@@ -1,0 +1,29 @@
+# Core Tools repo clone (used for analysis only)
+repo/
+
+# Host build artifacts
+azure-functions-host/
+cdn-server/hosts/
+
+# Node modules
+node_modules/
+
+# func-emu cache
+.func-emu/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Transcripts and meeting notes (local only)
+meeting.vtt
+transcript
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
