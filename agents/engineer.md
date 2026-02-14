@@ -33,12 +33,18 @@ func-emulate/
 │   ├── profiles/
 │   │   └── sku-profiles.json           ← copy of cdn-server's (bundled fallback)
 │   └── package.json                    ← Section 6.1
-├── test-node-app/
-│   ├── host.json                       ← Section 7, Step 3
-│   ├── local.settings.json             ← Section 7, Step 3
-│   ├── package.json                    ← npm init + @azure/functions
+├── test-node-app/                       ← scaffolded with: func init + func new
+│   ├── host.json
+│   ├── local.settings.json
+│   ├── package.json
 │   └── src/functions/
-│       └── hello.js                    ← Section 7, Step 3
+│       └── hello.js
+├── test-python-app/                     ← scaffolded with: func init + func new
+│   ├── function_app.py
+│   ├── host.json
+│   ├── local.settings.json
+│   ├── requirements.txt
+│   └── .venv/                           ← Python virtual environment
 ├── prd.md                              ← already exists (don't modify)
 ├── implementation.md                   ← already exists (don't modify)
 ├── testing.md                          ← already exists (don't modify)
@@ -79,12 +85,33 @@ Execute these tasks in order:
 - `lib/host-launcher.js`: From Section 6.6
 - `profiles/sku-profiles.json`: Copy of `cdn-server/profiles/sku-profiles.json` (bundled fallback)
 
-### Task 4: Create `test-node-app/`
+### Task 4: Create test function apps
 
-- Source: `implementation.md` Section 7, Step 3
-- Create: `host.json`, `local.settings.json`, `src/functions/hello.js`
-- Run `npm init -y` and `npm install @azure/functions` in the directory
-- The function uses `authLevel: 'anonymous'` (required — no auth bypass in POC)
+Use the **existing `func` CLI** (Azure Functions Core Tools v4) to scaffold real function apps.
+
+**Node.js app:**
+```bash
+func init test-node-app --worker-runtime node --language javascript --model V4
+cd test-node-app
+func new --name hello --template "HTTP trigger" --authlevel anonymous
+npm install
+cd ..
+```
+
+**Python app:**
+```bash
+func init test-python-app --worker-runtime python --model V2
+cd test-python-app
+func new --name hello --template "HTTP trigger" --authlevel anonymous
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cd ..
+```
+
+- Both functions MUST use `authLevel: anonymous` (required — no auth bypass in POC)
+- The `func` CLI must be installed and available (`func --version` shows 4.x)
+- Using `func` instead of manual `cat >` ensures correct V2/V4 programming model structure
 
 ### Task 5: Validate scaffolding
 
@@ -108,7 +135,8 @@ node func-emu/bin/func-emu start --sku list
 ls -la build-hosts.sh
 ls func-emu/bin/func-emu func-emu/lib/*.js func-emu/profiles/sku-profiles.json
 ls cdn-server/server.js cdn-server/profiles/sku-profiles.json
-ls test-node-app/host.json test-node-app/local.settings.json test-node-app/src/functions/hello.js
+ls test-node-app/host.json test-node-app/local.settings.json
+ls test-python-app/function_app.py test-python-app/requirements.txt test-python-app/host.json
 ```
 
 ## Implementation Guidelines

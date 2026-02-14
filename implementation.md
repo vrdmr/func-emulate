@@ -1093,46 +1093,48 @@ curl -I http://localhost:4566/hosts/4.1047.100/Azure.Functions.Host.osx-arm64.zi
 # → HTTP/1.1 200 OK, Content-Type: application/zip
 ```
 
-### Step 3: Create the Test Function App (Agent 3)
+### Step 3: Create Test Function Apps Using `func` CLI (Agent 3)
+
+Use the existing `func` CLI (Azure Functions Core Tools v4) to scaffold real function apps. This ensures the apps have the correct structure, V2 programming model, and all expected files.
+
+**Node.js test app:**
 
 ```bash
 cd /Users/varad/work/new-core-tools
-mkdir -p test-node-app/src/functions && cd test-node-app
 
-cat > host.json << 'EOF'
-{
-  "version": "2.0",
-  "extensionBundle": {
-    "id": "Microsoft.Azure.Functions.ExtensionBundle",
-    "version": "[4.*, 5.0.0)"
-  }
-}
-EOF
+# Scaffold with func CLI
+func init test-node-app --worker-runtime node --language javascript --model V4
+cd test-node-app
+func new --name hello --template "HTTP trigger" --authlevel anonymous
 
-cat > local.settings.json << 'EOF'
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "node"
-  }
-}
-EOF
-
-cat > src/functions/hello.js << 'EOF'
-const { app } = require('@azure/functions');
-app.http('hello', {
-    methods: ['GET'],
-    authLevel: 'anonymous',
-    handler: async (request, context) => {
-        return { body: `Hello from ${context.functionName}! Host: ${process.env.WEBSITE_HOSTNAME || 'unknown'}` };
-    }
-});
-EOF
-
-npm init -y
-npm install @azure/functions
+# Verify structure
+ls -la src/functions/hello.js host.json local.settings.json package.json
+npm install
+cd ..
 ```
+
+**Python test app:**
+
+```bash
+cd /Users/varad/work/new-core-tools
+
+# Scaffold with func CLI
+func init test-python-app --worker-runtime python --model V2
+cd test-python-app
+func new --name hello --template "HTTP trigger" --authlevel anonymous
+
+# Set up venv and install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cd ..
+```
+
+**Why `func` instead of manual `cat >`?** Using the real CLI ensures:
+- Correct V2/V4 programming model boilerplate
+- Proper `host.json`, `local.settings.json`, and `package.json`/`requirements.txt`
+- Any worker-specific files (e.g., `.funcignore`, `getting_started.md`)
+- Validates that func-emu can run apps scaffolded by the production tool
 
 ### Step 4: Run with Flex SKU
 

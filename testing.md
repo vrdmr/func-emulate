@@ -10,30 +10,110 @@ This document defines the test scenarios for the func-emu POC. The goal is to va
 |-------------|---------|---------------|
 | Node.js | ≥ 18 | `node --version` |
 | .NET 8 SDK | ≥ 8.0.101 | `dotnet --version` |
+| Azure Functions Core Tools | 4.x | `func --version` |
+| Python 3 | ≥ 3.9 | `python3 --version` |
 | curl | any | `curl --version` |
 | jq (optional) | any | `jq --version` |
 
-### Pre-test Setup
+---
 
-All three agents must have completed their work:
+## Test Harness Setup
+
+This section creates everything needed to run the tests — from zero to ready. Run these steps once before the first test execution.
+
+### Step 1: Scaffold the func-emu CLI and CDN server (Engineer Agent)
+
+If the Engineer Agent has already run, skip this step. Otherwise, create the files as described in `implementation.md` Sections 4–6 and the `agents/engineer.md` spec.
 
 ```bash
-# 1. Host builds exist (Agent 1)
-ls cdn-server/hosts/*/Azure.Functions.Host.*.zip
-# Should list 5 zip files
-
-# 2. CDN server is running (Agent 2)
-curl -s http://localhost:4566/api/profiles | jq '.profiles | keys'
-# → ["flex", "linux-consumption", "linux-premium", "windows-consumption", "windows-dedicated"]
-
-# 3. func-emu CLI is scaffolded (Agent 3)
-node func-emu/bin/func-emu start --help 2>&1 | head -1
-# → Usage: func-emu start ...
-
-# 4. Test app exists (Agent 3)
-cat test-node-app/local.settings.json | jq '.Values.FUNCTIONS_WORKER_RUNTIME'
-# → "node"
+# Verify Engineer Agent output exists
+ls build-hosts.sh cdn-server/server.js func-emu/bin/func-emu
 ```
+
+### Step 2: Build host packages
+
+```bash
+chmod +x build-hosts.sh
+./build-hosts.sh
+# Builds 5 host versions from real release tags (~15-25 min)
+# Output: cdn-server/hosts/{version}/Azure.Functions.Host.{platform}.zip
+```
+
+Verify:
+```bash
+ls cdn-server/hosts/*/Azure.Functions.Host.*.zip | wc -l
+# Expected: 5
+```
+
+### Step 3: Start the CDN server
+
+```bash
+cd cdn-server && node server.js &
+CDN_PID=$!
+cd ..
+
+# Verify
+curl -s http://localhost:4566/ | head -1
+# Expected: "func-emu CDN Server"
+```
+
+### Step 4: Scaffold test function apps with `func` CLI
+
+Use the **existing production `func` CLI** (v4) to create real function apps. This ensures correct V2/V4 programming model structure — and proves `func-emu` can run any app scaffolded by the existing tooling.
+
+```bash
+# Node.js test app (V4 programming model)
+func init test-node-app --worker-runtime node --language javascript --model V4
+cd test-node-app
+func new --name hello --template "HTTP trigger" --authlevel anonymous
+npm install
+cd ..
+
+# Python test app (V2 programming model)
+func init test-python-app --worker-runtime python --model V2
+cd test-python-app
+func new --name hello --template "HTTP trigger" --authlevel anonymous
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+deactivate
+cd ..
+```
+
+**Why `func init` / `func new` instead of manual `cat >`?**
+- Correct boilerplate for the programming model version
+- All expected files present (`host.json`, `local.settings.json`, `.funcignore`, etc.)
+- Validates that `func-emu` works with apps created by the real tooling — not hand-crafted files
+
+---
+
+## Pre-flight Checks
+
+Run these before every test session. They only **verify** — they don't create anything.
+
+```bash
+# 1. Tools available
+node --version      # ≥ 18
+func --version      # 4.x
+python3 --version   # ≥ 3.9
+
+# 2. Host zips built
+ls cdn-server/hosts/*/Azure.Functions.Host.*.zip | wc -l   # 5
+
+# 3. CDN server responding
+curl -s http://localhost:4566/api/profiles | jq '.profiles | keys | length'   # 5
+
+# 4. func-emu CLI runnable
+node func-emu/bin/func-emu 2>&1 | head -1   # "Usage: func-emu start ..."
+
+# 5. Node test app ready
+ls test-node-app/host.json test-node-app/node_modules/@azure/functions/package.json   # both exist
+
+# 6. Python test app ready
+ls test-python-app/function_app.py test-python-app/requirements.txt test-python-app/.venv/bin/activate   # all exist
+```
+
+If any check fails, go back to the corresponding Test Harness Setup step.
 
 ---
 
@@ -310,59 +390,61 @@ node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 
 
 ## Test 10: Python Function App
 
-**What**: Verify the POC works with Python (not just Node.js).
+**What**: Verify the POC works with Python — the second most popular Functions language. Uses the `func`-scaffolded `test-python-app/`.
+
+**Prerequisite**: `test-python-app/` was scaffolded with `func init --worker-runtime python --model V2` and `func new --name hello --template "HTTP trigger" --authlevel anonymous`. Python venv created with `azure-functions` installed.
 
 ```bash
-mkdir -p test-python-app
+# Verify test app is ready
+ls test-python-app/function_app.py test-python-app/requirements.txt test-python-app/local.settings.json
+# All must exist
 
-cat > test-python-app/host.json << 'EOF'
-{
-  "version": "2.0",
-  "extensionBundle": {
-    "id": "Microsoft.Azure.Functions.ExtensionBundle",
-    "version": "[4.*, 5.0.0)"
-  }
-}
-EOF
+# Activate venv (the host's Python worker needs it)
+source test-python-app/.venv/bin/activate
 
-cat > test-python-app/local.settings.json << 'EOF'
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "python"
-  }
-}
-EOF
+# Start with Flex SKU
+node func-emu/bin/func-emu start --sku flex --scriptroot ./test-python-app --port 7076
+```
 
-cat > test-python-app/function_app.py << 'EOF'
-import azure.functions as func
+**Verify** (in another terminal):
+```bash
+# 10a. Banner shows python runtime
+# Expected output includes:
+#   Worker Runtime:    python
 
-app = func.FunctionApp()
+# 10b. Function responds
+curl -s http://localhost:7076/api/hello
+# Expected: HTTP 200 with response body (exact text depends on func template)
 
-@app.function_name(name="hello")
-@app.route(route="hello", auth_level=func.AuthLevel.ANONYMOUS)
-def hello(req: func.HttpRequest) -> func.HttpResponse:
-    return func.HttpResponse("Hello from Python!")
-EOF
+# 10c. Compare with Node — same SKU, different runtime
+# (test-node-app should already work from Test 4)
+# This proves the host correctly spawns different language workers
+```
 
-# Install Python Functions SDK
-cd test-python-app
-python3 -m venv .venv
-source .venv/bin/activate
-pip install azure-functions
-cd ..
+**Pass criteria**: Python worker starts via gRPC, HTTP function returns 200.
 
+---
+
+## Test 11: Side-by-Side — Node vs Python on Same SKU
+
+**What**: Prove the host correctly launches different language workers based on `FUNCTIONS_WORKER_RUNTIME`.
+
+```bash
+# Terminal 1: Node app on Flex
+node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+
+# Terminal 2: Python app on Flex (same SKU, same host version!)
 node func-emu/bin/func-emu start --sku flex --scriptroot ./test-python-app --port 7076
 ```
 
 **Verify**:
 ```bash
-curl -s http://localhost:7076/api/hello
-# Expected: "Hello from Python!"
+curl -s http://localhost:7071/api/hello  # Node response
+curl -s http://localhost:7076/api/hello  # Python response
+# Both should return 200 with different response bodies
 ```
 
-**Pass criteria**: Python worker starts via gRPC, function serves HTTP.
+**Pass criteria**: Same host version serves both Node and Python apps correctly.
 
 ---
 
@@ -373,23 +455,25 @@ curl -s http://localhost:7076/api/hello
 | 1 | CDN Server Health | CDN server serves profiles and zips correctly | P0 |
 | 2 | Profile Resolution | CLI resolves SKUs, handles errors | P0 |
 | 3 | Host Download & Caching | Download → extract → cache → reuse flow | P0 |
-| 4 | Host Startup (Flex) | Latest host starts and serves Node.js function | P0 |
-| 5 | Host Startup (Win Consumption) | Older host starts with same app | P0 |
-| 6 | Side-by-Side Comparison | Two host versions simultaneously (the demo) | P0 |
+| 4 | Host Startup (Flex, Node) | Latest host starts and serves Node.js function | P0 |
+| 5 | Host Startup (Win Consumption, Node) | Older host starts with same app | P0 |
+| 6 | Side-by-Side SKU Comparison | Two host versions simultaneously (the demo) | P0 |
 | 7 | All 5 SKUs Smoke | Every SKU profile works | P1 |
 | 8 | Offline Fallback | Graceful degradation without CDN | P1 |
 | 9 | Error Handling | Clear errors for invalid inputs | P1 |
-| 10 | Python App | Non-Node language worker works | P1 |
+| 10 | Python App | Python language worker starts via gRPC | P0 |
+| 11 | Node vs Python on Same SKU | Host launches correct language worker per runtime | P1 |
 
 ## Definition of Done
 
 The POC is considered successful when:
 
-1. ✅ **Tests 1-6 all pass** — core flow works end-to-end
+1. ✅ **Tests 1-6 and 10 all pass** — core flow works end-to-end for both Node and Python
 2. ✅ **Two different host versions** can serve the **same function app** simultaneously on different ports
 3. ✅ **Version displayed in banner** matches the SKU profile (proving the correct host was selected)
 4. ✅ **Download from CDN server** works (not just pre-placed cache)
 5. ✅ **Caching** prevents redundant downloads on subsequent runs
+6. ✅ **Both Node.js and Python** language workers start correctly via gRPC
 
 ## Known Limitations
 

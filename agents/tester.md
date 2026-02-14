@@ -6,43 +6,86 @@ You are a **Test Engineer agent** responsible for executing the test plan define
 
 ## Inputs
 
-- `testing.md` — The complete test plan (10 test scenarios, prioritized P0/P1)
-- Running system:
-  - Host zips built and placed in `cdn-server/hosts/` (by `build-hosts.sh`)
-  - CDN server running on `http://localhost:4566` (by `node cdn-server/server.js`)
-  - `func-emu/` CLI scaffolded and runnable
-  - `test-node-app/` with `@azure/functions` installed
+- `testing.md` — The complete test plan (11 test scenarios, prioritized P0/P1)
+- All source code from the Engineer Agent
 
 ## Output
 
 A test execution report with pass/fail for each test, captured output, and any issues found.
 
-## Pre-flight Checks
+## Test Harness Setup
 
-Before running any tests, verify the system is ready:
+Before any tests can run, the full harness must exist. If any piece is missing, create it. This section takes you from zero to ready-to-test.
+
+### Step 1: Verify Engineer Agent output
 
 ```bash
-# 1. Node.js version
-node --version  # Must be >= 18
-
-# 2. Host zips exist
-ls cdn-server/hosts/*/Azure.Functions.Host.*.zip
-# Must show at least 2 zip files (flex + windows-consumption minimum)
-
-# 3. CDN server is running
-curl -s http://localhost:4566/ | head -1
-# Must return "func-emu CDN Server"
-
-# 4. CLI is runnable
-node func-emu/bin/func-emu 2>&1 | head -1
-# Must show usage message
-
-# 5. Test app has dependencies
-ls test-node-app/node_modules/@azure/functions/package.json
-# Must exist
+ls build-hosts.sh cdn-server/server.js func-emu/bin/func-emu
+# All three must exist. If not, run the Engineer Agent first.
 ```
 
-If any pre-flight check fails, stop and report which prerequisite is missing.
+### Step 2: Build host packages (if not already built)
+
+```bash
+ls cdn-server/hosts/*/Azure.Functions.Host.*.zip | wc -l
+# If < 5 (or the command fails), run:
+chmod +x build-hosts.sh && ./build-hosts.sh
+```
+
+### Step 3: Start the CDN server
+
+```bash
+cd cdn-server && node server.js &
+CDN_PID=$!
+cd ..
+curl -s http://localhost:4566/ | head -1
+# Must return "func-emu CDN Server"
+```
+
+### Step 4: Scaffold test apps with `func` CLI
+
+Use the **existing production `func` CLI** (v4) to create real function apps:
+
+```bash
+# Node.js app
+func init test-node-app --worker-runtime node --language javascript --model V4
+cd test-node-app && func new --name hello --template "HTTP trigger" --authlevel anonymous && npm install && cd ..
+
+# Python app
+func init test-python-app --worker-runtime python --model V2
+cd test-python-app && func new --name hello --template "HTTP trigger" --authlevel anonymous
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && deactivate && cd ..
+```
+
+**Why `func init`/`func new`?** Using the production CLI ensures correct V2/V4 programming model structure. This also proves `func-emu` can run any app scaffolded by the existing tooling — not hand-crafted files.
+
+## Pre-flight Checks
+
+Run these before every test session. They only **verify** — they don't create anything.
+
+```bash
+# 1. Tools
+node --version      # ≥ 18
+func --version      # 4.x
+python3 --version   # ≥ 3.9
+
+# 2. Host zips
+ls cdn-server/hosts/*/Azure.Functions.Host.*.zip | wc -l   # 5
+
+# 3. CDN server
+curl -s http://localhost:4566/api/profiles | jq '.profiles | keys | length'   # 5
+
+# 4. func-emu CLI
+node func-emu/bin/func-emu 2>&1 | head -1   # "Usage: func-emu start ..."
+
+# 5. Node test app
+ls test-node-app/host.json test-node-app/node_modules/@azure/functions/package.json
+
+# 6. Python test app
+ls test-python-app/function_app.py test-python-app/.venv/bin/activate
+```
+
+If any check fails, go back to the corresponding Test Harness Setup step.
 
 ## Test Execution
 
@@ -251,20 +294,50 @@ rm -rf /tmp/dotnet-test
 
 #### Test 10: Python Function App
 
-Only run if Python 3.x is available:
-
 ```bash
-python3 --version || { echo "SKIP: Python not available"; exit 0; }
-
-# Create Python test app (see testing.md Test 10 for full setup)
-# ... setup steps ...
+# Activate venv for Python worker
+source test-python-app/.venv/bin/activate
 
 node func-emu/bin/func-emu start --sku flex --scriptroot ./test-python-app --port 7076 &
-PID=$!
+CLI_PID=$!
 sleep 15
-curl -s http://localhost:7076/api/hello
-# PASS if: "Hello from Python!"
-kill $PID 2>/dev/null; wait $PID 2>/dev/null
+
+# 10a. Function responds
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7076/api/hello)
+echo "HTTP Status: $HTTP_STATUS"
+# PASS if: 200
+
+# 10b. Response body
+BODY=$(curl -s http://localhost:7076/api/hello)
+echo "Response: $BODY"
+# PASS if: contains "Hello" or similar
+
+kill $CLI_PID 2>/dev/null; wait $CLI_PID 2>/dev/null
+deactivate
+```
+
+#### Test 11: Node vs Python on Same SKU
+
+```bash
+# Terminal 1: Node app on Flex
+node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
+NODE_PID=$!
+sleep 15
+
+# Terminal 2: Python app on Flex (same SKU!)
+source test-python-app/.venv/bin/activate
+node func-emu/bin/func-emu start --sku flex --scriptroot ./test-python-app --port 7076 &
+PY_PID=$!
+sleep 15
+
+# Both should respond
+NODE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7071/api/hello)
+PY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7076/api/hello)
+echo "Node: $NODE_STATUS, Python: $PY_STATUS"
+# PASS if: both 200
+
+kill $NODE_PID $PY_PID 2>/dev/null; wait $NODE_PID $PY_PID 2>/dev/null
+deactivate
 ```
 
 ## Report Format
@@ -287,16 +360,17 @@ After executing all tests, produce a report:
 | 1 | CDN Server Health | P0 | ✅/❌ | |
 | 2 | Profile Resolution | P0 | ✅/❌ | |
 | 3 | Host Download & Caching | P0 | ✅/❌ | |
-| 4 | Host Startup (Flex) | P0 | ✅/❌ | |
-| 5 | Host Startup (Win Consumption) | P0 | ✅/❌ | |
-| 6 | Side-by-Side Comparison | P0 | ✅/❌ | |
+| 4 | Host Startup (Flex, Node) | P0 | ✅/❌ | |
+| 5 | Host Startup (Win Consumption, Node) | P0 | ✅/❌ | |
+| 6 | Side-by-Side SKU Comparison | P0 | ✅/❌ | |
 | 7 | All 5 SKUs Smoke | P1 | ✅/❌ | |
 | 8 | Offline Fallback | P1 | ✅/❌ | |
 | 9 | Error Handling | P1 | ✅/❌ | |
-| 10 | Python App | P1 | ✅/❌/⏭️ | |
+| 10 | Python App | P0 | ✅/❌ | |
+| 11 | Node vs Python Same SKU | P1 | ✅/❌ | |
 
 ## Summary
-- P0: X/6 passed
+- P0: X/7 passed
 - P1: X/4 passed
 - Overall: PASS / FAIL
 
@@ -315,3 +389,5 @@ After executing all tests, produce a report:
 4. **CDN server must be running** for Tests 1-7 — start it before beginning
 5. **Test 6 is the most important** — this is the "money shot" that proves the concept
 6. **If a P0 test fails**, investigate and document before continuing to P1 tests
+7. **Test apps must be scaffolded with `func` CLI** — not manually created. Use `func init` + `func new`.
+8. **Python venv must be activated** before running Python tests (Tests 10, 11)
