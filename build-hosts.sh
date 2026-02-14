@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Allow newer .NET SDK versions (e.g. 10.x when repo needs 8.x)
+export DOTNET_ROLL_FORWARD=latestMajor
+
 # ─── Configuration ───────────────────────────────────────────────────
 HOST_REPO="https://github.com/Azure/azure-functions-host.git"
 HOST_DIR="./azure-functions-host"
@@ -65,6 +68,12 @@ for tag in "${TAGS[@]}"; do
 
   cd "$HOST_DIR"
   git checkout "$tag" --quiet
+
+  # Patch global.json to allow any installed SDK version (e.g. 10.x when repo pins 8.x)
+  if [ -f global.json ]; then
+    sed -i.bak 's/"rollForward": "[^"]*"/"rollForward": "latestMajor"/' global.json
+    rm -f global.json.bak
+  fi
 
   # Build self-contained (disable ReadyToRun for cross-platform compat)
   dotnet publish src/WebJobs.Script.WebHost/WebJobs.Script.WebHost.csproj \
