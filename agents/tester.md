@@ -1,3 +1,10 @@
+---
+name: tester
+description: Executes the testing.md test plan against the func-emulate POC. Sets up test harness, runs 11 tests across 5 SKUs, and produces a pass/fail report.
+tools:
+  - "*"
+---
+
 # Test Agent: End-to-End Verification
 
 ## Role

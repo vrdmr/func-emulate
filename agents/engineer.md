@@ -1,3 +1,10 @@
+---
+name: engineer
+description: Scaffolds all code for the func-emulate POC from implementation.md spec. Creates build-hosts.sh, cdn-server, func-emu CLI, and test function apps.
+tools:
+  - "*"
+---
+
 # Engineer Agent: Implementation
 
 ## Role
