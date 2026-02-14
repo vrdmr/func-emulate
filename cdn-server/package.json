@@ -1,0 +1,12 @@
+{
+  "name": "func-emu-cdn-server",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Dummy CDN server for func-emu POC",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

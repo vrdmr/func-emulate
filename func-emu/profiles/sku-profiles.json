@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "1.0",
+  "profiles": {
+    "flex": {
+      "displayName": "Flex Consumption",
+      "hostVersion": "4.1047.100",
+      "hostGitTag": "v4.1047.100",
+      "extensionBundleVersion": "[4.22.*, 5.0.0)",
+      "hostPackageUrl": {
+        "linux-x64": "http://localhost:4566/hosts/4.1047.100/Azure.Functions.Host.linux-x64.zip",
+        "osx-x64": "http://localhost:4566/hosts/4.1047.100/Azure.Functions.Host.osx-x64.zip",
+        "osx-arm64": "http://localhost:4566/hosts/4.1047.100/Azure.Functions.Host.osx-arm64.zip",
+        "win-x64": "http://localhost:4566/hosts/4.1047.100/Azure.Functions.Host.win-x64.zip"
+      },
+      "status": "GA",
+      "notes": "Newest host — Flex gets bits first (2-week cadence)"
+    },
+    "linux-premium": {
+      "displayName": "Linux Premium (EP)",
+      "hostVersion": "4.1046.100",
+      "hostGitTag": "v4.1046.100",
+      "extensionBundleVersion": "[4.21.*, 5.0.0)",
+      "hostPackageUrl": {
+        "linux-x64": "http://localhost:4566/hosts/4.1046.100/Azure.Functions.Host.linux-x64.zip",
+        "osx-x64": "http://localhost:4566/hosts/4.1046.100/Azure.Functions.Host.osx-x64.zip",
+        "osx-arm64": "http://localhost:4566/hosts/4.1046.100/Azure.Functions.Host.osx-arm64.zip",
+        "win-x64": "http://localhost:4566/hosts/4.1046.100/Azure.Functions.Host.win-x64.zip"
+      },
+      "status": "GA",
+      "notes": "1 version behind Flex — aligned cadence but slightly delayed"
+    },
+    "windows-consumption": {
+      "displayName": "Windows Consumption",
+      "hostVersion": "4.1045.200",
+      "hostGitTag": "v4.1045.200",
+      "extensionBundleVersion": "[4.19.*, 5.0.0)",
+      "hostPackageUrl": {
+        "linux-x64": "http://localhost:4566/hosts/4.1045.200/Azure.Functions.Host.linux-x64.zip",
+        "osx-x64": "http://localhost:4566/hosts/4.1045.200/Azure.Functions.Host.osx-x64.zip",
+        "osx-arm64": "http://localhost:4566/hosts/4.1045.200/Azure.Functions.Host.osx-arm64.zip",
+        "win-x64": "http://localhost:4566/hosts/4.1045.200/Azure.Functions.Host.win-x64.zip"
+      },
+      "status": "GA",
+      "notes": "~3 month cadence — 2 versions behind Flex"
+    },
+    "windows-dedicated": {
+      "displayName": "Windows Dedicated (ASP)",
+      "hostVersion": "4.1045.100",
+      "hostGitTag": "v4.1045.100",
+      "extensionBundleVersion": "[4.19.*, 5.0.0)",
+      "hostPackageUrl": {
+        "linux-x64": "http://localhost:4566/hosts/4.1045.100/Azure.Functions.Host.linux-x64.zip",
+        "osx-x64": "http://localhost:4566/hosts/4.1045.100/Azure.Functions.Host.osx-x64.zip",
+        "osx-arm64": "http://localhost:4566/hosts/4.1045.100/Azure.Functions.Host.osx-arm64.zip",
+        "win-x64": "http://localhost:4566/hosts/4.1045.100/Azure.Functions.Host.win-x64.zip"
+      },
+      "status": "GA",
+      "notes": "Similar cadence to Windows Consumption"
+    },
+    "linux-consumption": {
+      "displayName": "Linux Consumption",
+      "hostVersion": "4.1044.400",
+      "hostGitTag": "v4.1044.400",
+      "extensionBundleVersion": "[4.18.*, 5.0.0)",
+      "hostPackageUrl": {
+        "linux-x64": "http://localhost:4566/hosts/4.1044.400/Azure.Functions.Host.linux-x64.zip",
+        "osx-x64": "http://localhost:4566/hosts/4.1044.400/Azure.Functions.Host.osx-x64.zip",
+        "osx-arm64": "http://localhost:4566/hosts/4.1044.400/Azure.Functions.Host.osx-arm64.zip",
+        "win-x64": "http://localhost:4566/hosts/4.1044.400/Azure.Functions.Host.win-x64.zip"
+      },
+      "status": "deprecated",
+      "retirementDate": "2028-09-30",
+      "notes": "Deprecated — oldest host, ~3x/year releases"
+    }
+  },
+  "updatedAt": "2026-02-14T00:00:00Z"
+}

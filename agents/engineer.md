@@ -137,20 +137,34 @@ cd ..
 - Using `func` instead of manual `cat >` ensures correct V2/V4 programming model structure
 - **Verify**: `local.settings.json` has correct `FUNCTIONS_WORKER_RUNTIME`, function file exists, dependencies installed
 
-### Task 5: Integration validation
+### Task 5: Create test tools (`test-tools/`)
 
-Start the CDN server, run the CLI against it, verify the full chain works. **Log every command and its output.**
+- Source: `testing.md` "Test Tools" section
+- Create directory `test-tools/`
+- Create the 5 helper scripts exactly as specified in `testing.md`:
+  - `start-cdn.sh` — starts CDN server, polls for health, prints `CDN_PID=<pid>`
+  - `start-emu.sh` — starts func-emu with `--sku`/`--port`/`--scriptroot`, polls for host readiness, prints `EMU_PID=<pid>`
+  - `check-endpoint.sh` — HTTP status check with retries, prints `✓`/`✗`
+  - `preflight.sh` — runs all pre-flight checks, reports pass/fail counts
+  - `cleanup.sh` — kills PIDs passed as args or tracked in `/tmp/func-emu-test-pids`, finds orphaned host processes
+- `chmod +x` all scripts
+- **Verify**: each script is executable, `./test-tools/preflight.sh` runs and reports checks (some may fail if CDN isn't running yet — that's expected)
+
+### Task 6: Integration validation
+
+Start the CDN server, run the CLI against it, verify the full chain works. **Use the test tools from Task 5.**
 
 ```bash
-echo "═══ Task 5: Integration Validation ═══"
+echo "═══ Task 6: Integration Validation ═══"
 
-# Start CDN server
-echo "Starting CDN server..."
-node cdn-server/server.js &
-CDN_PID=$!
-sleep 2
-curl -s http://localhost:4566/ | head -1
-echo "✓ CDN server running"
+# Pre-flight (CDN not running yet, so that check will fail — that's OK)
+echo "--- Pre-flight (partial) ---"
+./test-tools/preflight.sh || true
+
+# Start CDN using test tool
+echo ""
+echo "--- Starting CDN server ---"
+eval $(./test-tools/start-cdn.sh)
 
 # Profile list
 echo ""
@@ -174,8 +188,10 @@ echo "func-emu/bin:          $(test -x func-emu/bin/func-emu && echo '✓ execut
 echo "func-emu/lib:          $(ls func-emu/lib/*.js 2>/dev/null | wc -l | tr -d ' ') JS modules"
 echo "test-node-app:         $(test -f test-node-app/host.json && echo '✓ scaffolded' || echo '✗ MISSING')"
 echo "test-python-app:       $(test -f test-python-app/function_app.py && echo '✓ scaffolded' || echo '✗ MISSING')"
+echo "test-tools:            $(ls test-tools/*.sh 2>/dev/null | wc -l | tr -d ' ') scripts"
 
-kill $CDN_PID 2>/dev/null
+# Cleanup CDN
+./test-tools/cleanup.sh $CDN_PID
 echo ""
 echo "═══ Integration validation complete ═══"
 ```
@@ -183,12 +199,13 @@ echo "═══ Integration validation complete ═══"
 ## Implementation Guidelines
 
 1. **Copy code exactly from `implementation.md`** — do not refactor, rename, or "improve" the code. The spec is the spec.
-2. **Use ESM modules** — all JS files use `import`/`export`, package.json has `"type": "module"`.
-3. **Zero npm dependencies** for `func-emu/` and `cdn-server/` — Node.js 18+ built-ins only.
-4. **`test-node-app/`** is the one directory that has a dependency: `@azure/functions`.
-5. **Make executables executable** — `chmod +x build-hosts.sh func-emu/bin/func-emu`.
-6. **Profile resolver defaults to `http://localhost:4566/api/profiles`** — this is the CDN server URL.
-7. **Do not modify existing files** — `prd.md`, `implementation.md`, `testing.md`, `agents.md`, `agents/` are off-limits.
+2. **Copy test tools exactly from `testing.md`** "Test Tools" section — the scripts are fully specified there.
+3. **Use ESM modules** — all JS files use `import`/`export`, package.json has `"type": "module"`.
+4. **Zero npm dependencies** for `func-emu/`, `cdn-server/`, and `test-tools/` — Node.js 18+ built-ins only.
+5. **`test-node-app/`** is the one directory that has a dependency: `@azure/functions`.
+6. **Make executables executable** — `chmod +x build-hosts.sh func-emu/bin/func-emu test-tools/*.sh`.
+7. **Profile resolver defaults to `http://localhost:4566/api/profiles`** — this is the CDN server URL.
+8. **Do not modify existing files** — `prd.md`, `implementation.md`, `testing.md`, `agents.md`, `agents/` are off-limits.
 
 ## Logging & Progress Reporting
 
@@ -264,13 +281,19 @@ cat test-python-app/local.settings.json | grep FUNCTIONS_WORKER_RUNTIME
 ls test-python-app/function_app.py test-python-app/.venv/bin/activate
 ```
 
-After **Task 5** (integration validation):
+After **Task 5** (test tools):
+```bash
+echo "=== Verifying test-tools ==="
+ls -la test-tools/*.sh
+# Expected: 5 scripts, all executable
+./test-tools/preflight.sh 2>&1 || true
+# Expected: runs checks (some may fail if CDN not started)
+```
+
+After **Task 6** (integration validation):
 ```bash
 echo "=== Integration check: CDN + CLI ==="
-# Start CDN server in background
-node cdn-server/server.js &
-CDN_PID=$!
-sleep 2
+eval $(./test-tools/start-cdn.sh)
 
 # Test profile list
 node func-emu/bin/func-emu start --sku list
@@ -280,7 +303,7 @@ node func-emu/bin/func-emu start --sku list
 node func-emu/bin/func-emu start --sku bogus --scriptroot ./test-node-app 2>&1
 # Expected: error listing valid SKUs
 
-kill $CDN_PID 2>/dev/null
+./test-tools/cleanup.sh $CDN_PID
 echo "=== All checks passed ==="
 ```
 
@@ -297,6 +320,7 @@ After all tasks complete, print a summary:
 ║  ✓ cdn-server/profiles     (5 SKU profiles)          ║
 ║  ✓ func-emu/bin/func-emu   (entry point)             ║
 ║  ✓ func-emu/lib/           (4 modules, ~320 lines)   ║
+║  ✓ test-tools/             (5 scripts)               ║
 ║  ✓ test-node-app/          (func init + func new)    ║
 ║  ✓ test-python-app/        (func init + func new)    ║
 ║                                                       ║

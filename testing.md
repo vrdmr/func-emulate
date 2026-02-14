@@ -117,6 +117,257 @@ If any check fails, go back to the corresponding Test Harness Setup step.
 
 ---
 
+## Test Tools (`test-tools/`)
+
+Reusable shell scripts that eliminate repetitive bash patterns across tests. The Engineer Agent creates these alongside the other code. The Tester Agent invokes them directly instead of writing ad-hoc curl/sleep/kill loops.
+
+### Why
+
+Without these, every test repeats the same fragile patterns:
+- `sleep 15` hoping the host is ready (it might not be)
+- Manual PID tracking and cleanup (easy to leak processes)
+- Copy-pasted curl + status code checks
+- Platform RID detection (osx-arm64 vs linux-x64)
+
+### `test-tools/start-cdn.sh`
+
+Starts the CDN server, waits for it to be healthy, prints the PID.
+
+```bash
+#!/usr/bin/env bash
+# Usage: ./test-tools/start-cdn.sh
+# Output: CDN_PID=<pid> on stdout (for eval)
+# Exit 1 if CDN doesn't become healthy within 10s
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PORT="${CDN_PORT:-4566}"
+
+node "$SCRIPT_DIR/cdn-server/server.js" &
+CDN_PID=$!
+
+# Poll for health
+for i in $(seq 1 20); do
+  if curl -sf "http://localhost:${PORT}/" > /dev/null 2>&1; then
+    echo "CDN_PID=$CDN_PID"
+    echo "✓ CDN server ready on port $PORT (PID $CDN_PID)" >&2
+    exit 0
+  fi
+  sleep 0.5
+done
+
+echo "✗ CDN server failed to start within 10s" >&2
+kill $CDN_PID 2>/dev/null
+exit 1
+```
+
+### `test-tools/start-emu.sh`
+
+Starts func-emu with a SKU, waits for the host to be ready (polls the HTTP endpoint), prints the PID.
+
+```bash
+#!/usr/bin/env bash
+# Usage: ./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app
+# Output: EMU_PID=<pid> on stdout (for eval)
+# Exit 1 if host doesn't respond within 60s
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Parse args (pass-through to func-emu)
+SKU="" PORT="" SCRIPTROOT=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --sku) SKU="$2"; shift 2 ;;
+    --port) PORT="$2"; shift 2 ;;
+    --scriptroot) SCRIPTROOT="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+PORT="${PORT:-7071}"
+SCRIPTROOT="${SCRIPTROOT:-./test-node-app}"
+
+echo "Starting func-emu --sku $SKU --port $PORT --scriptroot $SCRIPTROOT" >&2
+
+node "$SCRIPT_DIR/func-emu/bin/func-emu" start \
+  --sku "$SKU" --port "$PORT" --scriptroot "$SCRIPTROOT" &
+EMU_PID=$!
+
+# Poll for host readiness (check HTTP endpoint, not just process alive)
+echo "Waiting for host on port $PORT..." >&2
+for i in $(seq 1 120); do
+  if curl -sf "http://localhost:${PORT}/admin/host/status" > /dev/null 2>&1; then
+    echo "EMU_PID=$EMU_PID"
+    echo "✓ Host ready on port $PORT (PID $EMU_PID, SKU=$SKU)" >&2
+    exit 0
+  fi
+  # Also check if process is still alive
+  if ! kill -0 $EMU_PID 2>/dev/null; then
+    echo "✗ func-emu process died before host became ready" >&2
+    exit 1
+  fi
+  sleep 0.5
+done
+
+echo "✗ Host not ready after 60s on port $PORT" >&2
+kill $EMU_PID 2>/dev/null
+exit 1
+```
+
+### `test-tools/check-endpoint.sh`
+
+Checks an HTTP endpoint returns expected status. Retries on connection refused.
+
+```bash
+#!/usr/bin/env bash
+# Usage: ./test-tools/check-endpoint.sh <url> [expected_status] [max_retries]
+# Example: ./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
+# Exit 0 on match, exit 1 on mismatch/timeout
+set -euo pipefail
+
+URL="$1"
+EXPECTED="${2:-200}"
+MAX_RETRIES="${3:-5}"
+
+for i in $(seq 1 "$MAX_RETRIES"); do
+  STATUS=$(curl -s -o /tmp/check-endpoint-body -w "%{http_code}" "$URL" 2>/dev/null) || STATUS="000"
+  BODY=$(cat /tmp/check-endpoint-body 2>/dev/null || echo "")
+
+  if [[ "$STATUS" == "$EXPECTED" ]]; then
+    echo "✓ $URL → HTTP $STATUS"
+    [[ -n "$BODY" ]] && echo "  Body: $(echo "$BODY" | head -c 200)"
+    rm -f /tmp/check-endpoint-body
+    exit 0
+  fi
+
+  if [[ "$STATUS" != "000" ]]; then
+    # Got a real HTTP status, just not what we expected
+    echo "✗ $URL → HTTP $STATUS (expected $EXPECTED)"
+    [[ -n "$BODY" ]] && echo "  Body: $(echo "$BODY" | head -c 200)"
+    rm -f /tmp/check-endpoint-body
+    exit 1
+  fi
+
+  # Connection refused — retry
+  sleep 1
+done
+
+echo "✗ $URL → connection refused after $MAX_RETRIES retries"
+rm -f /tmp/check-endpoint-body
+exit 1
+```
+
+### `test-tools/preflight.sh`
+
+Runs all pre-flight checks. Exits 0 if all pass, 1 on first failure.
+
+```bash
+#!/usr/bin/env bash
+# Usage: ./test-tools/preflight.sh
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+PASS=0 FAIL=0
+
+check() {
+  local label="$1"; shift
+  if "$@" > /dev/null 2>&1; then
+    echo "  ✓ $label"
+    ((PASS++))
+  else
+    echo "  ✗ $label"
+    ((FAIL++))
+  fi
+}
+
+echo "═══ Pre-flight Checks ═══"
+check "Node.js ≥ 18"              node -e "process.exit(parseInt(process.version.slice(1)) >= 18 ? 0 : 1)"
+check "func CLI available"        func --version
+check "python3 available"         python3 --version
+check "Host zips built (≥2)"      bash -c '[[ $(ls cdn-server/hosts/*/Azure.Functions.Host.*.zip 2>/dev/null | wc -l) -ge 2 ]]'
+check "CDN server responding"     curl -sf http://localhost:4566/api/profiles
+check "func-emu CLI runnable"     node func-emu/bin/func-emu
+check "test-node-app ready"       test -f test-node-app/host.json
+check "test-python-app ready"     test -f test-python-app/function_app.py
+
+echo ""
+echo "Results: $PASS passed, $FAIL failed"
+[[ $FAIL -eq 0 ]] && echo "✓ All pre-flight checks passed" || echo "✗ Fix failures before running tests"
+exit $FAIL
+```
+
+### `test-tools/cleanup.sh`
+
+Kills all func-emu and CDN server processes started during testing.
+
+```bash
+#!/usr/bin/env bash
+# Usage: ./test-tools/cleanup.sh [PID1 PID2 ...]
+# If PIDs given, kills those. Otherwise kills tracked PIDs from PIDS_FILE.
+set -uo pipefail
+
+PIDS_FILE="/tmp/func-emu-test-pids"
+
+if [[ $# -gt 0 ]]; then
+  for pid in "$@"; do
+    kill "$pid" 2>/dev/null && echo "✓ Killed PID $pid" || echo "  PID $pid already gone"
+    wait "$pid" 2>/dev/null
+  done
+else
+  if [[ -f "$PIDS_FILE" ]]; then
+    while read -r pid; do
+      kill "$pid" 2>/dev/null && echo "✓ Killed PID $pid" || echo "  PID $pid already gone"
+      wait "$pid" 2>/dev/null
+    done < "$PIDS_FILE"
+    rm -f "$PIDS_FILE"
+  fi
+fi
+
+# Safety net: find any orphaned host processes
+ORPHANS=$(pgrep -f "Microsoft.Azure.WebJobs.Script.WebHost" 2>/dev/null || true)
+if [[ -n "$ORPHANS" ]]; then
+  echo "Found orphaned host processes: $ORPHANS"
+  echo "$ORPHANS" | while read -r pid; do
+    kill "$pid" 2>/dev/null && echo "✓ Killed orphaned host PID $pid"
+  done
+fi
+```
+
+### Usage in Tests
+
+With these tools, tests become concise and deterministic:
+
+```bash
+# Before (fragile):
+node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
+PID=$!
+sleep 15  # hope it's ready...
+curl -s http://localhost:7071/api/hello
+kill $PID 2>/dev/null
+
+# After (deterministic):
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
+./test-tools/cleanup.sh $EMU_PID
+```
+
+### File List
+
+```
+test-tools/
+├── start-cdn.sh           ← start CDN, poll for health, print PID
+├── start-emu.sh           ← start func-emu, poll for host ready, print PID
+├── check-endpoint.sh      ← HTTP status check with retries
+├── preflight.sh           ← run all pre-flight checks
+└── cleanup.sh             ← kill tracked PIDs + find orphaned hosts
+```
+
+All scripts are `chmod +x`, zero dependencies, and print `✓`/`✗` status to stderr so they work in pipelines.
+
+---
+
 ## Test 1: CDN Server Health
 
 **What**: Verify the dummy CDN server serves profiles and host zips correctly.

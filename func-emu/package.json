@@ -1,0 +1,13 @@
+{
+  "name": "func-emu",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "POC: SKU-aware Azure Functions local emulator",
+  "bin": {
+    "func-emu": "./bin/func-emu"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}
