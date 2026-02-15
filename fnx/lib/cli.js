@@ -41,6 +41,7 @@ export async function main(args) {
   const mcpPort = getFlag(args, '--mcp-port') || String(parseInt(port) + 1);
   const verbose = args.includes('--verbose');
   const noMcp = args.includes('--no-mcp');
+  const noAzurite = args.includes('--no-azurite');
   const profilesSource = getFlag(args, '--profiles');
 
   // Set profiles source before any profile resolution
@@ -167,6 +168,7 @@ export async function main(args) {
     profile,
     verbose,
     hostState,
+    noAzurite,
   });
 }
 
@@ -242,6 +244,7 @@ Options:
   --port <port>    Port for the host HTTP listener. Default: 7071.
   --mcp-port <p>   Port for the live MCP server. Default: host port + 1 (7072).
   --no-mcp         Disable the live MCP server (host-only mode).
+  --no-azurite     Skip automatic Azurite start (for users who manage Azurite separately).
   --profiles <src> SKU profiles source. Can be:
                    • A URL (http/https) to a profiles JSON endpoint
                    • A local file path to a profiles JSON file

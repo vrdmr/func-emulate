@@ -4,6 +4,7 @@ import { platform, homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { existsSync } from 'node:fs';
 import { getHostExeName } from './host-manager.js';
+import { ensureAzurite, stopAzurite } from './azurite-manager.js';
 
 // ─── Shared host state (consumed by live MCP server) ─────────────────────
 // This object is populated by the log filter and exposed for the MCP server.
@@ -105,58 +106,6 @@ function findPythonExecutable(scriptRoot, explicitPath) {
     } catch { /* not found */ }
   }
   return null;
-}
-
-// ─── Azurite (local storage emulator) ───────────────────────────────────
-// When AzureWebJobsStorage=UseDevelopmentStorage=true, the host expects
-// Azurite to be running. We auto-start it so developers don't get stuck.
-
-let azuriteProcess = null;
-
-function startAzuriteIfNeeded(env) {
-  if (env.AzureWebJobsStorage !== 'UseDevelopmentStorage=true') return;
-
-  // Check if Azurite is already running on default port (10000)
-  try {
-    execSync('curl -sf http://127.0.0.1:10000/ -o /dev/null 2>&1', { stdio: 'ignore', timeout: 2000 });
-    console.log('  Azurite:         already running on port 10000');
-    return;
-  } catch { /* not running */ }
-
-  // Try to find azurite
-  let azuriteBin;
-  try {
-    azuriteBin = execSync('which azurite', { encoding: 'utf-8' }).trim();
-  } catch {
-    try {
-      // Try npx path
-      azuriteBin = execSync('npm root -g', { encoding: 'utf-8' }).trim() + '/azurite/dist/src/azurite.js';
-      if (!existsSync(azuriteBin)) azuriteBin = null;
-    } catch { azuriteBin = null; }
-  }
-
-  if (!azuriteBin) {
-    console.log('  ⚠️  AzureWebJobsStorage=UseDevelopmentStorage=true but azurite not found.');
-    console.log('     Install with: npm install -g azurite');
-    return;
-  }
-
-  console.log('  Azurite:         auto-starting (UseDevelopmentStorage=true)');
-  azuriteProcess = spawn('azurite', ['--silent', '--location', '/tmp/azurite-fnx', '--blobHost', '127.0.0.1', '--queueHost', '127.0.0.1', '--tableHost', '127.0.0.1'], {
-    stdio: 'ignore',
-    detached: true,
-  });
-  azuriteProcess.unref();
-
-  // Give Azurite a moment to start
-  execSync('sleep 1');
-}
-
-function stopAzurite() {
-  if (azuriteProcess) {
-    try { process.kill(-azuriteProcess.pid); } catch { /* already dead */ }
-    azuriteProcess = null;
-  }
 }
 
 // ─── Log filtering (mirrors Core Tools ColoredConsoleLogger behavior) ───
@@ -395,8 +344,8 @@ export async function launchHost(hostDir, opts) {
     }
   }
 
-  // Auto-start Azurite if needed
-  startAzuriteIfNeeded(env);
+  // Auto-start Azurite if needed (lazy install + TCP readiness probe)
+  const azuriteProc = await ensureAzurite(opts.mergedValues, { noAzurite: opts.noAzurite });
 
   console.log();
   console.log('Azure Functions Local Emulator (fnx — Phoenix Emulate)');
