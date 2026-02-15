@@ -61,6 +61,10 @@ PM Agent produces a validation report: checklist of PRD requirements with pass/f
 ### Test → Orchestrator
 Test Agent produces a test report: pass/fail for each test in `docs/testing.md`.
 
+## Branch Policy
+
+**Never push directly to `main`.** All work — features, docs, fixes — must go to a feature branch (e.g., `feature/f8-homepage-improvements`) and be merged via PR. Agents must create a new branch for any commits they produce.
+
 ## How to Run
 
 ```bash
