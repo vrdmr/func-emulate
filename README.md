@@ -150,9 +150,12 @@ Values from both files are merged and injected as environment variables into the
 │   ├── test-tools/              # Test helper scripts
 │   ├── TEST_REPORT.md           # Full test report
 │   └── RETEST_CHECKLIST.md      # Re-test guide
-├── prd.md                       # Product Requirements
-├── implementation.md            # Implementation Spec
-└── testing.md                   # Test Plan
+├── docs/                        # Spec documents
+│   ├── prd.md                   # Product Requirements
+│   ├── implementation.md        # Implementation Spec
+│   ├── testing.md               # Test Plan
+│   ├── initial-thoughts.md      # Initial design thinking
+│   └── npm-release-plan.md      # npm publish roadmap
 ```
 
 ## How It Works
@@ -179,9 +182,9 @@ Highlights:
 
 | Document | Description |
 |----------|-------------|
-| [prd.md](prd.md) | Product Requirements Document |
-| [implementation.md](implementation.md) | Full implementation spec |
-| [testing.md](testing.md) | Test plan (11 scenarios) |
+| [docs/prd.md](docs/prd.md) | Product Requirements Document |
+| [docs/implementation.md](docs/implementation.md) | Full implementation spec |
+| [docs/testing.md](docs/testing.md) | Test plan (11 scenarios) |
 | [AGENTS.md](AGENTS.md) | Agent orchestration guide |
 
 ## Status

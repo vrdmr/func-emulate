@@ -10,7 +10,7 @@ This project uses a **top-level orchestrator** and **three specialized agents** 
 │  Coordinates the three agents, validates handoffs,       │
 │  ensures end-to-end integration.                         │
 │                                                          │
-│  Inputs:  prd.md, implementation.md, testing.md          │
+│  Inputs:  docs/prd.md, docs/implementation.md, docs/testing.md │
 │  Outputs: Working POC, validated end-to-end              │
 │                                                          │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
@@ -34,9 +34,9 @@ The PM Agent and Test Agent can run in parallel after the Engineer Agent complet
 
 | Agent | Scope | Key Files | Success Criteria |
 |-------|-------|-----------|------------------|
-| **PM** | Validate PRD requirements are met by the implementation | `prd.md`, all source files | Checklist of PRD requirements mapped to implementation |
-| **Engineer** | Scaffold all code from `implementation.md` spec | `build-hosts.sh`, `cdn-server/`, `func-emu/`, `test-node-app/` | All files created, CLI runs without errors |
-| **Test** | Execute `testing.md` plan, validate end-to-end | `testing.md`, running system | Tests 1-6 (P0) pass |
+| **PM** | Validate PRD requirements are met by the implementation | `docs/prd.md`, all source files | Checklist of PRD requirements mapped to implementation |
+| **Engineer** | Scaffold all code from `docs/implementation.md` spec | `build-hosts.sh`, `cdn-server/`, `func-emu/`, `tests/test-node-app/` | All files created, CLI runs without errors |
+| **Test** | Execute `docs/testing.md` plan, validate end-to-end | `docs/testing.md`, running system | Tests 1-6 (P0) pass |
 
 ## Handoff Protocol
 
@@ -47,7 +47,7 @@ The Engineer Agent produces:
 - `func-emu/` with all 4 JS files + `package.json` + bundled `profiles/sku-profiles.json`
 - `test-node-app/` with `host.json`, `local.settings.json`, `package.json`, `src/functions/hello.js`
 
-The PM Agent then validates these against `prd.md` requirements.
+The PM Agent then validates these against `docs/prd.md` requirements.
 
 ### Engineer → Test
 The Test Agent needs:
@@ -59,7 +59,7 @@ The Test Agent needs:
 PM Agent produces a validation report: checklist of PRD requirements with pass/fail/partial status.
 
 ### Test → Orchestrator
-Test Agent produces a test report: pass/fail for each test in `testing.md`.
+Test Agent produces a test report: pass/fail for each test in `docs/testing.md`.
 
 ## How to Run
 

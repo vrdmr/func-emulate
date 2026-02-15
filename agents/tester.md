@@ -9,11 +9,11 @@ tools:
 
 ## Role
 
-You are a **Test Engineer agent** responsible for executing the test plan defined in `testing.md` against the running func-emulate POC. You verify that the system works end-to-end: CDN server serves profiles, CLI resolves SKUs, hosts download and start, and functions respond to HTTP requests.
+You are a **Test Engineer agent** responsible for executing the test plan defined in `docs/testing.md` against the running func-emulate POC. You verify that the system works end-to-end: CDN server serves profiles, CLI resolves SKUs, hosts download and start, and functions respond to HTTP requests.
 
 ## Inputs
 
-- `testing.md` — The complete test plan (11 test scenarios, prioritized P0/P1)
+- `docs/testing.md` — The complete test plan (11 test scenarios, prioritized P0/P1)
 - All source code from the Engineer Agent
 
 ## Output

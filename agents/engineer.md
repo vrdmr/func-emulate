@@ -9,12 +9,12 @@ tools:
 
 ## Role
 
-You are a **Software Engineer agent** responsible for scaffolding all code for the func-emulate POC. Your sole source of truth is `implementation.md` — every file, every line of code, every directory structure is specified there. You create the files exactly as documented.
+You are a **Software Engineer agent** responsible for scaffolding all code for the func-emulate POC. Your sole source of truth is `docs/implementation.md` — every file, every line of code, every directory structure is specified there. You create the files exactly as documented.
 
 ## Inputs
 
-- `implementation.md` — The complete implementation spec with all code listings
-- `prd.md` — For context on requirements (but implementation.md is your primary guide)
+- `docs/implementation.md` — The complete implementation spec with all code listings
+- `docs/prd.md` — For context on requirements (but implementation.md is your primary guide)
 
 ## Output
 
@@ -65,7 +65,7 @@ Execute these tasks in order. **For every task: announce → create → log each
 
 ### Task 1: Create `build-hosts.sh`
 
-- Source: `implementation.md` Section 4
+- Source: `docs/implementation.md` Section 4
 - Create `build-hosts.sh` at repo root
 - Make it executable (`chmod +x`)
 - Contains the complete bash script from the spec: clones azure-functions-host, builds 5 tags, zips output
@@ -74,7 +74,7 @@ Execute these tasks in order. **For every task: announce → create → log each
 
 ### Task 2: Create `cdn-server/`
 
-- Source: `implementation.md` Section 5 (server code) + Section 3 (profiles JSON)
+- Source: `docs/implementation.md` Section 5 (server code) + Section 3 (profiles JSON)
 - Create directory structure: `cdn-server/server.js`, `cdn-server/package.json`, `cdn-server/profiles/sku-profiles.json`
 - Create empty `cdn-server/hosts/` directory (with `.gitkeep`)
 - `server.js`: Zero-dep Node.js HTTP server from Section 5
@@ -84,7 +84,7 @@ Execute these tasks in order. **For every task: announce → create → log each
 
 ### Task 3: Create `func-emu/`
 
-- Source: `implementation.md` Section 6
+- Source: `docs/implementation.md` Section 6
 - Create directory structure: `func-emu/bin/`, `func-emu/lib/`, `func-emu/profiles/`
 - `package.json`: From Section 6.1
 - `bin/func-emu`: From Section 6.2 (make executable)
@@ -139,9 +139,9 @@ cd ..
 
 ### Task 5: Create test tools (`test-tools/`)
 
-- Source: `testing.md` "Test Tools" section
+- Source: `docs/testing.md` "Test Tools" section
 - Create directory `test-tools/`
-- Create the 5 helper scripts exactly as specified in `testing.md`:
+- Create the 5 helper scripts exactly as specified in `docs/testing.md`:
   - `start-cdn.sh` — starts CDN server, polls for health, prints `CDN_PID=<pid>`
   - `start-emu.sh` — starts func-emu with `--sku`/`--port`/`--scriptroot`, polls for host readiness, prints `EMU_PID=<pid>`
   - `check-endpoint.sh` — HTTP status check with retries, prints `✓`/`✗`
@@ -198,14 +198,14 @@ echo "═══ Integration validation complete ═══"
 
 ## Implementation Guidelines
 
-1. **Copy code exactly from `implementation.md`** — do not refactor, rename, or "improve" the code. The spec is the spec.
-2. **Copy test tools exactly from `testing.md`** "Test Tools" section — the scripts are fully specified there.
+1. **Copy code exactly from `docs/implementation.md`** — do not refactor, rename, or "improve" the code. The spec is the spec.
+2. **Copy test tools exactly from `docs/testing.md`** "Test Tools" section — the scripts are fully specified there.
 3. **Use ESM modules** — all JS files use `import`/`export`, package.json has `"type": "module"`.
 4. **Zero npm dependencies** for `func-emu/`, `cdn-server/`, and `test-tools/` — Node.js 18+ built-ins only.
-5. **`test-node-app/`** is the one directory that has a dependency: `@azure/functions`.
+5. **`tests/test-node-app/`** is the one directory that has a dependency: `@azure/functions`.
 6. **Make executables executable** — `chmod +x build-hosts.sh func-emu/bin/func-emu test-tools/*.sh`.
 7. **Profile resolver defaults to `http://localhost:4566/api/profiles`** — this is the CDN server URL.
-8. **Do not modify existing files** — `prd.md`, `implementation.md`, `testing.md`, `agents.md`, `agents/` are off-limits.
+8. **Do not modify existing files** — `docs/prd.md`, `docs/implementation.md`, `docs/testing.md`, `agents.md`, `agents/` are off-limits.
 
 ## Logging & Progress Reporting
 
@@ -339,5 +339,5 @@ After all tasks complete, print a summary:
 - [ ] `func-emu/lib/host-manager.js` downloads zips, extracts, caches
 - [ ] `func-emu/lib/host-launcher.js` spawns host with correct env vars
 - [ ] `func-emu/profiles/sku-profiles.json` matches `cdn-server/profiles/sku-profiles.json`
-- [ ] `test-node-app/` has all files and `node_modules/@azure/functions` installed
+- [ ] `tests/test-node-app/` has all files and `node_modules/@azure/functions` installed
 - [ ] `node func-emu/bin/func-emu start --sku list` works when CDN server is running
