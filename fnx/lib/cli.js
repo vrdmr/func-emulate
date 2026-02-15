@@ -116,12 +116,11 @@ export async function main(args) {
   const hostState = createHostState();
 
   if (!noMcp) {
-    try {
-      await startLiveMcpServer(hostState, parseInt(mcpPort));
-    } catch (err) {
+    startLiveMcpServer(hostState, parseInt(mcpPort)).catch((err) => {
       console.error(`  ⚠️  MCP server failed to start on port ${mcpPort}: ${err.message}`);
       console.error(`     Use --no-mcp to disable, or --mcp-port <port> to change port.`);
-    }
+    });
+    // Don't await — host startup should not depend on MCP server
   }
 
   // 5. Launch host

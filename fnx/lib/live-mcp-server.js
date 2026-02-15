@@ -365,10 +365,18 @@ export async function startLiveMcpServer(hostState, mcpPort) {
   });
 
   return new Promise((resolve, reject) => {
+    httpServer.on('error', (err) => {
+      // Only reject during startup; after that, log and continue
+      if (!httpServer.listening) {
+        reject(err);
+      } else {
+        console.error(`  ⚠️  MCP server error: ${err.message}`);
+      }
+    });
+
     httpServer.listen(mcpPort, '127.0.0.1', () => {
       console.log(`  MCP Server:      http://127.0.0.1:${mcpPort}/mcp (Streamable HTTP)`);
       resolve(httpServer);
     });
-    httpServer.on('error', reject);
   });
 }
