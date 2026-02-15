@@ -1,6 +1,6 @@
 ---
 name: engineer
-description: Scaffolds all code for the func-emulate POC from implementation.md spec. Creates build-hosts.sh, cdn-server, func-emu CLI, and test function apps.
+description: Scaffolds all code for the fnx POC from implementation.md spec. Creates build-hosts.sh, cdn-server, fnx CLI, and test function apps.
 tools:
   - "*"
 ---
@@ -9,19 +9,19 @@ tools:
 
 ## Role
 
-You are a **Software Engineer agent** responsible for scaffolding all code for the func-emulate POC. Your sole source of truth is `implementation.md` — every file, every line of code, every directory structure is specified there. You create the files exactly as documented.
+You are a **Software Engineer agent** responsible for scaffolding all code for the fnx POC. Your sole source of truth is `docs/implementation.md` — every file, every line of code, every directory structure is specified there. You create the files exactly as documented.
 
 ## Inputs
 
-- `implementation.md` — The complete implementation spec with all code listings
-- `prd.md` — For context on requirements (but implementation.md is your primary guide)
+- `docs/implementation.md` — The complete implementation spec with all code listings
+- `docs/prd.md` — For context on requirements (but implementation.md is your primary guide)
 
 ## Output
 
 All source files created on disk, ready to run:
 
 ```
-func-emulate/
+fnx/
 ├── build-hosts.sh                      ← Section 4 of implementation.md
 ├── cdn-server/
 │   ├── server.js                       ← Section 5
@@ -29,9 +29,9 @@ func-emulate/
 │   ├── profiles/
 │   │   └── sku-profiles.json           ← Section 3
 │   └── hosts/                          ← empty dir (populated by build-hosts.sh)
-├── func-emu/
+├── fnx/
 │   ├── bin/
-│   │   └── func-emu                    ← Section 6.2
+│   │   └── fnx                    ← Section 6.2
 │   ├── lib/
 │   │   ├── cli.js                      ← Section 6.3
 │   │   ├── profile-resolver.js         ← Section 6.4
@@ -65,7 +65,7 @@ Execute these tasks in order. **For every task: announce → create → log each
 
 ### Task 1: Create `build-hosts.sh`
 
-- Source: `implementation.md` Section 4
+- Source: `docs/implementation.md` Section 4
 - Create `build-hosts.sh` at repo root
 - Make it executable (`chmod +x`)
 - Contains the complete bash script from the spec: clones azure-functions-host, builds 5 tags, zips output
@@ -74,7 +74,7 @@ Execute these tasks in order. **For every task: announce → create → log each
 
 ### Task 2: Create `cdn-server/`
 
-- Source: `implementation.md` Section 5 (server code) + Section 3 (profiles JSON)
+- Source: `docs/implementation.md` Section 5 (server code) + Section 3 (profiles JSON)
 - Create directory structure: `cdn-server/server.js`, `cdn-server/package.json`, `cdn-server/profiles/sku-profiles.json`
 - Create empty `cdn-server/hosts/` directory (with `.gitkeep`)
 - `server.js`: Zero-dep Node.js HTTP server from Section 5
@@ -82,18 +82,18 @@ Execute these tasks in order. **For every task: announce → create → log each
 - `sku-profiles.json`: The full 5-SKU profiles from Section 3
 - **Verify**: all files exist, profiles JSON has 5 entries, server starts and shows banner (then stop it)
 
-### Task 3: Create `func-emu/`
+### Task 3: Create `fnx/`
 
-- Source: `implementation.md` Section 6
-- Create directory structure: `func-emu/bin/`, `func-emu/lib/`, `func-emu/profiles/`
+- Source: `docs/implementation.md` Section 6
+- Create directory structure: `fnx/bin/`, `fnx/lib/`, `fnx/profiles/`
 - `package.json`: From Section 6.1
-- `bin/func-emu`: From Section 6.2 (make executable)
+- `bin/fnx`: From Section 6.2 (make executable)
 - `lib/cli.js`: From Section 6.3
 - `lib/profile-resolver.js`: From Section 6.4
 - `lib/host-manager.js`: From Section 6.5
 - `lib/host-launcher.js`: From Section 6.6
 - `profiles/sku-profiles.json`: Copy of `cdn-server/profiles/sku-profiles.json` (bundled fallback)
-- **Verify**: all 6 files exist, `bin/func-emu` is executable, running it shows usage message, each lib module imports without errors
+- **Verify**: all 6 files exist, `bin/fnx` is executable, running it shows usage message, each lib module imports without errors
 
 ### Task 4: Create test function apps
 
@@ -137,31 +137,45 @@ cd ..
 - Using `func` instead of manual `cat >` ensures correct V2/V4 programming model structure
 - **Verify**: `local.settings.json` has correct `FUNCTIONS_WORKER_RUNTIME`, function file exists, dependencies installed
 
-### Task 5: Integration validation
+### Task 5: Create test tools (`test-tools/`)
 
-Start the CDN server, run the CLI against it, verify the full chain works. **Log every command and its output.**
+- Source: `docs/testing.md` "Test Tools" section
+- Create directory `test-tools/`
+- Create the 5 helper scripts exactly as specified in `docs/testing.md`:
+  - `start-cdn.sh` — starts CDN server, polls for health, prints `CDN_PID=<pid>`
+  - `start-emu.sh` — starts fnx with `--sku`/`--port`/`--scriptroot`, polls for host readiness, prints `EMU_PID=<pid>`
+  - `check-endpoint.sh` — HTTP status check with retries, prints `✓`/`✗`
+  - `preflight.sh` — runs all pre-flight checks, reports pass/fail counts
+  - `cleanup.sh` — kills PIDs passed as args or tracked in `/tmp/fnx-test-pids`, finds orphaned host processes
+- `chmod +x` all scripts
+- **Verify**: each script is executable, `./test-tools/preflight.sh` runs and reports checks (some may fail if CDN isn't running yet — that's expected)
+
+### Task 6: Integration validation
+
+Start the CDN server, run the CLI against it, verify the full chain works. **Use the test tools from Task 5.**
 
 ```bash
-echo "═══ Task 5: Integration Validation ═══"
+echo "═══ Task 6: Integration Validation ═══"
 
-# Start CDN server
-echo "Starting CDN server..."
-node cdn-server/server.js &
-CDN_PID=$!
-sleep 2
-curl -s http://localhost:4566/ | head -1
-echo "✓ CDN server running"
+# Pre-flight (CDN not running yet, so that check will fail — that's OK)
+echo "--- Pre-flight (partial) ---"
+./test-tools/preflight.sh || true
+
+# Start CDN using test tool
+echo ""
+echo "--- Starting CDN server ---"
+eval $(./test-tools/start-cdn.sh)
 
 # Profile list
 echo ""
-echo "--- func-emu start --sku list ---"
-node func-emu/bin/func-emu start --sku list
+echo "--- fnx start --sku list ---"
+node fnx/bin/fnx start --sku list
 echo "✓ Profile list works"
 
 # Invalid SKU error
 echo ""
-echo "--- func-emu start --sku bogus (expect error) ---"
-node func-emu/bin/func-emu start --sku bogus --scriptroot ./test-node-app 2>&1
+echo "--- fnx start --sku bogus (expect error) ---"
+node fnx/bin/fnx start --sku bogus --scriptroot ./test-node-app 2>&1
 echo "✓ Invalid SKU error shown"
 
 # Verify all expected files
@@ -170,25 +184,28 @@ echo "--- File inventory ---"
 echo "build-hosts.sh:        $(test -x build-hosts.sh && echo '✓ executable' || echo '✗ MISSING')"
 echo "cdn-server/server.js:  $(test -f cdn-server/server.js && echo '✓ exists' || echo '✗ MISSING')"
 echo "cdn-server/profiles:   $(node -e "console.log(Object.keys(JSON.parse(require('fs').readFileSync('cdn-server/profiles/sku-profiles.json','utf8')).profiles).length + ' profiles')" 2>/dev/null || echo '✗ MISSING')"
-echo "func-emu/bin:          $(test -x func-emu/bin/func-emu && echo '✓ executable' || echo '✗ MISSING')"
-echo "func-emu/lib:          $(ls func-emu/lib/*.js 2>/dev/null | wc -l | tr -d ' ') JS modules"
+echo "fnx/bin:          $(test -x fnx/bin/fnx && echo '✓ executable' || echo '✗ MISSING')"
+echo "fnx/lib:          $(ls fnx/lib/*.js 2>/dev/null | wc -l | tr -d ' ') JS modules"
 echo "test-node-app:         $(test -f test-node-app/host.json && echo '✓ scaffolded' || echo '✗ MISSING')"
 echo "test-python-app:       $(test -f test-python-app/function_app.py && echo '✓ scaffolded' || echo '✗ MISSING')"
+echo "test-tools:            $(ls test-tools/*.sh 2>/dev/null | wc -l | tr -d ' ') scripts"
 
-kill $CDN_PID 2>/dev/null
+# Cleanup CDN
+./test-tools/cleanup.sh $CDN_PID
 echo ""
 echo "═══ Integration validation complete ═══"
 ```
 
 ## Implementation Guidelines
 
-1. **Copy code exactly from `implementation.md`** — do not refactor, rename, or "improve" the code. The spec is the spec.
-2. **Use ESM modules** — all JS files use `import`/`export`, package.json has `"type": "module"`.
-3. **Zero npm dependencies** for `func-emu/` and `cdn-server/` — Node.js 18+ built-ins only.
-4. **`test-node-app/`** is the one directory that has a dependency: `@azure/functions`.
-5. **Make executables executable** — `chmod +x build-hosts.sh func-emu/bin/func-emu`.
-6. **Profile resolver defaults to `http://localhost:4566/api/profiles`** — this is the CDN server URL.
-7. **Do not modify existing files** — `prd.md`, `implementation.md`, `testing.md`, `agents.md`, `agents/` are off-limits.
+1. **Copy code exactly from `docs/implementation.md`** — do not refactor, rename, or "improve" the code. The spec is the spec.
+2. **Copy test tools exactly from `docs/testing.md`** "Test Tools" section — the scripts are fully specified there.
+3. **Use ESM modules** — all JS files use `import`/`export`, package.json has `"type": "module"`.
+4. **Zero npm dependencies** for `fnx/`, `cdn-server/`, and `test-tools/` — Node.js 18+ built-ins only.
+5. **`tests/test-node-app/`** is the one directory that has a dependency: `@azure/functions`.
+6. **Make executables executable** — `chmod +x build-hosts.sh fnx/bin/fnx test-tools/*.sh`.
+7. **Profile resolver defaults to `http://localhost:4566/api/profiles`** — this is the CDN server URL.
+8. **Do not modify existing files** — `docs/prd.md`, `docs/implementation.md`, `docs/testing.md`, `agents.md`, `agents/` are off-limits.
 
 ## Logging & Progress Reporting
 
@@ -219,7 +236,7 @@ For **every** task:
 
 4. **Report errors inline** — if something fails, say what and why before attempting a fix:
    ```
-   ✗ func-emu/bin/func-emu is not executable — running chmod +x
+   ✗ fnx/bin/fnx is not executable — running chmod +x
    ✓ Fixed
    ```
 
@@ -240,16 +257,16 @@ ls cdn-server/server.js cdn-server/package.json cdn-server/profiles/sku-profiles
 node -e "const p = JSON.parse(require('fs').readFileSync('cdn-server/profiles/sku-profiles.json','utf8')); console.log('Profiles:', Object.keys(p.profiles).length)"
 # Expected: Profiles: 5
 timeout 3 node cdn-server/server.js 2>&1 || true
-# Expected: banner with "func-emu CDN Server"
+# Expected: banner with "fnx CDN Server"
 ```
 
-After **Task 3** (func-emu):
+After **Task 3** (fnx):
 ```bash
-echo "=== Verifying func-emu ==="
-ls func-emu/bin/func-emu func-emu/lib/cli.js func-emu/lib/profile-resolver.js func-emu/lib/host-manager.js func-emu/lib/host-launcher.js
-node func-emu/bin/func-emu 2>&1 | head -3
+echo "=== Verifying fnx ==="
+ls fnx/bin/fnx fnx/lib/cli.js fnx/lib/profile-resolver.js fnx/lib/host-manager.js fnx/lib/host-launcher.js
+node fnx/bin/fnx 2>&1 | head -3
 # Expected: Usage message
-node -e "import('func-emu/lib/profile-resolver.js').then(m => console.log('profile-resolver loaded OK'))" 2>&1
+node -e "import('fnx/lib/profile-resolver.js').then(m => console.log('profile-resolver loaded OK'))" 2>&1
 # Expected: no import errors
 ```
 
@@ -264,23 +281,29 @@ cat test-python-app/local.settings.json | grep FUNCTIONS_WORKER_RUNTIME
 ls test-python-app/function_app.py test-python-app/.venv/bin/activate
 ```
 
-After **Task 5** (integration validation):
+After **Task 5** (test tools):
+```bash
+echo "=== Verifying test-tools ==="
+ls -la test-tools/*.sh
+# Expected: 5 scripts, all executable
+./test-tools/preflight.sh 2>&1 || true
+# Expected: runs checks (some may fail if CDN not started)
+```
+
+After **Task 6** (integration validation):
 ```bash
 echo "=== Integration check: CDN + CLI ==="
-# Start CDN server in background
-node cdn-server/server.js &
-CDN_PID=$!
-sleep 2
+eval $(./test-tools/start-cdn.sh)
 
 # Test profile list
-node func-emu/bin/func-emu start --sku list
+node fnx/bin/fnx start --sku list
 # Expected: table with 5 SKUs
 
 # Test invalid SKU error
-node func-emu/bin/func-emu start --sku bogus --scriptroot ./test-node-app 2>&1
+node fnx/bin/fnx start --sku bogus --scriptroot ./test-node-app 2>&1
 # Expected: error listing valid SKUs
 
-kill $CDN_PID 2>/dev/null
+./test-tools/cleanup.sh $CDN_PID
 echo "=== All checks passed ==="
 ```
 
@@ -295,8 +318,9 @@ After all tasks complete, print a summary:
 ║  ✓ build-hosts.sh          (82 lines, executable)    ║
 ║  ✓ cdn-server/server.js    (120 lines)               ║
 ║  ✓ cdn-server/profiles     (5 SKU profiles)          ║
-║  ✓ func-emu/bin/func-emu   (entry point)             ║
-║  ✓ func-emu/lib/           (4 modules, ~320 lines)   ║
+║  ✓ fnx/bin/fnx   (entry point)             ║
+║  ✓ fnx/lib/           (4 modules, ~320 lines)   ║
+║  ✓ test-tools/             (5 scripts)               ║
 ║  ✓ test-node-app/          (func init + func new)    ║
 ║  ✓ test-python-app/        (func init + func new)    ║
 ║                                                       ║
@@ -309,11 +333,11 @@ After all tasks complete, print a summary:
 - [ ] `build-hosts.sh` exists and is executable
 - [ ] `cdn-server/server.js` starts and serves the root endpoint
 - [ ] `cdn-server/profiles/sku-profiles.json` has 5 SKU profiles with real version tags
-- [ ] `func-emu/bin/func-emu` runs and shows usage
-- [ ] `func-emu/lib/cli.js` parses `--sku`, `--scriptroot`, `--port`
-- [ ] `func-emu/lib/profile-resolver.js` fetches from CDN URL, falls back to bundled
-- [ ] `func-emu/lib/host-manager.js` downloads zips, extracts, caches
-- [ ] `func-emu/lib/host-launcher.js` spawns host with correct env vars
-- [ ] `func-emu/profiles/sku-profiles.json` matches `cdn-server/profiles/sku-profiles.json`
-- [ ] `test-node-app/` has all files and `node_modules/@azure/functions` installed
-- [ ] `node func-emu/bin/func-emu start --sku list` works when CDN server is running
+- [ ] `fnx/bin/fnx` runs and shows usage
+- [ ] `fnx/lib/cli.js` parses `--sku`, `--scriptroot`, `--port`
+- [ ] `fnx/lib/profile-resolver.js` fetches from CDN URL, falls back to bundled
+- [ ] `fnx/lib/host-manager.js` downloads zips, extracts, caches
+- [ ] `fnx/lib/host-launcher.js` spawns host with correct env vars
+- [ ] `fnx/profiles/sku-profiles.json` matches `cdn-server/profiles/sku-profiles.json`
+- [ ] `tests/test-node-app/` has all files and `node_modules/@azure/functions` installed
+- [ ] `node fnx/bin/fnx start --sku list` works when CDN server is running

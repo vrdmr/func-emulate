@@ -1,0 +1,122 @@
+# Build Azure Functions Host binaries for all platforms and upload to GitHub Releases.
+#
+# Trigger: workflow_dispatch with a host version tag (e.g. v4.1047.100).
+# Creates a pre-release "host-vX.Y.Z" with platform zips as assets.
+#
+# Platforms: linux-x64, osx-x64, osx-arm64, win-x64
+
+name: Build Host Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      host_tag:
+        description: 'Host git tag (e.g. v4.1047.100)'
+        required: true
+        type: string
+      sku_name:
+        description: 'SKU label for release notes (e.g. Flex Consumption)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-13        # Intel
+            rid: osx-x64
+          - os: macos-14        # Apple Silicon
+            rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      DOTNET_ROLL_FORWARD: latestMajor
+      HOST_TAG: ${{ inputs.host_tag }}
+
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Clone azure-functions-host
+        run: |
+          git clone --depth 1 --branch ${{ inputs.host_tag }} https://github.com/Azure/azure-functions-host.git host
+
+      - name: Patch global.json for SDK compatibility
+        shell: bash
+        working-directory: host
+        run: |
+          if [ -f global.json ]; then
+            sed -i.bak 's/"rollForward": "[^"]*"/"rollForward": "latestMajor"/' global.json
+            rm -f global.json.bak
+          fi
+
+      - name: Build self-contained host
+        working-directory: host
+        run: |
+          dotnet publish src/WebJobs.Script.WebHost/WebJobs.Script.WebHost.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --self-contained \
+            -p:PublishReadyToRun=false \
+            -o ./publish
+
+      - name: Create zip
+        shell: bash
+        run: |
+          cd host/publish
+          zip -r -q "../../azure-functions-v${{ inputs.host_tag }}-${{ matrix.rid }}.zip" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-${{ matrix.rid }}
+          path: azure-functions-v${{ inputs.host_tag }}-${{ matrix.rid }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lh assets/
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="host-${{ inputs.host_tag }}"
+          VERSION="${{ inputs.host_tag }}"
+          VERSION="${VERSION#v}"
+          SKU="${{ inputs.sku_name }}"
+          NOTES="Azure Functions Host ${VERSION} — self-contained builds for local emulation.
+
+          ${SKU:+SKU: $SKU}
+          Platforms: linux-x64, osx-x64, osx-arm64, win-x64
+          Built from: https://github.com/Azure/azure-functions-host/releases/tag/${{ inputs.host_tag }}"
+
+          # Create release if it doesn't exist, or upload assets to existing
+          gh release create "$TAG" assets/*.zip \
+            --repo ${{ github.repository }} \
+            --title "Host ${VERSION}${SKU:+ ($SKU)}" \
+            --notes "$NOTES" \
+            --prerelease \
+          || gh release upload "$TAG" assets/*.zip \
+            --repo ${{ github.repository }} \
+            --clobber

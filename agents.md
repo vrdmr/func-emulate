@@ -1,6 +1,6 @@
-# Agents: func-emulate POC
+# Agents: fnx POC
 
-This project uses a **top-level orchestrator** and **three specialized agents** to build the func-emulate POC. Each agent has a focused scope, clear inputs/outputs, and can work independently.
+This project uses a **top-level orchestrator** and **three specialized agents** to build the fnx POC. Each agent has a focused scope, clear inputs/outputs, and can work independently.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ This project uses a **top-level orchestrator** and **three specialized agents** 
 │  Coordinates the three agents, validates handoffs,       │
 │  ensures end-to-end integration.                         │
 │                                                          │
-│  Inputs:  prd.md, implementation.md, testing.md          │
+│  Inputs:  docs/prd.md, docs/implementation.md, docs/testing.md │
 │  Outputs: Working POC, validated end-to-end              │
 │                                                          │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
@@ -34,32 +34,32 @@ The PM Agent and Test Agent can run in parallel after the Engineer Agent complet
 
 | Agent | Scope | Key Files | Success Criteria |
 |-------|-------|-----------|------------------|
-| **PM** | Validate PRD requirements are met by the implementation | `prd.md`, all source files | Checklist of PRD requirements mapped to implementation |
-| **Engineer** | Scaffold all code from `implementation.md` spec | `build-hosts.sh`, `cdn-server/`, `func-emu/`, `test-node-app/` | All files created, CLI runs without errors |
-| **Test** | Execute `testing.md` plan, validate end-to-end | `testing.md`, running system | Tests 1-6 (P0) pass |
+| **PM** | Validate PRD requirements are met by the implementation | `docs/prd.md`, all source files | Checklist of PRD requirements mapped to implementation |
+| **Engineer** | Scaffold all code from `docs/implementation.md` spec | `cdn-server/`, `fnx/`, `tests/` | All files created, CLI runs without errors |
+| **Test** | Execute `docs/testing.md` plan, validate end-to-end | `docs/testing.md`, running system | Tests 1-6 (P0) pass |
 
 ## Handoff Protocol
 
 ### Engineer → PM
 The Engineer Agent produces:
-- `build-hosts.sh` (executable)
+- `tests/build-hosts.sh` (executable)
 - `cdn-server/server.js` + `cdn-server/profiles/sku-profiles.json` + `cdn-server/package.json`
-- `func-emu/` with all 4 JS files + `package.json` + bundled `profiles/sku-profiles.json`
+- `fnx/` with all 4 JS files + `package.json` + bundled `profiles/sku-profiles.json`
 - `test-node-app/` with `host.json`, `local.settings.json`, `package.json`, `src/functions/hello.js`
 
-The PM Agent then validates these against `prd.md` requirements.
+The PM Agent then validates these against `docs/prd.md` requirements.
 
 ### Engineer → Test
 The Test Agent needs:
 - All code scaffolded by Engineer Agent
-- Host binaries built (by running `build-hosts.sh`) OR manually placed in cache
+- Host binaries built (by running `tests/build-hosts.sh`) OR manually placed in cache
 - CDN server running on `localhost:4566`
 
 ### PM → Orchestrator
 PM Agent produces a validation report: checklist of PRD requirements with pass/fail/partial status.
 
 ### Test → Orchestrator
-Test Agent produces a test report: pass/fail for each test in `testing.md`.
+Test Agent produces a test report: pass/fail for each test in `docs/testing.md`.
 
 ## How to Run
 
@@ -68,7 +68,7 @@ Test Agent produces a test report: pass/fail for each test in `testing.md`.
 #    (see agents/engineer.md)
 
 # 2. Build host packages (long-running, ~20 min)
-./build-hosts.sh
+./tests/build-hosts.sh
 
 # 3. Start CDN server (background)
 cd cdn-server && node server.js &

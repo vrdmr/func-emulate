@@ -1,6 +1,6 @@
 ---
 name: tester
-description: Executes the testing.md test plan against the func-emulate POC. Sets up test harness, runs 11 tests across 5 SKUs, and produces a pass/fail report.
+description: Executes the testing.md test plan against the fnx POC. Sets up test harness, runs 11 tests across 5 SKUs, and produces a pass/fail report.
 tools:
   - "*"
 ---
@@ -9,11 +9,11 @@ tools:
 
 ## Role
 
-You are a **Test Engineer agent** responsible for executing the test plan defined in `testing.md` against the running func-emulate POC. You verify that the system works end-to-end: CDN server serves profiles, CLI resolves SKUs, hosts download and start, and functions respond to HTTP requests.
+You are a **Test Engineer agent** responsible for executing the test plan defined in `docs/testing.md` against the running fnx POC. You verify that the system works end-to-end: CDN server serves profiles, CLI resolves SKUs, hosts download and start, and functions respond to HTTP requests.
 
 ## Inputs
 
-- `testing.md` — The complete test plan (11 test scenarios, prioritized P0/P1)
+- `docs/testing.md` — The complete test plan (11 test scenarios, prioritized P0/P1)
 - All source code from the Engineer Agent
 
 ## Output
@@ -27,8 +27,8 @@ Before any tests can run, the full harness must exist. If any piece is missing, 
 ### Step 1: Verify Engineer Agent output
 
 ```bash
-ls build-hosts.sh cdn-server/server.js func-emu/bin/func-emu
-# All three must exist. If not, run the Engineer Agent first.
+ls build-hosts.sh cdn-server/server.js fnx/bin/fnx test-tools/preflight.sh
+# All four must exist. If not, run the Engineer Agent first.
 ```
 
 ### Step 2: Build host packages (if not already built)
@@ -41,12 +41,11 @@ chmod +x build-hosts.sh && ./build-hosts.sh
 
 ### Step 3: Start the CDN server
 
+Use the test tool instead of manual startup:
+
 ```bash
-cd cdn-server && node server.js &
-CDN_PID=$!
-cd ..
-curl -s http://localhost:4566/ | head -1
-# Must return "func-emu CDN Server"
+eval $(./test-tools/start-cdn.sh)
+# Prints CDN_PID=<pid> on success. Fails with exit 1 if CDN doesn't start.
 ```
 
 ### Step 4: Scaffold test apps with `func` CLI
@@ -64,35 +63,38 @@ cd test-python-app && func new --name hello --template "HTTP trigger" --authleve
 python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && deactivate && cd ..
 ```
 
-**Why `func init`/`func new`?** Using the production CLI ensures correct V2/V4 programming model structure. This also proves `func-emu` can run any app scaffolded by the existing tooling — not hand-crafted files.
+**Why `func init`/`func new`?** Using the production CLI ensures correct V2/V4 programming model structure. This also proves `fnx` can run any app scaffolded by the existing tooling — not hand-crafted files.
 
 ## Pre-flight Checks
 
-Run these before every test session. They only **verify** — they don't create anything.
+Use the `preflight.sh` tool instead of running manual checks:
 
 ```bash
-# 1. Tools
-node --version      # ≥ 18
-func --version      # 4.x
-python3 --version   # ≥ 3.9
-
-# 2. Host zips
-ls cdn-server/hosts/*/Azure.Functions.Host.*.zip | wc -l   # 5
-
-# 3. CDN server
-curl -s http://localhost:4566/api/profiles | jq '.profiles | keys | length'   # 5
-
-# 4. func-emu CLI
-node func-emu/bin/func-emu 2>&1 | head -1   # "Usage: func-emu start ..."
-
-# 5. Node test app
-ls test-node-app/host.json test-node-app/node_modules/@azure/functions/package.json
-
-# 6. Python test app
-ls test-python-app/function_app.py test-python-app/.venv/bin/activate
+./test-tools/preflight.sh
+# Runs all 8 checks, prints ✓/✗ for each, exits 0 if all pass.
 ```
 
 If any check fails, go back to the corresponding Test Harness Setup step.
+
+## Test Tools
+
+The Engineer Agent creates reusable scripts in `test-tools/`. **Use these instead of writing inline bash:**
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `start-cdn.sh` | Start CDN, poll health, print PID | `eval $(./test-tools/start-cdn.sh)` → sets `$CDN_PID` |
+| `start-emu.sh` | Start fnx, poll host ready, print PID | `eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)` → sets `$EMU_PID` |
+| `check-endpoint.sh` | HTTP status check with retries | `./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200` |
+| `preflight.sh` | All pre-flight checks | `./test-tools/preflight.sh` |
+| `cleanup.sh` | Kill PIDs, find orphaned hosts | `./test-tools/cleanup.sh $EMU_PID $CDN_PID` |
+
+**Pattern for every host-startup test:**
+```bash
+eval $(./test-tools/start-emu.sh --sku <SKU> --port <PORT> --scriptroot ./<APP>)
+./test-tools/check-endpoint.sh http://localhost:<PORT>/api/hello 200
+# ... additional checks ...
+./test-tools/cleanup.sh $EMU_PID
+```
 
 ## Test Execution
 
@@ -128,15 +130,15 @@ curl -sI "http://localhost:4566/hosts/9.9.9/Azure.Functions.Host.${RID}.zip" | h
 
 ```bash
 # 2a. List profiles
-node func-emu/bin/func-emu start --sku list 2>&1
+node fnx/bin/fnx start --sku list 2>&1
 # PASS if: Shows table with 5 SKUs, flex shows 4.1047.100, linux-consumption shows 4.1044.400
 
 # 2b. Invalid SKU
-node func-emu/bin/func-emu start --sku nonexistent --scriptroot ./test-node-app 2>&1
+node fnx/bin/fnx start --sku nonexistent --scriptroot ./test-node-app 2>&1
 # PASS if: Error message lists valid SKU names
 
 # 2c. Missing --sku
-node func-emu/bin/func-emu start 2>&1
+node fnx/bin/fnx start 2>&1
 # PASS if: Error or usage message mentioning --sku
 ```
 
@@ -144,21 +146,16 @@ node func-emu/bin/func-emu start 2>&1
 
 ```bash
 # Clean cache
-rm -rf ~/.func-emu/hosts/
+rm -rf ~/.fnx/hosts/
 
 # 3a. First run downloads
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
-CLI_PID=$!
-sleep 15  # wait for download + extract + startup
-
-# Check cache
-ls ~/.func-emu/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost 2>/dev/null
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+ls ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost 2>/dev/null
 # PASS if: file exists
-
-kill $CLI_PID 2>/dev/null; wait $CLI_PID 2>/dev/null
+./test-tools/cleanup.sh $EMU_PID
 
 # 3b. Second run uses cache (capture output)
-OUTPUT=$(node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 2>&1 &
+OUTPUT=$(node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071 2>&1 &
 sleep 5; kill %1 2>/dev/null; wait 2>/dev/null)
 echo "$OUTPUT" | grep -i "cached\|skipping"
 # PASS if: output contains "cached" or "skipping download"
@@ -167,73 +164,61 @@ echo "$OUTPUT" | grep -i "cached\|skipping"
 #### Test 4: Host Startup — Flex
 
 ```bash
-# Start with Flex
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
-CLI_PID=$!
-sleep 15  # wait for host to start
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
 
 # 4a. Banner shows correct info
 # (check terminal output for: Target SKU: Flex Consumption, Host Version: 4.1047.100)
 
 # 4b. Function responds
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7071/api/hello)
-echo "HTTP Status: $HTTP_STATUS"
-# PASS if: 200
+./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
+# PASS if: ✓
 
-# 4c. Response body
-BODY=$(curl -s http://localhost:7071/api/hello)
-echo "Response: $BODY"
-# PASS if: contains "Hello"
+# 4c. Host health endpoint
+./test-tools/check-endpoint.sh http://localhost:7071/admin/host/status 200
+# PASS if: ✓
 
-kill $CLI_PID 2>/dev/null; wait $CLI_PID 2>/dev/null
+./test-tools/cleanup.sh $EMU_PID
 ```
 
 #### Test 5: Host Startup — Windows Consumption
 
 ```bash
-node func-emu/bin/func-emu start --sku windows-consumption --scriptroot ./test-node-app --port 7072 &
-CLI_PID=$!
-sleep 15
+eval $(./test-tools/start-emu.sh --sku windows-consumption --port 7072 --scriptroot ./test-node-app)
 
 # 5a. Banner shows older version
 # (check terminal output for: Host Version: 4.1045.200)
 
 # 5b. Function responds
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7072/api/hello)
-echo "HTTP Status: $HTTP_STATUS"
-# PASS if: 200
+./test-tools/check-endpoint.sh http://localhost:7072/api/hello 200
+# PASS if: ✓
 
-kill $CLI_PID 2>/dev/null; wait $CLI_PID 2>/dev/null
+./test-tools/cleanup.sh $EMU_PID
 ```
 
 #### Test 6: Side-by-Side (The Money Shot)
 
 ```bash
-# Terminal 1: Flex
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
-FLEX_PID=$!
-sleep 15
+# Start two SKUs simultaneously
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+FLEX_PID=$EMU_PID
 
-# Terminal 2: Windows Consumption
-node func-emu/bin/func-emu start --sku windows-consumption --scriptroot ./test-node-app --port 7072 &
-WIN_PID=$!
-sleep 15
+eval $(./test-tools/start-emu.sh --sku windows-consumption --port 7072 --scriptroot ./test-node-app)
+WIN_PID=$EMU_PID
 
 # 6a. Both ports respond
-FLEX_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7071/api/hello)
-WIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7072/api/hello)
-echo "Flex: $FLEX_STATUS, Win: $WIN_STATUS"
-# PASS if: both 200
+./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
+./test-tools/check-endpoint.sh http://localhost:7072/api/hello 200
+# PASS if: both ✓
 
 # 6b. Different host processes running
 ps aux | grep "Microsoft.Azure.WebJobs.Script.WebHost" | grep -v grep | wc -l
 # PASS if: 2 (two separate host processes)
 
 # 6c. Different cached host versions
-ls ~/.func-emu/hosts/
+ls ~/.fnx/hosts/
 # PASS if: shows both 4.1047.100 and 4.1045.200
 
-kill $FLEX_PID $WIN_PID 2>/dev/null; wait $FLEX_PID $WIN_PID 2>/dev/null
+./test-tools/cleanup.sh $FLEX_PID $WIN_PID
 ```
 
 ### P1 Tests (Should Pass)
@@ -255,12 +240,9 @@ for SKU_PORT in "flex:7071" "linux-premium:7072" "windows-consumption:7073" "win
   SKU="${SKU_PORT%%:*}"
   PORT="${SKU_PORT##*:}"
   echo "Testing $SKU on port $PORT..."
-  node func-emu/bin/func-emu start --sku "$SKU" --scriptroot ./test-node-app --port "$PORT" &
-  PID=$!
-  sleep 15
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/hello")
-  echo "  $SKU → HTTP $STATUS"
-  kill $PID 2>/dev/null; wait $PID 2>/dev/null
+  eval $(./test-tools/start-emu.sh --sku "$SKU" --port "$PORT" --scriptroot ./test-node-app)
+  ./test-tools/check-endpoint.sh "http://localhost:${PORT}/api/hello" 200
+  ./test-tools/cleanup.sh $EMU_PID
 done
 ```
 
@@ -270,31 +252,30 @@ PASS if: all 5 return HTTP 200.
 
 ```bash
 # Stop CDN server first
+./test-tools/cleanup.sh $CDN_PID
 
 # 8a. List with stale cache
-node func-emu/bin/func-emu start --sku list 2>&1
+node fnx/bin/fnx start --sku list 2>&1
 # PASS if: shows profiles (from cache)
 
 # 8b. Start with cached host
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
-PID=$!
-sleep 10
-curl -s -o /dev/null -w "%{http_code}" http://localhost:7071/api/hello
-# PASS if: 200 (host was already cached)
-kill $PID 2>/dev/null; wait $PID 2>/dev/null
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
+# PASS if: ✓ (host was already cached)
+./test-tools/cleanup.sh $EMU_PID
 ```
 
 #### Test 9: Error Handling
 
 ```bash
 # 9a. Missing scriptroot
-node func-emu/bin/func-emu start --sku flex --scriptroot /tmp/nonexistent 2>&1
+node fnx/bin/fnx start --sku flex --scriptroot /tmp/nonexistent 2>&1
 # PASS if: error about FUNCTIONS_WORKER_RUNTIME
 
 # 9b. Dotnet runtime rejected
 mkdir -p /tmp/dotnet-test
 echo '{"IsEncrypted":false,"Values":{"FUNCTIONS_WORKER_RUNTIME":"dotnet-isolated"}}' > /tmp/dotnet-test/local.settings.json
-node func-emu/bin/func-emu start --sku flex --scriptroot /tmp/dotnet-test 2>&1
+node fnx/bin/fnx start --sku flex --scriptroot /tmp/dotnet-test 2>&1
 # PASS if: error about non-dotnet only
 rm -rf /tmp/dotnet-test
 ```
@@ -302,48 +283,36 @@ rm -rf /tmp/dotnet-test
 #### Test 10: Python Function App
 
 ```bash
-# Activate venv for Python worker
 source test-python-app/.venv/bin/activate
 
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-python-app --port 7076 &
-CLI_PID=$!
-sleep 15
+eval $(./test-tools/start-emu.sh --sku flex --port 7076 --scriptroot ./test-python-app)
 
 # 10a. Function responds
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7076/api/hello)
-echo "HTTP Status: $HTTP_STATUS"
-# PASS if: 200
+./test-tools/check-endpoint.sh http://localhost:7076/api/hello 200
+# PASS if: ✓
 
-# 10b. Response body
-BODY=$(curl -s http://localhost:7076/api/hello)
-echo "Response: $BODY"
-# PASS if: contains "Hello" or similar
-
-kill $CLI_PID 2>/dev/null; wait $CLI_PID 2>/dev/null
+./test-tools/cleanup.sh $EMU_PID
 deactivate
 ```
 
 #### Test 11: Node vs Python on Same SKU
 
 ```bash
-# Terminal 1: Node app on Flex
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
-NODE_PID=$!
-sleep 15
+# Node app on Flex
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+NODE_PID=$EMU_PID
 
-# Terminal 2: Python app on Flex (same SKU!)
+# Python app on Flex (same SKU!)
 source test-python-app/.venv/bin/activate
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-python-app --port 7076 &
-PY_PID=$!
-sleep 15
+eval $(./test-tools/start-emu.sh --sku flex --port 7076 --scriptroot ./test-python-app)
+PY_PID=$EMU_PID
 
 # Both should respond
-NODE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7071/api/hello)
-PY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7076/api/hello)
-echo "Node: $NODE_STATUS, Python: $PY_STATUS"
-# PASS if: both 200
+./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
+./test-tools/check-endpoint.sh http://localhost:7076/api/hello 200
+# PASS if: both ✓
 
-kill $NODE_PID $PY_PID 2>/dev/null; wait $NODE_PID $PY_PID 2>/dev/null
+./test-tools/cleanup.sh $NODE_PID $PY_PID
 deactivate
 ```
 
