@@ -6,7 +6,7 @@ const CACHE_DIR = join(homedir(), '.fnx', 'profiles');
 const CACHE_FILE = join(CACHE_DIR, 'sku-profiles.json');
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-const DEFAULT_CDN_URL = 'http://localhost:4566/api/profiles';
+const DEFAULT_CDN_URL = 'https://raw.githubusercontent.com/vrdmr/func-emulate/feature/func-emulate-poc/fnx/profiles/sku-profiles.json';
 
 // Bundled fallback (shipped with the POC)
 const BUNDLED_PROFILES_PATH = new URL('../profiles/sku-profiles.json', import.meta.url).pathname;
