@@ -1248,6 +1248,104 @@ node bin/func-emu start --sku list
 | Can a thin JS CLI replace the monolithic Core Tools for local dev? | ~350 lines of JS, zero deps, full F5 experience |
 | Does a CDN-hosted profile registry work for version resolution? | cdn-server emulates the production CDN endpoint |
 
+## 8b. Extension Bundle Support
+
+### Background
+
+Azure Functions uses **extension bundles** to provide trigger and binding implementations (HTTP, Timer, Storage, etc.) without requiring customers to manage NuGet references. The `host.json` in every function app declares the bundle:
+
+```json
+{
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+  }
+}
+```
+
+The host needs these bundles at startup. Core Tools (`func start`) handles this by:
+1. Setting `FUNCTIONS_CORETOOLS_ENVIRONMENT=true` — tells the host it's in a dev/download context
+2. Setting `AzureFunctionsJobHost:extensionBundle:downloadPath` — tells the host WHERE to cache downloaded bundles
+3. The host then auto-downloads from the Azure CDN: `https://cdn.functions.azure.com/public/ExtensionBundles/{id}/{version}/{id}.{version}_any-any.zip`
+
+### How the Host Resolves Bundles
+
+From `ExtensionBundleManager.cs` in azure-functions-host:
+
+```
+GetBundle():
+  1. TryLocateExtensionBundle() — searches ProbingPaths + DownloadPath for existing bundle
+  2. If (isAppService || IsCoreTools || isLinuxConsumption || isContainer) AND (!found || ensureLatest):
+     a. GetLatestMatchingBundleVersionAsync() — fetches index.json from CDN, finds best match for version range
+     b. DownloadExtensionBundleAsync() — downloads {id}.{version}_any-any.zip, extracts to DownloadPath
+  3. Returns bundle path (or null)
+```
+
+Key env vars:
+- `FUNCTIONS_CORETOOLS_ENVIRONMENT` — must be set (any non-empty value) for host to enter download path (`IsCoreTools()`)
+- `AzureFunctionsJobHost:extensionBundle:downloadPath` — where host downloads and caches bundles
+- `ExtensionBundleSourceUri` (optional) — override CDN URL (default: `https://cdn.functions.azure.com/public`)
+
+### Bundle Download URL Pattern
+
+```
+Index:  https://cdn.functions.azure.com/public/ExtensionBundles/{id}/index.json
+Bundle: https://cdn.functions.azure.com/public/ExtensionBundles/{id}/{version}/{id}.{version}_any-any.zip
+```
+
+The `_any-any` suffix is the "flavor" for non-AppService environments (vs `_win-any` or `_linux-any` for managed hosting).
+
+### Bundle Directory Structure (after extraction)
+
+```
+~/.fnx/bundles/Microsoft.Azure.Functions.ExtensionBundle/4.30.0/
+├── bundle.json           ← metadata: {"id": "...", "version": "4.30.0"}
+├── bin/                  ← extension DLLs (161 files)
+│   ├── Azure.Messaging.ServiceBus.dll
+│   ├── Microsoft.Azure.WebJobs.Extensions.Http.dll
+│   └── ...
+├── StaticContent/        ← binding metadata for worker indexing
+└── extensions.csproj
+```
+
+### fnx Implementation
+
+In `host-launcher.js`, set three env vars before spawning the host:
+
+```javascript
+// Enable extension bundle auto-download (host checks IsCoreTools())
+env['FUNCTIONS_CORETOOLS_ENVIRONMENT'] = 'true';
+
+// Set bundle download/cache path under ~/.fnx/bundles/
+const bundleDownloadPath = join(homedir(), '.fnx', 'bundles',
+  'Microsoft.Azure.Functions.ExtensionBundle');
+env['AzureFunctionsJobHost:extensionBundle:downloadPath'] = bundleDownloadPath;
+```
+
+This lets the host handle all bundle resolution, version matching, download, and extraction — exactly as it does under Core Tools. No custom download logic needed in fnx.
+
+The host will:
+1. Read `extensionBundle` from the function app's `host.json`
+2. Check `downloadPath` for existing bundles
+3. If not found (and `FUNCTIONS_CORETOOLS_ENVIRONMENT` is set), fetch index.json from CDN
+4. Download best matching version zip
+5. Extract to `downloadPath/{version}/`
+6. Load extensions from `bin/`
+
+### Cache Location
+
+```
+~/.fnx/
+├── hosts/          ← host binaries (existing)
+│   └── 4.1047.100/
+└── bundles/        ← extension bundles (new)
+    └── Microsoft.Azure.Functions.ExtensionBundle/
+        └── 4.30.0/
+            ├── bundle.json
+            ├── bin/
+            └── ...
+```
+
 ## 9. What This POC Does NOT Prove
 
 | Gap | Why | Path Forward |

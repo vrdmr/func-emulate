@@ -1,6 +1,6 @@
 import { spawn, execSync } from 'node:child_process';
 import { join } from 'node:path';
-import { platform } from 'node:os';
+import { platform, homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { existsSync } from 'node:fs';
 import { getHostExeName } from './host-manager.js';
@@ -224,6 +224,11 @@ export async function launchHost(hostDir, opts) {
     FUNCTIONS_WORKER_RUNTIME: opts.workerRuntime,
     'AzureFunctionsJobHost:extensionBundle:version': opts.extensionBundleVersion,
     AzureWebJobsFeatureFlags: 'EnableWorkerIndexing',
+    // Enable extension bundle auto-download (host checks IsCoreTools())
+    FUNCTIONS_CORETOOLS_ENVIRONMENT: 'true',
+    // Set bundle download/cache path under ~/.fnx/bundles/
+    'AzureFunctionsJobHost:extensionBundle:downloadPath': join(homedir(), '.fnx', 'bundles',
+      'Microsoft.Azure.Functions.ExtensionBundle'),
   };
 
   // Merge all app config values into env
