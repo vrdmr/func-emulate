@@ -30,6 +30,12 @@ export async function main(args) {
     return;
   }
 
+  if (cmd === 'warmup') {
+    const { warmup } = await import('./warmup.js');
+    await warmup(args.slice(1));
+    return;
+  }
+
   if (cmd !== 'start') {
     console.error(`Unknown command: ${cmd}\n`);
     printHelp();
@@ -231,6 +237,8 @@ Usage: fnx <action> [-/--options]
 Actions:
   start            Launch the Azure Functions host runtime for a specific SKU.
                    Downloads and caches the correct host version automatically.
+  warmup           Pre-download host binaries and extension bundles for offline use.
+                   Runs automatically as postinstall hook. Use --dry-run to preview.
   templates-mcp    Start the Azure Functions templates MCP server (stdio transport).
                    Drop-in replacement for manvir-templates-mcp-server.
                    Provides 68 templates across 4 languages via MCP protocol.
