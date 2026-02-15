@@ -60,7 +60,17 @@ The fnx (Phoenix Emulate) POC proves that a **SKU-aware local emulator** for Azu
 - Remove file patching once env var approach is validated across all host versions
 - Or: contribute upstream fix to azure-functions-host to respect env var consistently
 
-### 4. Extension bundles — not validated
+### 4. Non-HTTP trigger display in function listing
+
+**Current:** The clean output parses the worker indexing JSON log line to extract non-HTTP triggers (blob, timer, queue, etc.) and displays them alongside HTTP routes. This log-parsing approach is fragile — it depends on the exact format of the Python/Node worker's indexing output, which may change across host versions.
+
+**Production fix:**
+- Use the host's `/admin/functions` REST API to get the canonical function list with binding metadata
+- Requires reading the auto-generated master key from `{scriptRoot}/secrets/host.json` (set `AzureWebJobsSecretStorageType=Files`)
+- Or: investigate how Core Tools uses in-process `IScriptJobHost.Functions` via DI (see `DisplayFunctionsInfoUtilities.cs` in Core Tools repo) and find an equivalent out-of-process mechanism
+- Fall back to log parsing if the admin API is unavailable
+
+### 5. Extension bundles — not validated
 
 **Current:** `extensionBundle` in `host.json` points to `https://functionscdn.azureedge.net/public/ExtensionBundles/Microsoft.Azure.Functions.ExtensionBundle/...`. The host downloads these at startup. This works when online but fails offline.
 
@@ -69,7 +79,7 @@ The fnx (Phoenix Emulate) POC proves that a **SKU-aware local emulator** for Azu
 - Or: bundle a minimal set of extensions (HTTP, Timer, Storage) in the host zip
 - Support `--offline` mode that skips extension download
 
-### 5. dotnet-isolated runtime — not supported
+### 6. dotnet-isolated runtime — not supported
 
 **Current:** Only non-dotnet languages (Node, Python, Java, PowerShell) are supported. The `dotnet-isolated` runtime model requires a different host startup flow.
 
@@ -78,7 +88,7 @@ The fnx (Phoenix Emulate) POC proves that a **SKU-aware local emulator** for Azu
 - May need to build the user's project (`dotnet build`) before launching host
 - Consider making this a separate "advanced" path
 
-### 6. Java and PowerShell — not tested
+### 7. Java and PowerShell — not tested
 
 **Current:** Profile metadata includes Java and PowerShell as supported runtimes, but no test apps exist.
 
@@ -87,7 +97,7 @@ The fnx (Phoenix Emulate) POC proves that a **SKU-aware local emulator** for Azu
 - Validate Java worker needs (JRE path, worker config)
 - Validate PowerShell worker needs (pwsh path)
 
-### 7. npm distribution — not implemented
+### 8. npm distribution — not implemented
 
 **Current:** `fnx` is run via `node fnx/bin/fnx`. Not published to npm.
 
@@ -96,7 +106,7 @@ The fnx (Phoenix Emulate) POC proves that a **SKU-aware local emulator** for Azu
 - `npx fnx start --sku flex` should just work
 - Include bundled profiles in the package
 
-### 8. Auth levels — anonymous only
+### 9. Auth levels — anonymous only
 
 **Current:** Test functions use `authLevel: anonymous`. The POC doesn't handle function keys or admin keys.
 
@@ -105,7 +115,7 @@ The fnx (Phoenix Emulate) POC proves that a **SKU-aware local emulator** for Azu
 - Need to set up local key storage (file-based)
 - Or: add `--no-auth` flag that injects anonymous auth middleware
 
-### 9. HTTPS — not supported
+### 10. HTTPS — not supported
 
 **Current:** Host listens on HTTP only.
 
@@ -114,7 +124,7 @@ The fnx (Phoenix Emulate) POC proves that a **SKU-aware local emulator** for Azu
 - Generate self-signed cert or accept user-provided cert
 - Set `ASPNETCORE_URLS` to `https://...` and configure Kestrel
 
-### 10. Colored console output
+### 11. Colored console output
 
 **Current:** All log output is plain text with no color differentiation.
 
@@ -124,7 +134,7 @@ The fnx (Phoenix Emulate) POC proves that a **SKU-aware local emulator** for Azu
 - Respect `NO_COLOR` env var and `--no-color` flag for CI/piped output
 - Color the startup banner, function route listing, and request/response logs differently
 
-### 11. Azurite lifecycle
+### 12. Azurite lifecycle
 
 **Current:** Auto-starts Azurite as a detached process when `UseDevelopmentStorage=true`. Cleanup happens on SIGINT/SIGTERM but orphan processes are possible.
 

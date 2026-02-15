@@ -349,13 +349,13 @@ Since Core Tools v5 no longer bundles the host, **all** host versions are downlo
 
 Before committing to the full C# rearchitecture, validate the decoupled architecture with a lightweight POC:
 
-- **What**: A ~550-line JavaScript CLI (`func-emu`) that downloads self-contained host builds from a dummy CDN server and launches them as child processes. Scoped to non-dotnet languages (Node.js, Python, Java, PowerShell).
+- **What**: A ~550-line JavaScript CLI (`fnx`) that downloads self-contained host builds from a dummy CDN server and launches them as child processes. Scoped to non-dotnet languages (Node.js, Python, Java, PowerShell).
 - **Why**: Proves that (a) the host can run standalone without Core Tools DI injection, (b) profile-based version resolution works, (c) language workers start correctly via gRPC, and (d) two different host versions can serve the same app simultaneously.
 - **How**: Three independent workstreams:
   1. **Host Builder**: Build self-contained hosts from 5 real release tags (`v4.1047.100` through `v4.1044.400`) using `dotnet publish --self-contained`.
   2. **Dummy CDN Server**: Zero-dep Node.js HTTP server serving the SKU profiles JSON and host zip downloads on `localhost:4566`.
-  3. **func-emu CLI**: Thin Node.js CLI that fetches profiles, downloads/caches hosts, and spawns them.
-- **Success**: Running `func-emu start --sku flex` on port 7071 and `func-emu start --sku windows-consumption` on port 7072 simultaneously, with different host versions serving the same function app.
+  3. **fnx CLI**: Thin Node.js CLI that fetches profiles, downloads/caches hosts, and spawns them.
+- **Success**: Running `fnx start --sku flex` on port 7071 and `fnx start --sku windows-consumption` on port 7072 simultaneously, with different host versions serving the same function app.
 - **Details**: See `implementation.md` and `testing.md`.
 
 ### Phase 1: Profile Registry + `func start --sku` (This PRD)
