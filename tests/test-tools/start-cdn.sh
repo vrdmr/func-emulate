@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: ./test-tools/start-cdn.sh
+# Usage: ./tests/test-tools/start-cdn.sh
 # Output: CDN_PID=<pid> on stdout (for eval)
 # Exit 1 if CDN doesn't become healthy within 10s
 set -euo pipefail

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: ./test-tools/cleanup.sh [PID1 PID2 ...]
+# Usage: ./tests/test-tools/cleanup.sh [PID1 PID2 ...]
 # If PIDs given, kills those. Otherwise kills tracked PIDs from PIDS_FILE.
 set -uo pipefail
 

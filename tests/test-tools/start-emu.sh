@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: ./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app
+# Usage: ./tests/test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./tests/test-node-app
 # Output: EMU_PID=<pid> on stdout (for eval)
 # Exit 1 if host doesn't respond within 60s
 set -euo pipefail
@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 PORT="${PORT:-7071}"
-SCRIPTROOT="${SCRIPTROOT:-./test-node-app}"
+SCRIPTROOT="${SCRIPTROOT:-./tests/test-node-app}"
 
 echo "Starting func-emu --sku $SKU --port $PORT --scriptroot $SCRIPTROOT" >&2
 

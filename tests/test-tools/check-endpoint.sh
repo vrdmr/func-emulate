@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Usage: ./test-tools/check-endpoint.sh <url> [expected_status] [max_retries]
-# Example: ./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
+# Usage: ./tests/test-tools/check-endpoint.sh <url> [expected_status] [max_retries]
+# Example: ./tests/test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
 # Exit 0 on match, exit 1 on mismatch/timeout
 set -euo pipefail
 
