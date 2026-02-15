@@ -274,8 +274,10 @@ function createLogFilter(verbose, hostState) {
     }
   }
 
-  return { processLine, extractFunctionInfo, extractListeningUrl };
+  return { processLine, extractFunctionInfo, extractListeningUrl, isSuppressed };
 }
+
+export { createLogFilter };
 
 export async function launchHost(hostDir, opts) {
   const hostExe = join(hostDir, getHostExeName());

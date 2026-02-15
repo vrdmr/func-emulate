@@ -214,12 +214,12 @@ async function startTemplatesMcp() {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-function getFlag(args, flag) {
+export function getFlag(args, flag) {
   const idx = args.indexOf(flag);
   return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : null;
 }
 
-async function readJsonFile(filePath) {
+export async function readJsonFile(filePath) {
   try {
     return JSON.parse(await readFile(filePath, 'utf-8'));
   } catch {
