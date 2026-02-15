@@ -23,6 +23,7 @@ A CDN-hosted JSON registry (`sku-profiles.json`) that maps each SKU to its curre
       "hostVersion": "4.1047.100",
       "hostGitTag": "v4.1047.100",
       "extensionBundleVersion": "[4.22.*, 5.0.0)",
+      "maxExtensionBundleVersion": "4.99.0",
       "hostPackageUrl": { "<rid>": "<download-url>" },
       "status": "GA | deprecated",
       "retirementDate": "2028-09-30",

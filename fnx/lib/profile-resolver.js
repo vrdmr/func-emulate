@@ -104,13 +104,14 @@ export async function resolveProfile(skuName) {
 export async function listProfiles() {
   const registry = await fetchRegistry();
   console.log('Available SKU profiles:\n');
-  console.log('  SKU                     Host Version         Bundle Version    Status');
-  console.log('  ─────────────────────── ──────────────────── ───────────────── ──────────');
+  console.log('  SKU                     Host Version         Bundle Version    Max Bundle  Status');
+  console.log('  ─────────────────────── ──────────────────── ───────────────── ─────────── ──────────');
   for (const [key, p] of Object.entries(registry.profiles)) {
     const sku = key.padEnd(24);
     const host = p.hostVersion.padEnd(21);
     const bundle = p.extensionBundleVersion.padEnd(18);
-    console.log(`  ${sku}${host}${bundle}${p.status}`);
+    const maxBundle = (p.maxExtensionBundleVersion || 'n/a').padEnd(12);
+    console.log(`  ${sku}${host}${bundle}${maxBundle}${p.status}`);
   }
   console.log(`\n  Last updated: ${registry.updatedAt}`);
 }

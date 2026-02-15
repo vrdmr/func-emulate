@@ -23,9 +23,24 @@ FUNCTIONS_CORETOOLS_ENVIRONMENT = 'true'
 // Where to cache downloaded bundles
 'AzureFunctionsJobHost:extensionBundle:downloadPath' = '~/.fnx/bundles/Microsoft.Azure.Functions.ExtensionBundle'
 
-// SKU-specific version range override
-'AzureFunctionsJobHost:extensionBundle:version' = '[4.22.*, 5.0.0)'  // from profile
+// SKU-specific version range override (clamped by maxExtensionBundleVersion)
+'AzureFunctionsJobHost:extensionBundle:version' = '[4.22.*, 4.99.1)'  // from profile, upper-bounded
 ```
+
+### Bundle Version Capping
+
+Not every host version supports every bundle version. A host at `4.1045.200` might not handle bundles newer than `4.25.0`, even if `4.30.0` exists on CDN. The profile's `maxExtensionBundleVersion` field defines the hard ceiling.
+
+**How it works:**
+1. Profile defines `extensionBundleVersion: "[4.19.*, 5.0.0)"` (the range the SKU intends)
+2. Profile also defines `maxExtensionBundleVersion: "4.25.0"` (the ceiling this host supports)
+3. fnx rewrites the range upper bound: `[4.19.*, 5.0.0)` → `[4.19.*, 4.25.1)`
+4. The host's bundle resolver now cannot download anything above `4.25.0`
+
+**Why this matters:**
+- Extension bundles ship new extension DLLs. A newer bundle may use host APIs that don't exist in an older host, causing runtime failures.
+- Without capping, `[4.19.*, 5.0.0)` would let the host grab `4.30.0` even on a host that only supports up to `4.25.0`.
+- The cap is set per-SKU by the release pipeline based on validated compatibility.
 
 The host handles all bundle resolution, version matching, download, and extraction:
 
@@ -50,7 +65,9 @@ The host handles all bundle resolution, version matching, download, and extracti
 
 ## Production Requirements
 
+- `maxExtensionBundleVersion` must be set in every SKU profile — validated at deploy time
 - Pre-cache bundles for offline support (`--offline` mode)
 - Verify bundle version loaded by host matches profile expectation
+- Warn if user's `host.json` bundle range exceeds `maxExtensionBundleVersion`
 - Support custom bundle IDs (not just `Microsoft.Azure.Functions.ExtensionBundle`)
 - Log bundle version in startup banner for visibility

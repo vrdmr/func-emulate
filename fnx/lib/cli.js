@@ -85,6 +85,9 @@ export async function main(args) {
   console.log(`  Target SKU:        ${profile.displayName}`);
   console.log(`  Host Version:      ${profile.hostVersion}`);
   console.log(`  Extension Bundle:  ${profile.extensionBundleVersion}`);
+  if (profile.maxExtensionBundleVersion) {
+    console.log(`  Max Bundle Cap:    ${profile.maxExtensionBundleVersion}`);
+  }
   console.log();
 
   // 2. Ensure host is downloaded
@@ -124,11 +127,24 @@ export async function main(args) {
   }
 
   // 5. Launch host
+  // Clamp extension bundle version range if profile defines a max
+  let effectiveBundleVersion = profile.extensionBundleVersion;
+  if (profile.maxExtensionBundleVersion) {
+    // Rewrite upper bound: e.g. "[4.19.*, 5.0.0)" → "[4.19.*, 4.25.1)"
+    // This prevents the host from downloading a bundle newer than this host supports
+    const maxParts = profile.maxExtensionBundleVersion.split('.').map(Number);
+    const ceilVersion = `${maxParts[0]}.${maxParts[1]}.${(maxParts[2] || 0) + 1}`;
+    const lowerBound = effectiveBundleVersion.match(/^\[([^\],]+)/);
+    if (lowerBound) {
+      effectiveBundleVersion = `[${lowerBound[1]}, ${ceilVersion})`;
+    }
+  }
+
   await launchHost(hostDir, {
     scriptRoot: resolvePath(scriptRoot),
     port,
     workerRuntime,
-    extensionBundleVersion: profile.extensionBundleVersion,
+    extensionBundleVersion: effectiveBundleVersion,
     mergedValues,
     profile,
     verbose,
