@@ -5,6 +5,7 @@ import { resolveProfile, listProfiles, setProfilesSource } from './profile-resol
 import { ensureHost, ensureBundle } from './host-manager.js';
 import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
+import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
 
 export async function main(args) {
   const cmd = args[0];
@@ -116,11 +117,14 @@ export async function main(args) {
     process.exit(1);
   }
 
+  // F9: .NET isolated worker only — block in-process projects with guidance
   const dotnetRuntimes = ['dotnet', 'dotnet-isolated'];
   if (dotnetRuntimes.includes(workerRuntime)) {
-    console.error(`Error: This POC only supports non-dotnet runtimes (node, python, java, powershell).`);
-    console.error(`       Got: ${workerRuntime}`);
-    process.exit(1);
+    const detection = await detectDotnetModel(resolvePath(scriptRoot));
+    if (detection.isInProcess) {
+      printInProcessError(detection.csprojPath);
+      process.exit(1);
+    }
   }
 
   // 5. Create shared host state and start live MCP server
@@ -307,7 +311,7 @@ MCP server (for VS Code Copilot / AI assistants):
   #   }
   # }
 
-Supported runtimes: node, python, java, powershell
-  (dotnet/dotnet-isolated use in-process hosting and are not supported in this POC)
+Supported runtimes: node, python, java, powershell, dotnet-isolated
+  (.NET in-process / Microsoft.NET.Sdk.Functions is not supported — isolated worker model only)
 `.trim());
 }
