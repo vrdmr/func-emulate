@@ -36,3 +36,6 @@ transcript
 __pycache__/
 *.pyc
 .venv/
+
+# Test reports (local only)
+test-report.md
