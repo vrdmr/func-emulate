@@ -1,0 +1,16 @@
+{
+  "name": "fnx-tests",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Test suite for fnx — debugging, logging, and CLI output validation",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.js",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:e2e": "node --test tests/e2e/*.test.js",
+    "test:all": "node --test tests/unit/*.test.js tests/e2e/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

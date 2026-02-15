@@ -1,0 +1,63 @@
+# CI: Run fnx test suite (unit + E2E) on every push and PR.
+#
+# Unit tests: Pure logic tests (log filtering, config layering, assertions).
+#   No external dependencies — runs instantly.
+#
+# E2E tests: Spawn `fnx` CLI subprocesses and validate output.
+#   Uses bundled SKU profiles (no CDN server needed for CLI flag tests).
+#   Tests that require a running host are timeout-guarded.
+
+name: Tests
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [18, 20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Run unit tests
+        shell: bash
+        run: node --test tests/unit/*.test.js
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Make fnx executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x fnx/bin/fnx
+
+      - name: Run E2E tests
+        shell: bash
+        run: node --test tests/e2e/*.test.js
