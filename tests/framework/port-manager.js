@@ -4,12 +4,12 @@ import { createServer } from 'node:net';
  * Find an available TCP port. Binds to port 0 to let the OS assign one,
  * then closes the server and returns the port number.
  */
-export async function findAvailablePort(startPort = 9000) {
+export async function findAvailablePort() {
   return new Promise((resolve, reject) => {
     const server = createServer();
     server.unref();
     server.on('error', reject);
-    server.listen(startPort, '127.0.0.1', () => {
+    server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
       server.close(() => resolve(port));
     });
@@ -33,13 +33,11 @@ export async function isPortInUse(port) {
 /**
  * Get N unique available ports for parallel test isolation.
  */
-export async function getAvailablePorts(count, startPort = 9000) {
+export async function getAvailablePorts(count) {
   const ports = [];
-  let next = startPort;
   for (let i = 0; i < count; i++) {
-    const port = await findAvailablePort(next);
+    const port = await findAvailablePort();
     ports.push(port);
-    next = port + 1;
   }
   return ports;
 }
