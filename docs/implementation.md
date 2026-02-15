@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a lightweight **JavaScript CLI** (`func-emu`) that proves the core concept: download the right self-contained Functions Host for a target SKU and launch it locally. Scoped to **non-dotnet languages only** (Node.js, Python, Java, PowerShell).
+Build a lightweight **JavaScript CLI** (`fnx`) that proves the core concept: download the right self-contained Functions Host for a target SKU and launch it locally. Scoped to **non-dotnet languages only** (Node.js, Python, Java, PowerShell).
 
 This is NOT a replacement for `func` — it's a POC to validate that:
 1. A self-contained host can be launched as a standalone process.
@@ -20,14 +20,14 @@ This is NOT a replacement for `func` — it's a POC to validate that:
 ### Process Tree (POC)
 
 ```
-func-emu start --sku flex --scriptroot ./my-node-app
+fnx start --sku flex --scriptroot ./my-node-app
   │
   ├── Fetches sku-profiles.json from CDN server (http://localhost:4566/api/profiles)
   ├── Resolves: flex → host 4.1047.100, bundle [4.22.*, 5.0.0)
   ├── Downloads self-contained host zip from CDN server (if not cached)
-  ├── Extracts to ~/.func-emu/hosts/4.1047.100/
+  ├── Extracts to ~/.fnx/hosts/4.1047.100/
   ├── Spawns host as child process:
-  │     ~/.func-emu/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
+  │     ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
   │     with env vars:
   │       AZURE_FUNCTIONS_ENVIRONMENT=Development
   │       AzureWebJobsScriptRoot=/path/to/my-node-app
@@ -78,14 +78,14 @@ POC has three components (each can be built independently by a separate agent):
               │ fetched by
               ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  AGENT 3: func-emu/ + test-node-app/                                   │
+│  AGENT 3: fnx/ + test-node-app/                                   │
 │  Node.js CLI (~350 lines, zero deps)                                   │
 │                                                                        │
-│  func-emu start --sku flex --scriptroot ./test-node-app                │
+│  fnx start --sku flex --scriptroot ./test-node-app                │
 │    1. Fetch profiles from cdn-server (http://localhost:4566)            │
 │    2. Resolve flex → host 4.1047.100                                   │
 │    3. Download host zip from cdn-server (if not cached)                 │
-│    4. Extract to ~/.func-emu/hosts/4.1047.100/                         │
+│    4. Extract to ~/.fnx/hosts/4.1047.100/                         │
 │    5. Spawn self-contained host as child process                       │
 │    6. Host discovers functions → spawns Node.js worker → serves HTTP   │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -103,8 +103,8 @@ new-core-tools/
 │       ├── 4.1046.100/
 │       │   └── ...
 │       └── ...
-├── func-emu/                        ← Agent 3: CLI
-│   ├── bin/func-emu
+├── fnx/                        ← Agent 3: CLI
+│   ├── bin/fnx
 │   ├── lib/
 │   │   ├── cli.js
 │   │   ├── profile-resolver.js
@@ -119,8 +119,8 @@ new-core-tools/
     ├── package.json
     └── src/functions/hello.js
 
-Cache directory (populated by func-emu at runtime):
-~/.func-emu/
+Cache directory (populated by fnx at runtime):
+~/.fnx/
 ├── profiles/
 │   └── sku-profiles.json            ← cached from cdn-server
 └── hosts/
@@ -240,8 +240,8 @@ dotnet publish src/WebJobs.Script.WebHost/WebJobs.Script.WebHost.csproj \
   -o ./host-v49
 
 # 3. Place in cache (simulating what the POC CLI would download)
-mkdir -p ~/.func-emu/hosts/4.1049.2.20887
-cp -r ./host-v49/* ~/.func-emu/hosts/4.1049.2.20887/
+mkdir -p ~/.fnx/hosts/4.1049.2.20887
+cp -r ./host-v49/* ~/.fnx/hosts/4.1049.2.20887/
 
 # 4. For the "older" SKU, checkout an older tag and rebuild
 git checkout v4.1046.x  # or whatever tag
@@ -251,8 +251,8 @@ dotnet publish src/WebJobs.Script.WebHost/WebJobs.Script.WebHost.csproj \
   --self-contained \
   -o ./host-v46
 
-mkdir -p ~/.func-emu/hosts/4.1046.1.20845
-cp -r ./host-v46/* ~/.func-emu/hosts/4.1046.1.20845/
+mkdir -p ~/.fnx/hosts/4.1046.1.20845
+cp -r ./host-v46/* ~/.fnx/hosts/4.1046.1.20845/
 ```
 
 ### What Production Would Need (Post-POC)
@@ -599,7 +599,7 @@ const server = createServer(async (req, res) => {
 
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end(
-        `func-emu CDN Server\n` +
+        `fnx CDN Server\n` +
         `────────────────────────────────────────\n` +
         `Endpoints:\n` +
         `  GET /api/profiles          → SKU profiles JSON\n` +
@@ -621,7 +621,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`╔════════════════════════════════════════════╗`);
-  console.log(`║  func-emu CDN Server                      ║`);
+  console.log(`║  fnx CDN Server                      ║`);
   console.log(`║  http://localhost:${PORT}                    ║`);
   console.log(`║                                            ║`);
   console.log(`║  GET /api/profiles     → SKU profiles      ║`);
@@ -634,10 +634,10 @@ server.listen(PORT, () => {
 
 ```json
 {
-  "name": "func-emu-cdn-server",
+  "name": "fnx-cdn-server",
   "version": "0.1.0",
   "type": "module",
-  "description": "Dummy CDN server for func-emu POC",
+  "description": "Dummy CDN server for fnx POC",
   "scripts": {
     "start": "node server.js"
   },
@@ -663,7 +663,7 @@ Developer runs: node cdn-server/server.js
     │            osx-arm64.zip             osx-arm64.zip
     │                 │                          │
     ▼                 ▼                          ▼
-func-emu reads   func-emu downloads        func-emu downloads
+fnx reads   fnx downloads        fnx downloads
 sku-profiles.json  for --sku flex           for --sku linux-consumption
 ```
 
@@ -671,18 +671,18 @@ In production, `localhost:4566` would be replaced by `https://functionscdn.azure
 
 ---
 
-## 6. Agent 3: func-emu CLI + Test App
+## 6. Agent 3: fnx CLI + Test App
 
 ### 6.1 `package.json`
 
 ```json
 {
-  "name": "func-emu",
+  "name": "fnx",
   "version": "0.1.0",
   "type": "module",
   "description": "POC: SKU-aware Azure Functions local emulator",
   "bin": {
-    "func-emu": "./bin/func-emu"
+    "fnx": "./bin/fnx"
   },
   "dependencies": {},
   "engines": {
@@ -693,7 +693,7 @@ In production, `localhost:4566` would be replaced by `https://functionscdn.azure
 
 Zero dependencies — Node.js 18+ has built-in `fetch`, `fs/promises`, `child_process`, and `node:stream`. The POC should be runnable with just `node`.
 
-### 6.2 `bin/func-emu`
+### 6.2 `bin/fnx`
 
 ```javascript
 #!/usr/bin/env node
@@ -713,8 +713,8 @@ export async function main(args) {
   const cmd = args[0];
 
   if (cmd !== 'start') {
-    console.log('Usage: func-emu start --sku <sku-name> [--scriptroot <path>] [--port <port>]');
-    console.log('       func-emu start --sku list');
+    console.log('Usage: fnx start --sku <sku-name> [--scriptroot <path>] [--port <port>]');
+    console.log('       fnx start --sku list');
     process.exit(1);
   }
 
@@ -795,7 +795,7 @@ import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const CACHE_DIR = join(homedir(), '.func-emu', 'profiles');
+const CACHE_DIR = join(homedir(), '.fnx', 'profiles');
 const CACHE_FILE = join(CACHE_DIR, 'sku-profiles.json');
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -875,7 +875,7 @@ import { createWriteStream } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { arch } from 'node:os';
 
-const HOST_CACHE = join(homedir(), '.func-emu', 'hosts');
+const HOST_CACHE = join(homedir(), '.fnx', 'hosts');
 
 function getPlatformRid() {
   const os = platform();
@@ -1003,7 +1003,7 @@ export async function launchHost(hostDir, opts) {
   }
 
   console.log('────────────────────────────────────────────────────');
-  console.log('func-emu POC');
+  console.log('fnx POC');
   console.log(`Target SKU:        ${opts.profile.displayName}`);
   console.log(`Host Version:      ${opts.profile.hostVersion}`);
   console.log(`Extension Bundle:  ${opts.extensionBundleVersion}`);
@@ -1078,7 +1078,7 @@ ls cdn-server/hosts/*/Azure.Functions.Host.*.zip
 cd cdn-server
 node server.js
 # ╔════════════════════════════════════════════╗
-# ║  func-emu CDN Server                      ║
+# ║  fnx CDN Server                      ║
 # ║  http://localhost:4566                     ║
 # ╚════════════════════════════════════════════╝
 ```
@@ -1134,14 +1134,14 @@ cd ..
 - Correct V2/V4 programming model boilerplate
 - Proper `host.json`, `local.settings.json`, and `package.json`/`requirements.txt`
 - Any worker-specific files (e.g., `.funcignore`, `getting_started.md`)
-- Validates that func-emu can run apps scaffolded by the production tool
+- Validates that fnx can run apps scaffolded by the production tool
 
 ### Step 4: Run with Flex SKU
 
 ```bash
-cd /Users/varad/work/new-core-tools/func-emu
+cd /Users/varad/work/new-core-tools/fnx
 
-node bin/func-emu start --sku flex --scriptroot ../test-node-app
+node bin/fnx start --sku flex --scriptroot ../test-node-app
 ```
 
 Expected output:
@@ -1157,10 +1157,10 @@ Resolving SKU profile: flex...
   Extracting...
   Host ready.
 
-  Host path:         /Users/varad/.func-emu/hosts/4.1047.100
+  Host path:         /Users/varad/.fnx/hosts/4.1047.100
 
 ────────────────────────────────────────────────────
-func-emu POC
+fnx POC
 Target SKU:        Flex Consumption
 Host Version:      4.1047.100
 Extension Bundle:  [4.22.*, 5.0.0)
@@ -1185,7 +1185,7 @@ curl http://localhost:7071/api/hello
 In a **second terminal**, same test app but different SKU and port:
 
 ```bash
-node bin/func-emu start --sku windows-consumption --scriptroot ../test-node-app --port 7072
+node bin/fnx start --sku windows-consumption --scriptroot ../test-node-app --port 7072
 ```
 
 Expected output:
@@ -1198,7 +1198,7 @@ Resolving SKU profile: windows-consumption...
   Downloading host 4.1045.200 for osx-arm64...
   ...
 ────────────────────────────────────────────────────
-func-emu POC
+fnx POC
 Target SKU:        Windows Consumption
 Host Version:      4.1045.200                ← OLDER host
 ...
@@ -1217,7 +1217,7 @@ curl http://localhost:7072/api/hello
 ### Step 6: List All SKU Profiles
 
 ```bash
-node bin/func-emu start --sku list
+node bin/fnx start --sku list
 
 # Expected:
 # Available SKU profiles:
@@ -1247,6 +1247,104 @@ node bin/func-emu start --sku list
 | Is the profile registry model viable? | profile-resolver.js fetches from CDN server, caches, resolves by SKU name |
 | Can a thin JS CLI replace the monolithic Core Tools for local dev? | ~350 lines of JS, zero deps, full F5 experience |
 | Does a CDN-hosted profile registry work for version resolution? | cdn-server emulates the production CDN endpoint |
+
+## 8b. Extension Bundle Support
+
+### Background
+
+Azure Functions uses **extension bundles** to provide trigger and binding implementations (HTTP, Timer, Storage, etc.) without requiring customers to manage NuGet references. The `host.json` in every function app declares the bundle:
+
+```json
+{
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+  }
+}
+```
+
+The host needs these bundles at startup. Core Tools (`func start`) handles this by:
+1. Setting `FUNCTIONS_CORETOOLS_ENVIRONMENT=true` — tells the host it's in a dev/download context
+2. Setting `AzureFunctionsJobHost:extensionBundle:downloadPath` — tells the host WHERE to cache downloaded bundles
+3. The host then auto-downloads from the Azure CDN: `https://cdn.functions.azure.com/public/ExtensionBundles/{id}/{version}/{id}.{version}_any-any.zip`
+
+### How the Host Resolves Bundles
+
+From `ExtensionBundleManager.cs` in azure-functions-host:
+
+```
+GetBundle():
+  1. TryLocateExtensionBundle() — searches ProbingPaths + DownloadPath for existing bundle
+  2. If (isAppService || IsCoreTools || isLinuxConsumption || isContainer) AND (!found || ensureLatest):
+     a. GetLatestMatchingBundleVersionAsync() — fetches index.json from CDN, finds best match for version range
+     b. DownloadExtensionBundleAsync() — downloads {id}.{version}_any-any.zip, extracts to DownloadPath
+  3. Returns bundle path (or null)
+```
+
+Key env vars:
+- `FUNCTIONS_CORETOOLS_ENVIRONMENT` — must be set (any non-empty value) for host to enter download path (`IsCoreTools()`)
+- `AzureFunctionsJobHost:extensionBundle:downloadPath` — where host downloads and caches bundles
+- `ExtensionBundleSourceUri` (optional) — override CDN URL (default: `https://cdn.functions.azure.com/public`)
+
+### Bundle Download URL Pattern
+
+```
+Index:  https://cdn.functions.azure.com/public/ExtensionBundles/{id}/index.json
+Bundle: https://cdn.functions.azure.com/public/ExtensionBundles/{id}/{version}/{id}.{version}_any-any.zip
+```
+
+The `_any-any` suffix is the "flavor" for non-AppService environments (vs `_win-any` or `_linux-any` for managed hosting).
+
+### Bundle Directory Structure (after extraction)
+
+```
+~/.fnx/bundles/Microsoft.Azure.Functions.ExtensionBundle/4.30.0/
+├── bundle.json           ← metadata: {"id": "...", "version": "4.30.0"}
+├── bin/                  ← extension DLLs (161 files)
+│   ├── Azure.Messaging.ServiceBus.dll
+│   ├── Microsoft.Azure.WebJobs.Extensions.Http.dll
+│   └── ...
+├── StaticContent/        ← binding metadata for worker indexing
+└── extensions.csproj
+```
+
+### fnx Implementation
+
+In `host-launcher.js`, set three env vars before spawning the host:
+
+```javascript
+// Enable extension bundle auto-download (host checks IsCoreTools())
+env['FUNCTIONS_CORETOOLS_ENVIRONMENT'] = 'true';
+
+// Set bundle download/cache path under ~/.fnx/bundles/
+const bundleDownloadPath = join(homedir(), '.fnx', 'bundles',
+  'Microsoft.Azure.Functions.ExtensionBundle');
+env['AzureFunctionsJobHost:extensionBundle:downloadPath'] = bundleDownloadPath;
+```
+
+This lets the host handle all bundle resolution, version matching, download, and extraction — exactly as it does under Core Tools. No custom download logic needed in fnx.
+
+The host will:
+1. Read `extensionBundle` from the function app's `host.json`
+2. Check `downloadPath` for existing bundles
+3. If not found (and `FUNCTIONS_CORETOOLS_ENVIRONMENT` is set), fetch index.json from CDN
+4. Download best matching version zip
+5. Extract to `downloadPath/{version}/`
+6. Load extensions from `bin/`
+
+### Cache Location
+
+```
+~/.fnx/
+├── hosts/          ← host binaries (existing)
+│   └── 4.1047.100/
+└── bundles/        ← extension bundles (new)
+    └── Microsoft.Azure.Functions.ExtensionBundle/
+        └── 4.30.0/
+            ├── bundle.json
+            ├── bin/
+            └── ...
+```
 
 ## 9. What This POC Does NOT Prove
 
@@ -1279,9 +1377,9 @@ new-core-tools/
 │       │   └── ...
 │       └── 4.1044.400/
 │           └── ...
-├── func-emu/                                ← Agent 3: CLI
+├── fnx/                                ← Agent 3: CLI
 │   ├── bin/
-│   │   └── func-emu                         ← #!/usr/bin/env node entry point (2 lines)
+│   │   └── fnx                         ← #!/usr/bin/env node entry point (2 lines)
 │   ├── lib/
 │   │   ├── cli.js                           ← arg parsing, orchestration (~80 lines)
 │   │   ├── profile-resolver.js              ← fetch/cache profiles (~70 lines)
@@ -1299,7 +1397,7 @@ new-core-tools/
 ├── implementation.md                        ← This file
 └── testing.md                               ← Test plan and verification
 
-Total new code: ~350 lines JS (func-emu) + ~120 lines JS (cdn-server) + ~80 lines bash (build script)
+Total new code: ~350 lines JS (fnx) + ~120 lines JS (cdn-server) + ~80 lines bash (build script)
                = ~550 lines total. Zero npm dependencies.
 ```
 

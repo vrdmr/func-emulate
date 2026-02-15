@@ -1,6 +1,6 @@
 import { spawn, execSync } from 'node:child_process';
 import { join } from 'node:path';
-import { platform } from 'node:os';
+import { platform, homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { existsSync } from 'node:fs';
 import { getHostExeName } from './host-manager.js';
@@ -132,7 +132,8 @@ const SUPPRESS_MESSAGES = [
 ];
 
 function createLogFilter(verbose) {
-  const functions = [];
+  const httpFunctions = [];
+  const nonHttpFunctions = []; // triggers like blob, queue, timer, etc.
   let functionsShown = false;
   let lastLogShown = false;
   let lastLogLevel = null;
@@ -183,10 +184,38 @@ function createLogFilter(verbose) {
     return line;
   }
 
-  function extractFunctionRoute(line) {
-    const match = line.match(/Mapped function route '([^']+)' \[([^\]]+)\] to '([^']+)'/);
-    if (match) {
-      functions.push({ route: match[1], methods: match[2], name: match[3] });
+  function extractFunctionInfo(line) {
+    // HTTP routes: "Mapped function route 'api/hello' [all] to 'hello'"
+    const routeMatch = line.match(/Mapped function route '([^']+)' \[([^\]]+)\] to '([^']+)'/);
+    if (routeMatch) {
+      httpFunctions.push({ route: routeMatch[1], methods: routeMatch[2], name: routeMatch[3] });
+    }
+
+    // Worker indexing JSON: extract non-HTTP trigger types from the indexed metadata
+    // Format: {"message": "Successfully indexed function app.", "functions": "Function Name: X, Function Binding: [('triggerType', ...)] ..."}
+    if (line.includes('Successfully indexed function app')) {
+      const jsonStart = line.indexOf('{');
+      if (jsonStart !== -1) {
+        try {
+          const meta = JSON.parse(line.slice(jsonStart));
+          const fnStr = meta.functions || '';
+          const fnEntries = fnStr.split(/Function Name: /).filter(Boolean);
+          for (const entry of fnEntries) {
+            const nameMatch = entry.match(/^(\w+),/);
+            const bindingMatch = entry.match(/Function Binding: \[([^\]]+)\]/);
+            if (nameMatch && bindingMatch) {
+              const name = nameMatch[1];
+              const bindings = bindingMatch[1];
+              // Find all trigger bindings and pick the non-HTTP one if present
+              const allTriggers = [...bindings.matchAll(/\('(\w*[Tt]rigger)', '[^']*', '[^']*'\)/g)];
+              const nonHttpTrigger = allTriggers.find(m => m[1] !== 'httpTrigger');
+              if (nonHttpTrigger) {
+                nonHttpFunctions.push({ name, triggerType: nonHttpTrigger[1] });
+              }
+            }
+          }
+        } catch { /* non-fatal: JSON parse failure */ }
+      }
     }
   }
 
@@ -194,11 +223,14 @@ function createLogFilter(verbose) {
     const match = line.match(/Now listening on: (.+)/);
     if (match && !functionsShown) {
       functionsShown = true;
-      if (functions.length > 0) {
+      if (httpFunctions.length > 0 || nonHttpFunctions.length > 0) {
         const baseUrl = match[1].replace('0.0.0.0', 'localhost');
         console.log('\nFunctions:\n');
-        for (const fn of functions) {
+        for (const fn of httpFunctions) {
           console.log(`\t${fn.name}: [${fn.methods}] ${baseUrl}/${fn.route}`);
+        }
+        for (const fn of nonHttpFunctions) {
+          console.log(`\t${fn.name}: ${fn.triggerType}`);
         }
         if (!verbose) {
           console.log('\nFor detailed output, run fnx with --verbose flag.');
@@ -208,7 +240,7 @@ function createLogFilter(verbose) {
     }
   }
 
-  return { processLine, extractFunctionRoute, extractListeningUrl, functions };
+  return { processLine, extractFunctionInfo, extractListeningUrl };
 }
 
 export async function launchHost(hostDir, opts) {
@@ -224,6 +256,11 @@ export async function launchHost(hostDir, opts) {
     FUNCTIONS_WORKER_RUNTIME: opts.workerRuntime,
     'AzureFunctionsJobHost:extensionBundle:version': opts.extensionBundleVersion,
     AzureWebJobsFeatureFlags: 'EnableWorkerIndexing',
+    // Enable extension bundle auto-download (host checks IsCoreTools())
+    FUNCTIONS_CORETOOLS_ENVIRONMENT: 'true',
+    // Set bundle download/cache path under ~/.fnx/bundles/
+    'AzureFunctionsJobHost:extensionBundle:downloadPath': join(homedir(), '.fnx', 'bundles',
+      'Microsoft.Azure.Functions.ExtensionBundle'),
   };
 
   // Merge all app config values into env
@@ -281,7 +318,7 @@ export async function launchHost(hostDir, opts) {
   for (const stream of [child.stdout, child.stderr]) {
     const rl = createInterface({ input: stream });
     rl.on('line', (line) => {
-      filter.extractFunctionRoute(line);
+      filter.extractFunctionInfo(line);
       filter.extractListeningUrl(line);
 
       const output = filter.processLine(line);

@@ -25,3 +25,8 @@ def hello(req: func.HttpRequest) -> func.HttpResponse:
              "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response.",
              status_code=200
         )
+
+@app.blob_trigger(arg_name="myblob", path="test-container/{name}",
+                   connection="AzureWebJobsStorage")
+def blob_trigger(myblob: func.InputStream):
+    logging.info(f"Blob trigger processed blob: {myblob.name}, Size: {myblob.length} bytes")

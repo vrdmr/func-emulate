@@ -1,8 +1,8 @@
-# Testing Plan: func-emu POC
+# Testing Plan: fnx POC
 
 ## Overview
 
-This document defines the test scenarios for the func-emu POC. The goal is to validate that SKU-aware host selection works end-to-end: the CLI resolves a profile, downloads the correct host version from the CDN server, launches it, and serves functions correctly.
+This document defines the test scenarios for the fnx POC. The goal is to validate that SKU-aware host selection works end-to-end: the CLI resolves a profile, downloads the correct host version from the CDN server, launches it, and serves functions correctly.
 
 ## Prerequisites
 
@@ -21,13 +21,13 @@ This document defines the test scenarios for the func-emu POC. The goal is to va
 
 This section creates everything needed to run the tests — from zero to ready. Run these steps once before the first test execution.
 
-### Step 1: Scaffold the func-emu CLI and CDN server (Engineer Agent)
+### Step 1: Scaffold the fnx CLI and CDN server (Engineer Agent)
 
 If the Engineer Agent has already run, skip this step. Otherwise, create the files as described in `implementation.md` Sections 4–6 and the `agents/engineer.md` spec.
 
 ```bash
 # Verify Engineer Agent output exists
-ls build-hosts.sh cdn-server/server.js func-emu/bin/func-emu
+ls build-hosts.sh cdn-server/server.js fnx/bin/fnx
 ```
 
 ### Step 2: Build host packages
@@ -54,12 +54,12 @@ cd ..
 
 # Verify
 curl -s http://localhost:4566/ | head -1
-# Expected: "func-emu CDN Server"
+# Expected: "fnx CDN Server"
 ```
 
 ### Step 4: Scaffold test function apps with `func` CLI
 
-Use the **existing production `func` CLI** (v4) to create real function apps. This ensures correct V2/V4 programming model structure — and proves `func-emu` can run any app scaffolded by the existing tooling.
+Use the **existing production `func` CLI** (v4) to create real function apps. This ensures correct V2/V4 programming model structure — and proves `fnx` can run any app scaffolded by the existing tooling.
 
 ```bash
 # Node.js test app (V4 programming model)
@@ -83,7 +83,7 @@ cd ..
 **Why `func init` / `func new` instead of manual `cat >`?**
 - Correct boilerplate for the programming model version
 - All expected files present (`host.json`, `local.settings.json`, `.funcignore`, etc.)
-- Validates that `func-emu` works with apps created by the real tooling — not hand-crafted files
+- Validates that `fnx` works with apps created by the real tooling — not hand-crafted files
 
 ---
 
@@ -103,8 +103,8 @@ ls cdn-server/hosts/*/Azure.Functions.Host.*.zip | wc -l   # 5
 # 3. CDN server responding
 curl -s http://localhost:4566/api/profiles | jq '.profiles | keys | length'   # 5
 
-# 4. func-emu CLI runnable
-node func-emu/bin/func-emu 2>&1 | head -1   # "Usage: func-emu start ..."
+# 4. fnx CLI runnable
+node fnx/bin/fnx 2>&1 | head -1   # "Usage: fnx start ..."
 
 # 5. Node test app ready
 ls test-node-app/host.json test-node-app/node_modules/@azure/functions/package.json   # both exist
@@ -163,7 +163,7 @@ exit 1
 
 ### `test-tools/start-emu.sh`
 
-Starts func-emu with a SKU, waits for the host to be ready (polls the HTTP endpoint), prints the PID.
+Starts fnx with a SKU, waits for the host to be ready (polls the HTTP endpoint), prints the PID.
 
 ```bash
 #!/usr/bin/env bash
@@ -174,7 +174,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Parse args (pass-through to func-emu)
+# Parse args (pass-through to fnx)
 SKU="" PORT="" SCRIPTROOT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -188,9 +188,9 @@ done
 PORT="${PORT:-7071}"
 SCRIPTROOT="${SCRIPTROOT:-./test-node-app}"
 
-echo "Starting func-emu --sku $SKU --port $PORT --scriptroot $SCRIPTROOT" >&2
+echo "Starting fnx --sku $SKU --port $PORT --scriptroot $SCRIPTROOT" >&2
 
-node "$SCRIPT_DIR/func-emu/bin/func-emu" start \
+node "$SCRIPT_DIR/fnx/bin/fnx" start \
   --sku "$SKU" --port "$PORT" --scriptroot "$SCRIPTROOT" &
 EMU_PID=$!
 
@@ -204,7 +204,7 @@ for i in $(seq 1 120); do
   fi
   # Also check if process is still alive
   if ! kill -0 $EMU_PID 2>/dev/null; then
-    echo "✗ func-emu process died before host became ready" >&2
+    echo "✗ fnx process died before host became ready" >&2
     exit 1
   fi
   sleep 0.5
@@ -288,7 +288,7 @@ check "func CLI available"        func --version
 check "python3 available"         python3 --version
 check "Host zips built (≥2)"      bash -c '[[ $(ls cdn-server/hosts/*/Azure.Functions.Host.*.zip 2>/dev/null | wc -l) -ge 2 ]]'
 check "CDN server responding"     curl -sf http://localhost:4566/api/profiles
-check "func-emu CLI runnable"     node func-emu/bin/func-emu
+check "fnx CLI runnable"     node fnx/bin/fnx
 check "test-node-app ready"       test -f test-node-app/host.json
 check "test-python-app ready"     test -f test-python-app/function_app.py
 
@@ -300,7 +300,7 @@ exit $FAIL
 
 ### `test-tools/cleanup.sh`
 
-Kills all func-emu and CDN server processes started during testing.
+Kills all fnx and CDN server processes started during testing.
 
 ```bash
 #!/usr/bin/env bash
@@ -308,7 +308,7 @@ Kills all func-emu and CDN server processes started during testing.
 # If PIDs given, kills those. Otherwise kills tracked PIDs from PIDS_FILE.
 set -uo pipefail
 
-PIDS_FILE="/tmp/func-emu-test-pids"
+PIDS_FILE="/tmp/fnx-test-pids"
 
 if [[ $# -gt 0 ]]; then
   for pid in "$@"; do
@@ -341,7 +341,7 @@ With these tools, tests become concise and deterministic:
 
 ```bash
 # Before (fragile):
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071 &
 PID=$!
 sleep 15  # hope it's ready...
 curl -s http://localhost:7071/api/hello
@@ -358,7 +358,7 @@ eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node
 ```
 test-tools/
 ├── start-cdn.sh           ← start CDN, poll for health, print PID
-├── start-emu.sh           ← start func-emu, poll for host ready, print PID
+├── start-emu.sh           ← start fnx, poll for host ready, print PID
 ├── check-endpoint.sh      ← HTTP status check with retries
 ├── preflight.sh           ← run all pre-flight checks
 └── cleanup.sh             ← kill tracked PIDs + find orphaned hosts
@@ -391,7 +391,7 @@ curl -I http://localhost:4566/hosts/9.9.9/Azure.Functions.Host.osx-arm64.zip
 
 # 1e. Root endpoint returns server info
 curl -s http://localhost:4566/ | head -1
-# Expected: "func-emu CDN Server"
+# Expected: "fnx CDN Server"
 ```
 
 **Pass criteria**: All 5 checks pass.
@@ -400,20 +400,20 @@ curl -s http://localhost:4566/ | head -1
 
 ## Test 2: Profile Resolution
 
-**What**: Verify func-emu resolves SKU profiles correctly from the CDN server.
+**What**: Verify fnx resolves SKU profiles correctly from the CDN server.
 
 ```bash
 # 2a. List profiles (fetches from CDN server)
-node func-emu/bin/func-emu start --sku list
+node fnx/bin/fnx start --sku list
 # Expected: Table showing 5 SKUs with versions and status
 # Verify: flex shows 4.1047.100, linux-consumption shows 4.1044.400
 
 # 2b. Invalid SKU name
-node func-emu/bin/func-emu start --sku nonexistent --scriptroot ./test-node-app 2>&1
+node fnx/bin/fnx start --sku nonexistent --scriptroot ./test-node-app 2>&1
 # Expected: Error message listing valid SKU names
 
 # 2c. Missing --sku flag
-node func-emu/bin/func-emu start 2>&1
+node fnx/bin/fnx start 2>&1
 # Expected: Usage message requiring --sku
 ```
 
@@ -423,25 +423,25 @@ node func-emu/bin/func-emu start 2>&1
 
 ## Test 3: Host Download and Caching
 
-**What**: Verify func-emu downloads hosts from CDN server and caches them locally.
+**What**: Verify fnx downloads hosts from CDN server and caches them locally.
 
 ```bash
 # Clean cache first
-rm -rf ~/.func-emu/hosts/
+rm -rf ~/.fnx/hosts/
 
 # 3a. First run triggers download
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071 &
 PID=$!
 sleep 10  # give time for download + extraction + host startup
 
 # Check cache was created
-ls ~/.func-emu/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
+ls ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
 # Expected: file exists, executable
 
 kill $PID 2>/dev/null
 
 # 3b. Second run uses cache (no download)
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 &
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071 &
 PID=$!
 sleep 5
 # Expected output includes: "Host cached, skipping download."
@@ -449,11 +449,11 @@ sleep 5
 kill $PID 2>/dev/null
 
 # 3c. Different SKU triggers new download
-node func-emu/bin/func-emu start --sku windows-consumption --scriptroot ./test-node-app --port 7072 &
+node fnx/bin/fnx start --sku windows-consumption --scriptroot ./test-node-app --port 7072 &
 PID=$!
 sleep 10
 
-ls ~/.func-emu/hosts/4.1045.200/Microsoft.Azure.WebJobs.Script.WebHost
+ls ~/.fnx/hosts/4.1045.200/Microsoft.Azure.WebJobs.Script.WebHost
 # Expected: file exists (different version from flex)
 
 kill $PID 2>/dev/null
@@ -469,7 +469,7 @@ kill $PID 2>/dev/null
 
 ```bash
 # Start with Flex SKU
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 ```
 
 **Verify** (in another terminal):
@@ -503,7 +503,7 @@ curl -s http://localhost:7071/admin/host/status | jq '.state'
 **What**: Same as Test 4 but with the Windows Consumption profile (older host).
 
 ```bash
-node func-emu/bin/func-emu start --sku windows-consumption --scriptroot ./test-node-app --port 7072
+node fnx/bin/fnx start --sku windows-consumption --scriptroot ./test-node-app --port 7072
 ```
 
 **Verify**:
@@ -528,10 +528,10 @@ curl -s http://localhost:7072/api/hello
 
 ```bash
 # Terminal 1:
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 
 # Terminal 2:
-node func-emu/bin/func-emu start --sku linux-consumption --scriptroot ./test-node-app --port 7072
+node fnx/bin/fnx start --sku linux-consumption --scriptroot ./test-node-app --port 7072
 ```
 
 **Verify**:
@@ -561,11 +561,11 @@ ps aux | grep Microsoft.Azure.WebJobs.Script.WebHost | grep -v grep
 
 | SKU | Port | Expected Host Version | Command |
 |-----|------|-----------------------|---------|
-| flex | 7071 | 4.1047.100 | `node bin/func-emu start --sku flex --scriptroot ../test-node-app --port 7071` |
-| linux-premium | 7072 | 4.1046.100 | `node bin/func-emu start --sku linux-premium --scriptroot ../test-node-app --port 7072` |
-| windows-consumption | 7073 | 4.1045.200 | `node bin/func-emu start --sku windows-consumption --scriptroot ../test-node-app --port 7073` |
-| windows-dedicated | 7074 | 4.1045.100 | `node bin/func-emu start --sku windows-dedicated --scriptroot ../test-node-app --port 7074` |
-| linux-consumption | 7075 | 4.1044.400 | `node bin/func-emu start --sku linux-consumption --scriptroot ../test-node-app --port 7075` |
+| flex | 7071 | 4.1047.100 | `node bin/fnx start --sku flex --scriptroot ../test-node-app --port 7071` |
+| linux-premium | 7072 | 4.1046.100 | `node bin/fnx start --sku linux-premium --scriptroot ../test-node-app --port 7072` |
+| windows-consumption | 7073 | 4.1045.200 | `node bin/fnx start --sku windows-consumption --scriptroot ../test-node-app --port 7073` |
+| windows-dedicated | 7074 | 4.1045.100 | `node bin/fnx start --sku windows-dedicated --scriptroot ../test-node-app --port 7074` |
+| linux-consumption | 7075 | 4.1044.400 | `node bin/fnx start --sku linux-consumption --scriptroot ../test-node-app --port 7075` |
 
 For each:
 ```bash
@@ -580,26 +580,26 @@ curl -s http://localhost:${PORT}/api/hello
 
 ## Test 8: Offline / CDN-Down Fallback
 
-**What**: Verify func-emu works when the CDN server is unreachable.
+**What**: Verify fnx works when the CDN server is unreachable.
 
 ```bash
 # Stop the CDN server (Ctrl+C)
 
 # 8a. With cached profiles (from previous runs)
-node func-emu/bin/func-emu start --sku list
-# Expected: Shows profiles from ~/.func-emu/profiles/sku-profiles.json (stale cache)
+node fnx/bin/fnx start --sku list
+# Expected: Shows profiles from ~/.fnx/profiles/sku-profiles.json (stale cache)
 
 # 8b. With cached host (from previous runs)
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 # Expected: Uses cached host, starts normally
 
 # 8c. With no cache at all
-rm -rf ~/.func-emu/
-node func-emu/bin/func-emu start --sku list
-# Expected: Falls back to bundled profiles (from func-emu/profiles/sku-profiles.json)
+rm -rf ~/.fnx/
+node fnx/bin/fnx start --sku list
+# Expected: Falls back to bundled profiles (from fnx/profiles/sku-profiles.json)
 
 # 8d. With no cache and trying to download host
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 # Expected: Error — "no host package for platform" or download failure
 # (bundled profiles have localhost URLs, CDN is down, and no cached host)
 ```
@@ -614,24 +614,24 @@ node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 
 
 ```bash
 # 9a. No scriptroot / missing local.settings.json
-node func-emu/bin/func-emu start --sku flex --scriptroot /tmp/nonexistent
+node fnx/bin/fnx start --sku flex --scriptroot /tmp/nonexistent
 # Expected: Error about missing FUNCTIONS_WORKER_RUNTIME
 
 # 9b. Dotnet runtime rejected
 mkdir -p /tmp/dotnet-app
 echo '{"IsEncrypted":false,"Values":{"FUNCTIONS_WORKER_RUNTIME":"dotnet-isolated"}}' > /tmp/dotnet-app/local.settings.json
-node func-emu/bin/func-emu start --sku flex --scriptroot /tmp/dotnet-app
+node fnx/bin/fnx start --sku flex --scriptroot /tmp/dotnet-app
 # Expected: Error — "This POC only supports non-dotnet runtimes"
 
 # 9c. Unknown command
-node func-emu/bin/func-emu deploy
+node fnx/bin/fnx deploy
 # Expected: Usage message
 
 # 9d. Host executable not found (corrupt cache)
-mkdir -p ~/.func-emu/hosts/4.1047.100
-rm -f ~/.func-emu/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
+mkdir -p ~/.fnx/hosts/4.1047.100
+rm -f ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
 # (with CDN server running)
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 # Expected: Re-downloads and extracts host
 ```
 
@@ -654,7 +654,7 @@ ls test-python-app/function_app.py test-python-app/requirements.txt test-python-
 source test-python-app/.venv/bin/activate
 
 # Start with Flex SKU
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-python-app --port 7076
+node fnx/bin/fnx start --sku flex --scriptroot ./test-python-app --port 7076
 ```
 
 **Verify** (in another terminal):
@@ -682,10 +682,10 @@ curl -s http://localhost:7076/api/hello
 
 ```bash
 # Terminal 1: Node app on Flex
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 
 # Terminal 2: Python app on Flex (same SKU, same host version!)
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-python-app --port 7076
+node fnx/bin/fnx start --sku flex --scriptroot ./test-python-app --port 7076
 ```
 
 **Verify**:
