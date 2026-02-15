@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, chmod, rm } from 'node:fs/promises';
+import { mkdir, chmod, rm, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { createWriteStream } from 'node:fs';
@@ -92,7 +92,41 @@ export async function ensureHost(profile) {
     try { await rm(tempZip); } catch { /* ignore */ }
   }
 
+  // Patch worker configs: replace 'python' → 'python3' on Unix where python3 exists but python doesn't
+  await patchWorkerConfigs(hostDir);
+
   return hostDir;
+}
+
+// On macOS/Linux, many systems have python3 but not python.
+// The host's bundled worker.config.json hardcodes "python" as the executable.
+// We patch it post-extraction so the worker can actually start.
+async function patchWorkerConfigs(hostDir) {
+  if (platform() === 'win32') return;
+
+  const workerConfig = join(hostDir, 'workers', 'python', 'worker.config.json');
+  if (!existsSync(workerConfig)) return;
+
+  // Find the best available python (prefer versioned 3.13 → 3.9, then python3)
+  let bestPython = null;
+  for (const ver of ['3.13', '3.12', '3.11', '3.10', '3.9']) {
+    try { execSync(`python${ver} --version`, { stdio: 'ignore' }); bestPython = `python${ver}`; break; } catch {}
+  }
+  if (!bestPython) {
+    try { execSync('python3 --version', { stdio: 'ignore' }); bestPython = 'python3'; } catch {}
+  }
+  if (!bestPython) return;
+
+  try {
+    const content = await readFile(workerConfig, 'utf-8');
+    const config = JSON.parse(content);
+    if (config.description?.defaultExecutablePath !== bestPython) {
+      const old = config.description.defaultExecutablePath;
+      config.description.defaultExecutablePath = bestPython;
+      await writeFile(workerConfig, JSON.stringify(config, null, 4));
+      console.log(`  Patched python worker config: ${old} → ${bestPython}`);
+    }
+  } catch { /* non-fatal */ }
 }
 
 export { getHostExeName };
