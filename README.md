@@ -1,6 +1,6 @@
-# func-emulate
+# fnx (Phoenix Emulate)
 
-**SKU-aware Azure Functions local emulator** — a POC proving that `func start --sku <sku-name>` can download and launch the correct Functions Host version for any target deployment SKU.
+**SKU-aware Azure Functions local emulator** — part of Project Phoenix. A POC proving that `fnx start --sku <sku-name>` can download and launch the correct Functions Host version for any target deployment SKU.
 
 ## Problem
 
@@ -8,15 +8,15 @@ Azure Functions Core Tools bundles a single host version, but different SKUs (Fl
 
 ## Solution
 
-A thin Node.js CLI (`func-emu`) that:
+A thin Node.js CLI (`fnx`) that:
 1. Fetches a **SKU profile registry** mapping each SKU to its current host version
 2. Downloads the correct **self-contained host** from CDN
 3. Launches it as a child process with clean, filtered output
 
 ```
-$ func-emu start --sku flex --scriptroot ./my-app
+$ fnx start --sku flex --scriptroot ./my-app
 
-Azure Functions Local Emulator (func-emu)
+Azure Functions Local Emulator (fnx)
 Emulator Version:  0.1.0
 Host Version:      4.1047.100 (Flex Consumption)
 
@@ -24,7 +24,7 @@ Functions:
 
     hello: [GET,POST] http://localhost:7071/api/hello
 
-For detailed output, run func-emu with --verbose flag.
+For detailed output, run fnx with --verbose flag.
 ```
 
 ## Quick Start
@@ -38,7 +38,7 @@ For detailed output, run func-emu with --verbose flag.
 ### 1. Build host packages (~20 min)
 
 ```bash
-./build-hosts.sh
+./tests/build-hosts.sh
 ```
 
 This clones [Azure/azure-functions-host](https://github.com/Azure/azure-functions-host), checks out 5 release tags, and produces self-contained builds for your platform as zips in `cdn-server/hosts/`.
@@ -49,26 +49,26 @@ This clones [Azure/azure-functions-host](https://github.com/Azure/azure-function
 cd cdn-server && node server.js &
 ```
 
-Serves SKU profiles and host packages on `http://localhost:4566`. The func-emu CLI fetches profiles and downloads hosts from here.
+Serves SKU profiles and host packages on `http://localhost:4566`. The fnx CLI fetches profiles and downloads hosts from here.
 
 ### 3. Run with a SKU
 
 ```bash
 # Default (Flex Consumption, latest host)
-node func-emu/bin/func-emu start --scriptroot ./tests/test-node-app
+node fnx/bin/fnx start --scriptroot ./tests/test-node-app
 
 # Specific SKU
-node func-emu/bin/func-emu start --sku windows-consumption --scriptroot ./tests/test-node-app --port 7072
+node fnx/bin/fnx start --sku windows-consumption --scriptroot ./tests/test-node-app --port 7072
 
 # Side-by-side comparison (two terminals!)
-node func-emu/bin/func-emu start --sku flex --port 7071 --scriptroot ./tests/test-node-app
-node func-emu/bin/func-emu start --sku windows-consumption --port 7072 --scriptroot ./tests/test-node-app
+node fnx/bin/fnx start --sku flex --port 7071 --scriptroot ./tests/test-node-app
+node fnx/bin/fnx start --sku windows-consumption --port 7072 --scriptroot ./tests/test-node-app
 ```
 
 ### 4. List available SKUs
 
 ```bash
-node func-emu/bin/func-emu start --sku list
+node fnx/bin/fnx start --sku list
 ```
 
 ```
@@ -86,7 +86,7 @@ Available SKU profiles:
 ## CLI Reference
 
 ```
-func-emu <action> [options]
+fnx <action> [options]
 
 Actions:
   start            Launch the Azure Functions host runtime for a specific SKU
@@ -103,7 +103,7 @@ Options:
 
 ## Configuration
 
-func-emu reads two config files from the function app directory:
+fnx reads two config files from the function app directory:
 
 | File | Purpose | Git tracked? |
 |------|---------|-------------|
@@ -127,13 +127,13 @@ Values from both files are merged and injected as environment variables into the
 
 | Variable | Description |
 |----------|-------------|
-| `FUNC_EMU_PROFILES_URL` | Override the SKU profiles endpoint (default: `http://localhost:4566/api/profiles`). Can be a GitHub raw URL or any HTTP endpoint serving the profiles JSON. |
+| `FNX_PROFILES_URL` | Override the SKU profiles endpoint (default: `http://localhost:4566/api/profiles`). Can be a GitHub raw URL or any HTTP endpoint serving the profiles JSON. |
 
 ## Project Structure
 
 ```
-├── func-emu/                    # The CLI (zero npm dependencies)
-│   ├── bin/func-emu             # Entry point
+├── fnx/                    # The CLI (zero npm dependencies)
+│   ├── bin/fnx             # Entry point
 │   ├── lib/cli.js               # Argument parsing, config merging, orchestration
 │   ├── lib/profile-resolver.js  # Fetch/cache SKU profiles (CDN → cache → bundled)
 │   ├── lib/host-manager.js      # Download/extract/cache host packages
@@ -142,8 +142,9 @@ Values from both files are merged and injected as environment variables into the
 ├── cdn-server/                  # Local CDN mock (serves profiles + host zips)
 │   ├── server.js
 │   ├── profiles/sku-profiles.json
-│   └── hosts/                   # Built host zips (populated by build-hosts.sh)
-├── build-hosts.sh               # Builds 5 host versions from azure-functions-host
+│   └── hosts/                   # Built host zips (populated by tests/build-hosts.sh)
+├── tests/                       # Test apps, tools, and reports
+│   ├── build-hosts.sh           # Builds 5 host versions from azure-functions-host
 ├── tests/                       # Test apps, tools, and reports
 │   ├── test-node-app/           # Node.js V4 function app
 │   ├── test-python-app/         # Python V2 function app
@@ -161,7 +162,7 @@ Values from both files are merged and injected as environment variables into the
 ## How It Works
 
 1. **Profile resolution**: CLI reads `--sku` flag (or `app.config.json` → `local.settings.json` → default `flex`), fetches the SKU profile from CDN (with 1hr cache + bundled fallback)
-2. **Host download**: Downloads the platform-specific host zip for the profile's `hostVersion`, extracts to `~/.func-emu/hosts/{version}/`, caches for reuse
+2. **Host download**: Downloads the platform-specific host zip for the profile's `hostVersion`, extracts to `~/.fnx/hosts/{version}/`, caches for reuse
 3. **Host launch**: Spawns the self-contained .NET host executable with merged env vars from both config files. Filters host output for clean display (like `func start`)
 
 ## Supported Runtimes

@@ -1,6 +1,6 @@
 ---
 name: pm
-description: Validates that the func-emulate POC implementation meets all PRD requirements. Reviews source code against prd.md checklist. Does NOT write code.
+description: Validates that the fnx POC implementation meets all PRD requirements. Reviews source code against prd.md checklist. Does NOT write code.
 tools:
   - read
   - search
@@ -10,7 +10,7 @@ tools:
 
 ## Role
 
-You are a **Product Manager agent** responsible for validating that the func-emulate POC implementation correctly meets the requirements defined in `docs/prd.md`. You do NOT write code — you review what the Engineer Agent built and produce a validation report.
+You are a **Product Manager agent** responsible for validating that the fnx POC implementation correctly meets the requirements defined in `docs/prd.md`. You do NOT write code — you review what the Engineer Agent built and produce a validation report.
 
 ## Inputs
 
@@ -19,7 +19,7 @@ You are a **Product Manager agent** responsible for validating that the func-emu
 - All source code produced by the Engineer Agent:
   - `build-hosts.sh`
   - `cdn-server/` (server.js, profiles/sku-profiles.json, package.json)
-  - `func-emu/` (bin/func-emu, lib/*.js, profiles/sku-profiles.json, package.json)
+  - `fnx/` (bin/fnx, lib/*.js, profiles/sku-profiles.json, package.json)
   - `tests/test-node-app/` (host.json, local.settings.json, src/functions/hello.js)
 
 ## Output
@@ -42,10 +42,10 @@ Work through each item below. For each, inspect the relevant source files and de
 
 | # | Requirement | How to Validate | Status |
 |---|-------------|-----------------|--------|
-| G2.1 | `--sku` flag on `func-emu start` selects correct host version | Check `func-emu/lib/cli.js` — does it parse `--sku` and pass to profile resolver? | |
-| G2.2 | Profile resolver fetches from CDN and maps SKU → host version | Check `func-emu/lib/profile-resolver.js` — does `resolveProfile(sku)` return correct host version? | |
-| G2.3 | Host manager downloads correct version zip from CDN | Check `func-emu/lib/host-manager.js` — does it use `profile.hostPackageUrl[rid]` to download? | |
-| G2.4 | Host launcher spawns the downloaded host (not a bundled one) | Check `func-emu/lib/host-launcher.js` — does it spawn from `~/.func-emu/hosts/{version}/`? | |
+| G2.1 | `--sku` flag on `fnx start` selects correct host version | Check `fnx/lib/cli.js` — does it parse `--sku` and pass to profile resolver? | |
+| G2.2 | Profile resolver fetches from CDN and maps SKU → host version | Check `fnx/lib/profile-resolver.js` — does `resolveProfile(sku)` return correct host version? | |
+| G2.3 | Host manager downloads correct version zip from CDN | Check `fnx/lib/host-manager.js` — does it use `profile.hostPackageUrl[rid]` to download? | |
+| G2.4 | Host launcher spawns the downloaded host (not a bundled one) | Check `fnx/lib/host-launcher.js` — does it spawn from `~/.fnx/hosts/{version}/`? | |
 | G2.5 | Extension bundle version from profile is passed to host | Check host-launcher.js env vars — `AzureFunctionsJobHost:extensionBundle:version` set from profile? | |
 | G2.6 | Banner output shows SKU name, host version, and bundle version | Check host-launcher.js console output | |
 
@@ -69,9 +69,9 @@ Work through each item below. For each, inspect the relevant source files and de
 
 | # | Requirement | How to Validate | Status |
 |---|-------------|-----------------|--------|
-| 6.1.1 | CLI contains no host DLLs | Check func-emu/ directory — should be JS only, no .NET binaries | |
+| 6.1.1 | CLI contains no host DLLs | Check fnx/ directory — should be JS only, no .NET binaries | |
 | 6.1.2 | Host is downloaded on demand | Check host-manager.js — downloads from CDN URL, not bundled | |
-| 6.1.3 | Host cached at `~/.func-emu/hosts/{version}/` | Check host-manager.js HOST_CACHE path | |
+| 6.1.3 | Host cached at `~/.fnx/hosts/{version}/` | Check host-manager.js HOST_CACHE path | |
 
 ### Section 6.3: SKU Profile Registry
 

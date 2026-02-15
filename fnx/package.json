@@ -1,0 +1,13 @@
+{
+  "name": "fnx",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "fnx (Phoenix Emulate) — SKU-aware Azure Functions local emulator",
+  "bin": {
+    "fnx": "./bin/fnx"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}

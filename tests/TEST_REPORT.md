@@ -14,7 +14,7 @@
 |---|------|----------|--------|-------|
 | 1 | CDN Server Health | P0 | ✅ | All 5 sub-tests passed: profiles endpoint, required fields, host zip download, 404 for missing version, root endpoint |
 | 2 | Profile Resolution | P0 | ✅ | CLI lists profiles, handles invalid SKU names, defaults to 'flex' when no --sku provided |
-| 3 | Host Download & Caching | P0 | ✅ | First run downloads, cache verified at ~/.func-emu/hosts/, different SKUs cache different versions |
+| 3 | Host Download & Caching | P0 | ✅ | First run downloads, cache verified at ~/.fnx/hosts/, different SKUs cache different versions |
 | 4 | Host Startup (Flex, Node) | P0 | ✅ | Latest host (4.1047.100) starts and serves Node.js function on port 7071 |
 | 5 | Host Startup (Win Consumption, Node) | P0 | ✅ | Older host (4.1045.200) starts and serves same Node.js function on port 7072 |
 | 6 | Side-by-Side SKU Comparison | P0 | ✅ | **THE MONEY SHOT!** Two different host versions (4.1047.100 and 4.1045.200) served same app simultaneously on ports 7071 & 7072 |
@@ -55,8 +55,8 @@
 
 ```bash
 $ ps aux | grep "Microsoft.Azure.WebJobs.Script.WebHost" | grep -v grep
-varad  76719  /Users/varad/.func-emu/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
-varad  76615  /Users/varad/.func-emu/hosts/4.1045.200/Microsoft.Azure.WebJobs.Script.WebHost
+varad  76719  /Users/varad/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
+varad  76615  /Users/varad/.fnx/hosts/4.1045.200/Microsoft.Azure.WebJobs.Script.WebHost
 
 $ curl http://localhost:7071/api/hello
 Hello, world!
@@ -64,7 +64,7 @@ Hello, world!
 $ curl http://localhost:7072/api/hello
 Hello, world!
 
-$ ls ~/.func-emu/hosts/
+$ ls ~/.fnx/hosts/
 4.1045.200    4.1047.100
 ```
 
@@ -88,13 +88,13 @@ Ports responding:
 
 ```bash
 # CDN server stopped
-$ node func-emu/bin/func-emu start --sku list
+$ node fnx/bin/fnx start --sku list
 Available SKU profiles:
   SKU                     Host Version         Bundle Version    Status
   flex                    4.1047.100           [4.22.*, 5.0.0)   GA
   [... profiles loaded from cache ...]
 
-$ node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+$ node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 Host cached, skipping download.
 [... host starts normally using cached binary ...]
 ```
@@ -112,7 +112,7 @@ Host cached, skipping download.
 
 ## Conclusion
 
-The **func-emulate POC is successful** for its core purpose:
+The **fnx POC is successful** for its core purpose:
 
 ✅ **Proves the concept**: Different SKU host versions can run side-by-side  
 ✅ **Download & caching**: Works seamlessly from CDN server  
@@ -140,10 +140,10 @@ To demonstrate the POC:
 cd cdn-server && node server.js
 
 # Terminal 2: Start Flex (latest)
-node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 
 # Terminal 3: Start Windows Consumption (older)
-node func-emu/bin/func-emu start --sku windows-consumption --scriptroot ./test-node-app --port 7072
+node fnx/bin/fnx start --sku windows-consumption --scriptroot ./test-node-app --port 7072
 
 # Terminal 4: Test both
 curl http://localhost:7071/api/hello  # Latest host (4.1047.100)

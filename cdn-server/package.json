@@ -1,8 +1,8 @@
 {
-  "name": "func-emu-cdn-server",
+  "name": "fnx-cdn-server",
   "version": "0.1.0",
   "type": "module",
-  "description": "Dummy CDN server for func-emu POC",
+  "description": "Dummy CDN server for fnx POC",
   "scripts": {
     "start": "node server.js"
   },

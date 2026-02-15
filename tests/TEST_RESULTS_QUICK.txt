@@ -1,4 +1,4 @@
-func-emulate POC Test Results - Quick Reference
+fnx POC Test Results - Quick Reference
 ================================================
 
 STATUS: ✅ PASS (9/11 tests, 81.8%)

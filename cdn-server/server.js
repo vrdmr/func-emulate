@@ -52,7 +52,7 @@ const server = createServer(async (req, res) => {
         res.writeHead(404);
         res.end(`Host package not found: ${version}/${filename}\n` +
           `Expected at: ${filePath}\n` +
-          `Run build-hosts.sh to build host packages.`);
+          `Run tests/build-hosts.sh to build host packages.`);
       }
       return;
     }
@@ -66,7 +66,7 @@ const server = createServer(async (req, res) => {
 
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end(
-        `func-emu CDN Server\n` +
+        `fnx CDN Server\n` +
         `────────────────────────────────────────\n` +
         `Endpoints:\n` +
         `  GET /api/profiles          → SKU profiles JSON\n` +
@@ -88,7 +88,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`╔════════════════════════════════════════════╗`);
-  console.log(`║  func-emu CDN Server                      ║`);
+  console.log(`║  fnx CDN Server                      ║`);
   console.log(`║  http://localhost:${PORT}                    ║`);
   console.log(`║                                            ║`);
   console.log(`║  GET /api/profiles     → SKU profiles      ║`);

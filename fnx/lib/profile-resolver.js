@@ -1,19 +1,64 @@
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve as resolvePath, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 
-const CACHE_DIR = join(homedir(), '.func-emu', 'profiles');
+const CACHE_DIR = join(homedir(), '.fnx', 'profiles');
 const CACHE_FILE = join(CACHE_DIR, 'sku-profiles.json');
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-// For POC: default to local dummy CDN server
-const CDN_URL = process.env.FUNC_EMU_PROFILES_URL ||
-  'http://localhost:4566/api/profiles';
+const DEFAULT_CDN_URL = 'http://localhost:4566/api/profiles';
 
 // Bundled fallback (shipped with the POC)
 const BUNDLED_PROFILES_PATH = new URL('../profiles/sku-profiles.json', import.meta.url).pathname;
 
+let profilesSource = null; // Set via setProfilesSource()
+
+export function setProfilesSource(source) {
+  profilesSource = source;
+}
+
+function isUrl(str) {
+  return str.startsWith('http://') || str.startsWith('https://');
+}
+
+function isJsonString(str) {
+  return str.trimStart().startsWith('{');
+}
+
 async function fetchRegistry() {
+  // If an explicit source was provided (--profiles flag or inline JSON), use it directly
+  if (profilesSource) {
+    // Inline JSON string
+    if (isJsonString(profilesSource)) {
+      return JSON.parse(profilesSource);
+    }
+
+    // URL (http/https)
+    if (isUrl(profilesSource)) {
+      try {
+        const res = await fetch(profilesSource);
+        if (res.ok) {
+          const json = await res.text();
+          await mkdir(CACHE_DIR, { recursive: true });
+          await writeFile(CACHE_FILE, json);
+          return JSON.parse(json);
+        }
+      } catch { /* fall through to error */ }
+      throw new Error(`Cannot fetch profiles from: ${profilesSource}`);
+    }
+
+    // Local file path
+    const filePath = isAbsolute(profilesSource) ? profilesSource : resolvePath(process.cwd(), profilesSource);
+    try {
+      return JSON.parse(await readFile(filePath, 'utf-8'));
+    } catch (err) {
+      throw new Error(`Cannot read profiles file: ${filePath} (${err.message})`);
+    }
+  }
+
+  // Default resolution chain: env var → cache → CDN → stale cache → bundled
+  const cdnUrl = process.env.FUNC_PROFILES_URL || DEFAULT_CDN_URL;
+
   // 1. Try cache (if fresh)
   try {
     const cacheStat = await stat(CACHE_FILE);
@@ -24,7 +69,7 @@ async function fetchRegistry() {
 
   // 2. Try CDN
   try {
-    const res = await fetch(CDN_URL);
+    const res = await fetch(cdnUrl);
     if (res.ok) {
       const json = await res.text();
       await mkdir(CACHE_DIR, { recursive: true });

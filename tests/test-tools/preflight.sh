@@ -23,7 +23,7 @@ check "func CLI available"        func --version
 check "python3 available"         python3 --version
 check "Host zips built (≥2)"      bash -c '[[ $(ls cdn-server/hosts/*/Azure.Functions.Host.*.zip 2>/dev/null | wc -l) -ge 2 ]]'
 check "CDN server responding"     curl -sf http://localhost:4566/api/profiles
-check "func-emu CLI runnable"     node func-emu/bin/func-emu
+check "fnx CLI runnable"     node fnx/bin/fnx
 check "test-node-app ready"       test -f tests/test-node-app/host.json
 check "test-python-app ready"     test -f tests/test-python-app/function_app.py
 

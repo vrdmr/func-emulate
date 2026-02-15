@@ -44,11 +44,11 @@ eval $(./test-tools/start-cdn.sh)
 #### Test 3: Host Download & Caching
 ```bash
 # Clean cache first
-rm -rf ~/.func-emu/hosts/
+rm -rf ~/.fnx/hosts/
 
 # First run (should download)
 eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
-ls ~/.func-emu/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
+ls ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
 # Should exist
 ./test-tools/cleanup.sh $EMU_PID
 
@@ -107,7 +107,7 @@ ps aux | grep "Microsoft.Azure.WebJobs.Script.WebHost" | grep -v grep
 # Should show 2 processes
 
 # Check different cached versions
-ls ~/.func-emu/hosts/
+ls ~/.fnx/hosts/
 # Should show: 4.1047.100 and 4.1044.400
 
 ./test-tools/cleanup.sh $FLEX_PID $LINUX_PID
@@ -151,13 +151,13 @@ eval $(./test-tools/start-cdn.sh)
 #### Test 9: Error Handling
 ```bash
 # Missing scriptroot
-node func-emu/bin/func-emu start --sku flex --scriptroot /tmp/nonexistent 2>&1 | grep -i "FUNCTIONS_WORKER_RUNTIME"
+node fnx/bin/fnx start --sku flex --scriptroot /tmp/nonexistent 2>&1 | grep -i "FUNCTIONS_WORKER_RUNTIME"
 # Should show error about missing runtime
 
 # Dotnet rejected
 mkdir -p /tmp/dotnet-test
 echo '{"IsEncrypted":false,"Values":{"FUNCTIONS_WORKER_RUNTIME":"dotnet-isolated"}}' > /tmp/dotnet-test/local.settings.json
-node func-emu/bin/func-emu start --sku flex --scriptroot /tmp/dotnet-test 2>&1 | grep -i "non-dotnet"
+node fnx/bin/fnx start --sku flex --scriptroot /tmp/dotnet-test 2>&1 | grep -i "non-dotnet"
 rm -rf /tmp/dotnet-test
 # Should show error about dotnet not supported
 ```
@@ -235,7 +235,7 @@ After running all tests, verify:
 
 ```bash
 # All 5 host versions cached
-ls ~/.func-emu/hosts/
+ls ~/.fnx/hosts/
 # Should show: 4.1044.400, 4.1045.100, 4.1045.200, 4.1046.100, 4.1047.100
 
 # All 5 host zips available from CDN
@@ -274,7 +274,7 @@ Take screenshots/video of Test 6 for the demo!
    # CDN server should print request logs to terminal
    ```
 
-3. Check func-emu logs:
+3. Check fnx logs:
    ```bash
    # Each test prints startup banner and any errors
    ```
@@ -286,7 +286,7 @@ Take screenshots/video of Test 6 for the demo!
 
 5. Manually test a simple function:
    ```bash
-   node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071
+   node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
    # In another terminal:
    curl http://localhost:7071/api/hello
    ```
@@ -296,8 +296,8 @@ Take screenshots/video of Test 6 for the demo!
 ## Contact
 
 If tests fail after building host binaries, the issue is likely in:
-- `func-emu/lib/host-manager.js` (download/extraction logic)
-- `func-emu/lib/cli.js` (host startup logic)
+- `fnx/lib/host-manager.js` (download/extraction logic)
+- `fnx/lib/cli.js` (host startup logic)
 - Test app configuration (check `local.settings.json`)
 
 Review the error messages carefully — they should indicate which component failed.

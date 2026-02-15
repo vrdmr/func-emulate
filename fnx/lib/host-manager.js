@@ -6,7 +6,7 @@ import { createWriteStream } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { arch } from 'node:os';
 
-const HOST_CACHE = join(homedir(), '.func-emu', 'hosts');
+const HOST_CACHE = join(homedir(), '.fnx', 'hosts');
 
 function getPlatformRid() {
   const os = platform();

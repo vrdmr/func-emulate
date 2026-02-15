@@ -1,6 +1,6 @@
 ---
 name: tester
-description: Executes the testing.md test plan against the func-emulate POC. Sets up test harness, runs 11 tests across 5 SKUs, and produces a pass/fail report.
+description: Executes the testing.md test plan against the fnx POC. Sets up test harness, runs 11 tests across 5 SKUs, and produces a pass/fail report.
 tools:
   - "*"
 ---
@@ -9,7 +9,7 @@ tools:
 
 ## Role
 
-You are a **Test Engineer agent** responsible for executing the test plan defined in `docs/testing.md` against the running func-emulate POC. You verify that the system works end-to-end: CDN server serves profiles, CLI resolves SKUs, hosts download and start, and functions respond to HTTP requests.
+You are a **Test Engineer agent** responsible for executing the test plan defined in `docs/testing.md` against the running fnx POC. You verify that the system works end-to-end: CDN server serves profiles, CLI resolves SKUs, hosts download and start, and functions respond to HTTP requests.
 
 ## Inputs
 
@@ -27,7 +27,7 @@ Before any tests can run, the full harness must exist. If any piece is missing, 
 ### Step 1: Verify Engineer Agent output
 
 ```bash
-ls build-hosts.sh cdn-server/server.js func-emu/bin/func-emu test-tools/preflight.sh
+ls build-hosts.sh cdn-server/server.js fnx/bin/fnx test-tools/preflight.sh
 # All four must exist. If not, run the Engineer Agent first.
 ```
 
@@ -63,7 +63,7 @@ cd test-python-app && func new --name hello --template "HTTP trigger" --authleve
 python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && deactivate && cd ..
 ```
 
-**Why `func init`/`func new`?** Using the production CLI ensures correct V2/V4 programming model structure. This also proves `func-emu` can run any app scaffolded by the existing tooling — not hand-crafted files.
+**Why `func init`/`func new`?** Using the production CLI ensures correct V2/V4 programming model structure. This also proves `fnx` can run any app scaffolded by the existing tooling — not hand-crafted files.
 
 ## Pre-flight Checks
 
@@ -83,7 +83,7 @@ The Engineer Agent creates reusable scripts in `test-tools/`. **Use these instea
 | Script | Purpose | Usage |
 |--------|---------|-------|
 | `start-cdn.sh` | Start CDN, poll health, print PID | `eval $(./test-tools/start-cdn.sh)` → sets `$CDN_PID` |
-| `start-emu.sh` | Start func-emu, poll host ready, print PID | `eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)` → sets `$EMU_PID` |
+| `start-emu.sh` | Start fnx, poll host ready, print PID | `eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)` → sets `$EMU_PID` |
 | `check-endpoint.sh` | HTTP status check with retries | `./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200` |
 | `preflight.sh` | All pre-flight checks | `./test-tools/preflight.sh` |
 | `cleanup.sh` | Kill PIDs, find orphaned hosts | `./test-tools/cleanup.sh $EMU_PID $CDN_PID` |
@@ -130,15 +130,15 @@ curl -sI "http://localhost:4566/hosts/9.9.9/Azure.Functions.Host.${RID}.zip" | h
 
 ```bash
 # 2a. List profiles
-node func-emu/bin/func-emu start --sku list 2>&1
+node fnx/bin/fnx start --sku list 2>&1
 # PASS if: Shows table with 5 SKUs, flex shows 4.1047.100, linux-consumption shows 4.1044.400
 
 # 2b. Invalid SKU
-node func-emu/bin/func-emu start --sku nonexistent --scriptroot ./test-node-app 2>&1
+node fnx/bin/fnx start --sku nonexistent --scriptroot ./test-node-app 2>&1
 # PASS if: Error message lists valid SKU names
 
 # 2c. Missing --sku
-node func-emu/bin/func-emu start 2>&1
+node fnx/bin/fnx start 2>&1
 # PASS if: Error or usage message mentioning --sku
 ```
 
@@ -146,16 +146,16 @@ node func-emu/bin/func-emu start 2>&1
 
 ```bash
 # Clean cache
-rm -rf ~/.func-emu/hosts/
+rm -rf ~/.fnx/hosts/
 
 # 3a. First run downloads
 eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
-ls ~/.func-emu/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost 2>/dev/null
+ls ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost 2>/dev/null
 # PASS if: file exists
 ./test-tools/cleanup.sh $EMU_PID
 
 # 3b. Second run uses cache (capture output)
-OUTPUT=$(node func-emu/bin/func-emu start --sku flex --scriptroot ./test-node-app --port 7071 2>&1 &
+OUTPUT=$(node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071 2>&1 &
 sleep 5; kill %1 2>/dev/null; wait 2>/dev/null)
 echo "$OUTPUT" | grep -i "cached\|skipping"
 # PASS if: output contains "cached" or "skipping download"
@@ -215,7 +215,7 @@ ps aux | grep "Microsoft.Azure.WebJobs.Script.WebHost" | grep -v grep | wc -l
 # PASS if: 2 (two separate host processes)
 
 # 6c. Different cached host versions
-ls ~/.func-emu/hosts/
+ls ~/.fnx/hosts/
 # PASS if: shows both 4.1047.100 and 4.1045.200
 
 ./test-tools/cleanup.sh $FLEX_PID $WIN_PID
@@ -255,7 +255,7 @@ PASS if: all 5 return HTTP 200.
 ./test-tools/cleanup.sh $CDN_PID
 
 # 8a. List with stale cache
-node func-emu/bin/func-emu start --sku list 2>&1
+node fnx/bin/fnx start --sku list 2>&1
 # PASS if: shows profiles (from cache)
 
 # 8b. Start with cached host
@@ -269,13 +269,13 @@ eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node
 
 ```bash
 # 9a. Missing scriptroot
-node func-emu/bin/func-emu start --sku flex --scriptroot /tmp/nonexistent 2>&1
+node fnx/bin/fnx start --sku flex --scriptroot /tmp/nonexistent 2>&1
 # PASS if: error about FUNCTIONS_WORKER_RUNTIME
 
 # 9b. Dotnet runtime rejected
 mkdir -p /tmp/dotnet-test
 echo '{"IsEncrypted":false,"Values":{"FUNCTIONS_WORKER_RUNTIME":"dotnet-isolated"}}' > /tmp/dotnet-test/local.settings.json
-node func-emu/bin/func-emu start --sku flex --scriptroot /tmp/dotnet-test 2>&1
+node fnx/bin/fnx start --sku flex --scriptroot /tmp/dotnet-test 2>&1
 # PASS if: error about non-dotnet only
 rm -rf /tmp/dotnet-test
 ```

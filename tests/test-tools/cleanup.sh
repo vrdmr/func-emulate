@@ -3,7 +3,7 @@
 # If PIDs given, kills those. Otherwise kills tracked PIDs from PIDS_FILE.
 set -uo pipefail
 
-PIDS_FILE="/tmp/func-emu-test-pids"
+PIDS_FILE="/tmp/fnx-test-pids"
 
 if [[ $# -gt 0 ]]; then
   for pid in "$@"; do

@@ -90,7 +90,7 @@ function createLogFilter(verbose) {
           console.log(`\t${fn.name}: [${fn.methods}] ${baseUrl}/${fn.route}`);
         }
         if (!verbose) {
-          console.log('\nFor detailed output, run func-emu with --verbose flag.');
+          console.log('\nFor detailed output, run fnx with --verbose flag.');
         }
         console.log();
       }
@@ -123,7 +123,7 @@ export async function launchHost(hostDir, opts) {
   }
 
   console.log();
-  console.log('Azure Functions Local Emulator (func-emu)');
+  console.log('Azure Functions Local Emulator (fnx — Phoenix Emulate)');
   console.log(`Emulator Version:  0.1.0`);
   console.log(`Host Version:      ${opts.profile.hostVersion} (${opts.profile.displayName})`);
   console.log();

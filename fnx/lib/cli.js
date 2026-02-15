@@ -1,6 +1,6 @@
 import { resolve as resolvePath } from 'node:path';
 import { readFile } from 'node:fs/promises';
-import { resolveProfile, listProfiles } from './profile-resolver.js';
+import { resolveProfile, listProfiles, setProfilesSource } from './profile-resolver.js';
 import { ensureHost } from './host-manager.js';
 import { launchHost } from './host-launcher.js';
 
@@ -18,7 +18,7 @@ export async function main(args) {
     const { dirname, join } = await import('node:path');
     const dir = dirname(fileURLToPath(import.meta.url));
     const pkg = JSON.parse(readFileSync(join(dir, '..', 'package.json'), 'utf-8'));
-    console.log(`func-emu v${pkg.version}`);
+    console.log(`fnx v${pkg.version}`);
     process.exit(0);
   }
 
@@ -31,6 +31,12 @@ export async function main(args) {
   const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
   const port = getFlag(args, '--port') || '7071';
   const verbose = args.includes('--verbose');
+  const profilesSource = getFlag(args, '--profiles');
+
+  // Set profiles source before any profile resolution
+  if (profilesSource) {
+    setProfilesSource(profilesSource);
+  }
 
   // Read config files early (needed for SKU resolution and env vars)
   const appConfig = await readJsonFile(resolvePath(scriptRoot, 'app.config.json'));
@@ -124,10 +130,10 @@ async function readJsonFile(filePath) {
 
 function printHelp() {
   console.log(`
-Azure Functions Local Emulator (func-emu)
+Azure Functions Local Emulator (fnx — Phoenix Emulate)
 SKU-aware host runtime for local development.
 
-Usage: func-emu <action> [-/--options]
+Usage: fnx <action> [-/--options]
 
 Actions:
   start            Launch the Azure Functions host runtime for a specific SKU.
@@ -140,8 +146,13 @@ Options:
   --scriptroot     Path to the function app directory. Defaults to the current directory.
                    Must contain host.json and either app.config.json or local.settings.json.
   --port <port>    Port for the host HTTP listener. Default: 7071.
+  --profiles <src> SKU profiles source. Can be:
+                   • A URL (http/https) to a profiles JSON endpoint
+                   • A local file path to a profiles JSON file
+                   • Inline JSON string (e.g. '{"profiles":{...}}')
+                   Default: FUNC_PROFILES_URL env var, or http://localhost:4566/api/profiles.
   --verbose        Show all host output (unfiltered). Default: clean output only.
-  -v, --version    Display the version of func-emu.
+  -v, --version    Display the version of fnx.
   -h, --help       Display this help information.
 
 Available SKUs:
@@ -161,19 +172,19 @@ Configuration:
   variables into the host process. local.settings.json values take precedence.
 
 Examples:
-  func-emu start                           Start with default SKU (flex) in current directory
-  func-emu start --sku flex                Emulate Flex Consumption
-  func-emu start --sku windows-consumption Emulate Windows Consumption (older host version)
-  func-emu start --sku list                List all available SKU profiles with host versions
-  func-emu start --sku flex --port 8080    Start on a custom port
-  func-emu start --scriptroot ./my-app     Start from a specific function app directory
+  fnx start                           Start with default SKU (flex) in current directory
+  fnx start --sku flex                Emulate Flex Consumption
+  fnx start --sku windows-consumption Emulate Windows Consumption (older host version)
+  fnx start --sku list                List all available SKU profiles with host versions
+  fnx start --sku flex --port 8080    Start on a custom port
+  fnx start --scriptroot ./my-app     Start from a specific function app directory
 
 Side-by-side comparison:
   # Terminal 1: Run as Flex Consumption
-  func-emu start --sku flex --port 7071
+  fnx start --sku flex --port 7071
 
   # Terminal 2: Run as Windows Consumption (different host version)
-  func-emu start --sku windows-consumption --port 7072
+  fnx start --sku windows-consumption --port 7072
 
   # Compare behavior across SKUs with the same function app!
 

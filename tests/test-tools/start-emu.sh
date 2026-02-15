@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Parse args (pass-through to func-emu)
+# Parse args (pass-through to fnx)
 SKU="" PORT="" SCRIPTROOT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,9 +20,9 @@ done
 PORT="${PORT:-7071}"
 SCRIPTROOT="${SCRIPTROOT:-./tests/test-node-app}"
 
-echo "Starting func-emu --sku $SKU --port $PORT --scriptroot $SCRIPTROOT" >&2
+echo "Starting fnx --sku $SKU --port $PORT --scriptroot $SCRIPTROOT" >&2
 
-node "$SCRIPT_DIR/func-emu/bin/func-emu" start \
+node "$SCRIPT_DIR/fnx/bin/fnx" start \
   --sku "$SKU" --port "$PORT" --scriptroot "$SCRIPTROOT" &
 EMU_PID=$!
 
@@ -36,7 +36,7 @@ for i in $(seq 1 120); do
   fi
   # Also check if process is still alive
   if ! kill -0 $EMU_PID 2>/dev/null; then
-    echo "✗ func-emu process died before host became ready" >&2
+    echo "✗ fnx process died before host became ready" >&2
     exit 1
   fi
   sleep 0.5
