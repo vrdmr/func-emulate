@@ -1,5 +1,6 @@
-import { resolve as resolvePath } from 'node:path';
+import { resolve as resolvePath, dirname, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { resolveProfile, listProfiles, setProfilesSource } from './profile-resolver.js';
 import { ensureHost } from './host-manager.js';
 import { launchHost } from './host-launcher.js';
@@ -20,6 +21,11 @@ export async function main(args) {
     const pkg = JSON.parse(readFileSync(join(dir, '..', 'package.json'), 'utf-8'));
     console.log(`fnx v${pkg.version}`);
     process.exit(0);
+  }
+
+  if (cmd === 'templates-mcp') {
+    await startTemplatesMcp();
+    return;
   }
 
   if (cmd !== 'start') {
@@ -115,6 +121,42 @@ export async function main(args) {
   });
 }
 
+async function startTemplatesMcp() {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const templatesMcpDir = join(__dirname, '..', 'templates-mcp');
+  const templatesRoot = join(templatesMcpDir, 'templates');
+
+  // Import from templates-mcp's own dist (it has the MCP SDK in its node_modules)
+  const { createServer, validateTemplates, logValidationResult } = await import('../templates-mcp/dist/src/server-factory.js');
+
+  // Validate templates on startup
+  const validationResult = await validateTemplates(templatesRoot, false);
+  logValidationResult(validationResult);
+
+  const server = createServer({
+    name: 'fnx-templates-mcp',
+    version: '0.1.0',
+    templatesRoot,
+  });
+
+  // Use dynamic import to resolve StdioServerTransport from templates-mcp's node_modules
+  const { createRequire } = await import('node:module');
+  const require = createRequire(join(templatesMcpDir, 'package.json'));
+  const sdkPath = require.resolve('@modelcontextprotocol/sdk/server/stdio.js');
+  const { StdioServerTransport } = await import(sdkPath);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  const shutdown = async (signal) => {
+    console.error(`[INFO] Received ${signal}, shutting down...`);
+    try { await server.close(); } catch { /* ignore */ }
+    process.exit(0);
+  };
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
+
 function getFlag(args, flag) {
   const idx = args.indexOf(flag);
   return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : null;
@@ -138,6 +180,9 @@ Usage: fnx <action> [-/--options]
 Actions:
   start            Launch the Azure Functions host runtime for a specific SKU.
                    Downloads and caches the correct host version automatically.
+  templates-mcp    Start the Azure Functions templates MCP server (stdio transport).
+                   Drop-in replacement for manvir-templates-mcp-server.
+                   Provides 68 templates across 4 languages via MCP protocol.
 
 Options:
   --sku <name>     Target SKU to emulate. Determines which host version runs.
@@ -187,6 +232,20 @@ Side-by-side comparison:
   fnx start --sku windows-consumption --port 7072
 
   # Compare behavior across SKUs with the same function app!
+
+MCP server (for VS Code Copilot / AI assistants):
+  fnx templates-mcp                    Start templates MCP server (stdio)
+
+  # .vscode/mcp.json configuration:
+  # {
+  #   "servers": {
+  #     "azure-functions-templates": {
+  #       "type": "stdio",
+  #       "command": "fnx",
+  #       "args": ["templates-mcp"]
+  #     }
+  #   }
+  # }
 
 Supported runtimes: node, python, java, powershell
   (dotnet/dotnet-isolated use in-process hosting and are not supported in this POC)

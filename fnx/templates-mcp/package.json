@@ -1,0 +1,35 @@
+{
+  "name": "fnx-templates-mcp",
+  "version": "0.1.0",
+  "description": "Azure Functions templates MCP server (embedded in fnx). Based on azure-functions-templates-mcp-server by Manvir Kaur.",
+  "type": "module",
+  "main": "dist/src/server-factory.js",
+  "exports": {
+    ".": {
+      "import": "./dist/src/server-factory.js"
+    },
+    "./server": {
+      "import": "./dist/src/server.js"
+    },
+    "./handlers": {
+      "import": "./dist/src/handlers.js"
+    }
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/server.js",
+    "smoke": "node smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "typescript": "^5.5.4"
+  }
+}
