@@ -33,6 +33,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Run unit tests
+        shell: bash
         run: node --test tests/unit/*.test.js
 
   e2e-tests:
@@ -56,4 +57,5 @@ jobs:
         run: chmod +x fnx/bin/fnx
 
       - name: Run E2E tests
+        shell: bash
         run: node --test tests/e2e/*.test.js
