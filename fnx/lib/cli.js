@@ -1,8 +1,10 @@
-import { resolve as resolvePath } from 'node:path';
+import { resolve as resolvePath, dirname, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { resolveProfile, listProfiles, setProfilesSource } from './profile-resolver.js';
 import { ensureHost } from './host-manager.js';
-import { launchHost } from './host-launcher.js';
+import { launchHost, createHostState } from './host-launcher.js';
+import { startLiveMcpServer } from './live-mcp-server.js';
 
 export async function main(args) {
   const cmd = args[0];
@@ -22,6 +24,11 @@ export async function main(args) {
     process.exit(0);
   }
 
+  if (cmd === 'templates-mcp') {
+    await startTemplatesMcp();
+    return;
+  }
+
   if (cmd !== 'start') {
     console.error(`Unknown command: ${cmd}\n`);
     printHelp();
@@ -30,7 +37,9 @@ export async function main(args) {
 
   const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
   const port = getFlag(args, '--port') || '7071';
+  const mcpPort = getFlag(args, '--mcp-port') || String(parseInt(port) + 1);
   const verbose = args.includes('--verbose');
+  const noMcp = args.includes('--no-mcp');
   const profilesSource = getFlag(args, '--profiles');
 
   // Set profiles source before any profile resolution
@@ -103,7 +112,18 @@ export async function main(args) {
     process.exit(1);
   }
 
-  // 4. Launch host
+  // 4. Create shared host state and start live MCP server
+  const hostState = createHostState();
+
+  if (!noMcp) {
+    startLiveMcpServer(hostState, parseInt(mcpPort)).catch((err) => {
+      console.error(`  ⚠️  MCP server failed to start on port ${mcpPort}: ${err.message}`);
+      console.error(`     Use --no-mcp to disable, or --mcp-port <port> to change port.`);
+    });
+    // Don't await — host startup should not depend on MCP server
+  }
+
+  // 5. Launch host
   await launchHost(hostDir, {
     scriptRoot: resolvePath(scriptRoot),
     port,
@@ -112,7 +132,44 @@ export async function main(args) {
     mergedValues,
     profile,
     verbose,
+    hostState,
   });
+}
+
+async function startTemplatesMcp() {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const templatesMcpDir = join(__dirname, '..', 'templates-mcp');
+  const templatesRoot = join(templatesMcpDir, 'templates');
+
+  // Import from templates-mcp's own dist (it has the MCP SDK in its node_modules)
+  const { createServer, validateTemplates, logValidationResult } = await import('../templates-mcp/dist/src/server-factory.js');
+
+  // Validate templates on startup
+  const validationResult = await validateTemplates(templatesRoot, false);
+  logValidationResult(validationResult);
+
+  const server = createServer({
+    name: 'fnx-templates-mcp',
+    version: '0.1.0',
+    templatesRoot,
+  });
+
+  // Use dynamic import to resolve StdioServerTransport from templates-mcp's node_modules
+  const { createRequire } = await import('node:module');
+  const require = createRequire(join(templatesMcpDir, 'package.json'));
+  const sdkPath = require.resolve('@modelcontextprotocol/sdk/server/stdio.js');
+  const { StdioServerTransport } = await import(sdkPath);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  const shutdown = async (signal) => {
+    console.error(`[INFO] Received ${signal}, shutting down...`);
+    try { await server.close(); } catch { /* ignore */ }
+    process.exit(0);
+  };
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 function getFlag(args, flag) {
@@ -138,6 +195,9 @@ Usage: fnx <action> [-/--options]
 Actions:
   start            Launch the Azure Functions host runtime for a specific SKU.
                    Downloads and caches the correct host version automatically.
+  templates-mcp    Start the Azure Functions templates MCP server (stdio transport).
+                   Drop-in replacement for manvir-templates-mcp-server.
+                   Provides 68 templates across 4 languages via MCP protocol.
 
 Options:
   --sku <name>     Target SKU to emulate. Determines which host version runs.
@@ -146,6 +206,8 @@ Options:
   --scriptroot     Path to the function app directory. Defaults to the current directory.
                    Must contain host.json and either app.config.json or local.settings.json.
   --port <port>    Port for the host HTTP listener. Default: 7071.
+  --mcp-port <p>   Port for the live MCP server. Default: host port + 1 (7072).
+  --no-mcp         Disable the live MCP server (host-only mode).
   --profiles <src> SKU profiles source. Can be:
                    • A URL (http/https) to a profiles JSON endpoint
                    • A local file path to a profiles JSON file
@@ -187,6 +249,33 @@ Side-by-side comparison:
   fnx start --sku windows-consumption --port 7072
 
   # Compare behavior across SKUs with the same function app!
+
+MCP server (for VS Code Copilot / AI assistants):
+  fnx templates-mcp                    Start templates MCP server (stdio)
+  fnx start                            Also starts live MCP server on port+1
+  fnx start --mcp-port 9000            Live MCP server on custom port
+  fnx start --no-mcp                   Disable live MCP server
+
+  # .vscode/mcp.json — templates only (stdio):
+  # {
+  #   "servers": {
+  #     "azure-functions-templates": {
+  #       "type": "stdio",
+  #       "command": "fnx",
+  #       "args": ["templates-mcp"]
+  #     }
+  #   }
+  # }
+  #
+  # .vscode/mcp.json — live host data (when fnx start is running):
+  # {
+  #   "servers": {
+  #     "fnx-live": {
+  #       "type": "http",
+  #       "url": "http://127.0.0.1:7072/mcp"
+  #     }
+  #   }
+  # }
 
 Supported runtimes: node, python, java, powershell
   (dotnet/dotnet-isolated use in-process hosting and are not supported in this POC)

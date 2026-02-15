@@ -5,6 +5,50 @@ import { createInterface } from 'node:readline';
 import { existsSync } from 'node:fs';
 import { getHostExeName } from './host-manager.js';
 
+// ─── Shared host state (consumed by live MCP server) ─────────────────────
+// This object is populated by the log filter and exposed for the MCP server.
+
+export function createHostState() {
+  return {
+    // Host metadata
+    pid: null,
+    state: 'Starting',      // Starting | Running | Error | Stopped
+    startedAt: Date.now(),
+    hostVersion: null,
+    skuName: null,
+    extensionBundleVersion: null,
+    workerRuntime: null,
+    port: null,
+    baseUrl: null,
+
+    // Functions discovered from logs
+    httpFunctions: [],       // [{ name, route, methods }]
+    nonHttpFunctions: [],    // [{ name, triggerType }]
+
+    // Invocation tracking (ring buffer, last 200)
+    invocations: [],         // [{ id, functionName, status, reason, durationMs, timestamp }]
+    _maxInvocations: 200,
+
+    // App settings (secrets redacted)
+    appSettings: {},
+
+    // Errors collected from logs
+    errors: [],
+
+    addInvocation(inv) {
+      this.invocations.push(inv);
+      if (this.invocations.length > this._maxInvocations) {
+        this.invocations.shift();
+      }
+    },
+
+    addError(err) {
+      this.errors.push({ message: err, timestamp: new Date().toISOString() });
+      if (this.errors.length > 50) this.errors.shift();
+    },
+  };
+}
+
 // ─── Python executable detection ────────────────────────────────────────
 // The .NET host needs a compatible Python version. The host's bundled worker
 // supports up to 3.13 (3.14 is unsupported). We check:
@@ -131,12 +175,15 @@ const SUPPRESS_MESSAGES = [
   'A timeout occurred while running check',
 ];
 
-function createLogFilter(verbose) {
+function createLogFilter(verbose, hostState) {
   const httpFunctions = [];
   const nonHttpFunctions = []; // triggers like blob, queue, timer, etc.
   let functionsShown = false;
   let lastLogShown = false;
   let lastLogLevel = null;
+
+  // In-flight invocations: track Executing → Executed pairs
+  const pendingInvocations = new Map(); // functionName → { reason, startTime }
 
   function isSuppressed(line) {
     for (const msg of SUPPRESS_MESSAGES) {
@@ -189,6 +236,7 @@ function createLogFilter(verbose) {
     const routeMatch = line.match(/Mapped function route '([^']+)' \[([^\]]+)\] to '([^']+)'/);
     if (routeMatch) {
       httpFunctions.push({ route: routeMatch[1], methods: routeMatch[2], name: routeMatch[3] });
+      if (hostState) hostState.httpFunctions = [...httpFunctions];
     }
 
     // Worker indexing JSON: extract non-HTTP trigger types from the indexed metadata
@@ -211,11 +259,41 @@ function createLogFilter(verbose) {
               const nonHttpTrigger = allTriggers.find(m => m[1] !== 'httpTrigger');
               if (nonHttpTrigger) {
                 nonHttpFunctions.push({ name, triggerType: nonHttpTrigger[1] });
+                if (hostState) hostState.nonHttpFunctions = [...nonHttpFunctions];
               }
             }
           }
         } catch { /* non-fatal: JSON parse failure */ }
       }
+    }
+
+    // Track invocations: "Executing 'Functions.hello' (Reason='...')"
+    const execMatch = line.match(/Executing 'Functions\.(\w+)' \(Reason='([^']*)'/);
+    if (execMatch) {
+      pendingInvocations.set(execMatch[1], {
+        reason: execMatch[2],
+        startTime: Date.now(),
+      });
+    }
+
+    // Track invocation completions: "Executed 'Functions.hello' (Succeeded, Id=..., Duration=...ms)"
+    const doneMatch = line.match(/Executed 'Functions\.(\w+)' \((\w+),.*?Duration=(\d+)ms\)/);
+    if (doneMatch && hostState) {
+      const [, name, status, durationStr] = doneMatch;
+      const pending = pendingInvocations.get(name);
+      hostState.addInvocation({
+        functionName: name,
+        status,
+        reason: pending?.reason || 'unknown',
+        durationMs: parseInt(durationStr, 10),
+        timestamp: new Date().toISOString(),
+      });
+      pendingInvocations.delete(name);
+    }
+
+    // Track errors
+    if (hostState && line.match(/^(fail|crit):/)) {
+      hostState.addError(line);
     }
   }
 
@@ -223,8 +301,15 @@ function createLogFilter(verbose) {
     const match = line.match(/Now listening on: (.+)/);
     if (match && !functionsShown) {
       functionsShown = true;
+      const baseUrl = match[1].replace('0.0.0.0', 'localhost');
+
+      // Update host state
+      if (hostState) {
+        hostState.state = 'Running';
+        hostState.baseUrl = baseUrl;
+      }
+
       if (httpFunctions.length > 0 || nonHttpFunctions.length > 0) {
-        const baseUrl = match[1].replace('0.0.0.0', 'localhost');
         console.log('\nFunctions:\n');
         for (const fn of httpFunctions) {
           console.log(`\t${fn.name}: [${fn.methods}] ${baseUrl}/${fn.route}`);
@@ -247,6 +332,14 @@ export async function launchHost(hostDir, opts) {
   const hostExe = join(hostDir, getHostExeName());
   const verbose = opts.verbose || false;
 
+  // Create shared host state for MCP server
+  const hostState = opts.hostState || createHostState();
+  hostState.hostVersion = opts.profile.hostVersion;
+  hostState.skuName = opts.profile.displayName;
+  hostState.extensionBundleVersion = opts.extensionBundleVersion;
+  hostState.workerRuntime = opts.workerRuntime;
+  hostState.port = opts.port;
+
   // Build environment for the host process
   const env = {
     ...process.env,
@@ -268,6 +361,14 @@ export async function launchHost(hostDir, opts) {
     for (const [key, value] of Object.entries(opts.mergedValues)) {
       env[key] = value;
     }
+    // Store redacted version for MCP server
+    const sensitiveKeys = ['AzureWebJobsStorage', 'EventHubConnectionString', 'ServiceBusConnectionString'];
+    const redacted = {};
+    for (const [key, value] of Object.entries(opts.mergedValues)) {
+      redacted[key] = sensitiveKeys.some(sk => key.includes(sk)) && value !== 'UseDevelopmentStorage=true'
+        ? '***REDACTED***' : value;
+    }
+    hostState.appSettings = redacted;
   }
 
   // Auto-detect Python executable if worker runtime is python
@@ -306,13 +407,15 @@ export async function launchHost(hostDir, opts) {
   }
   console.log();
 
-  const filter = createLogFilter(verbose);
+  const filter = createLogFilter(verbose, hostState);
 
   const child = spawn(hostExe, [], {
     env,
     stdio: ['inherit', 'pipe', 'pipe'],
     cwd: opts.scriptRoot,
   });
+
+  hostState.pid = child.pid;
 
   // Process stdout and stderr through the log filter
   for (const stream of [child.stdout, child.stderr]) {
@@ -335,16 +438,27 @@ export async function launchHost(hostDir, opts) {
     child.on('error', (err) => {
       console.error(`\nFailed to start host: ${err.message}`);
       console.error(`Host executable: ${hostExe}`);
+      hostState.state = 'Error';
       reject(err);
     });
 
     child.on('exit', (code, signal) => {
+      hostState.state = 'Stopped';
       if (signal) {
         console.log(`\nHost terminated by signal: ${signal}`);
       } else if (code !== 0) {
         console.error(`\nHost exited with code: ${code}`);
       }
-      resolve(code);
+      resolve({ code, hostState });
     });
+
+    // Expose hostState and child for MCP server startup
+    resolve.__hostState = hostState;
+    resolve.__child = child;
+
+    // Notify caller that launch is in progress (hostState is live)
+    if (opts.onHostLaunched) {
+      opts.onHostLaunched(hostState, child);
+    }
   });
 }
