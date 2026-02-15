@@ -11,6 +11,12 @@ node_modules/
 # func-emu cache
 .func-emu/
 
+# Azurite local storage emulator
+__azurite_db_*
+__blobstorage__/
+__queuestorage__/
+AzuriteConfig
+
 # OS files
 .DS_Store
 Thumbs.db

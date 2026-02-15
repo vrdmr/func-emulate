@@ -12,6 +12,8 @@ Individual feature specs broken out from the [PRD](../prd.md). Each FRD is self-
 | F4 | [CLI Surface & Config](./f4-cli-surface-config.md) | ✅ POC validated | `--sku` flag, config merging, help UX |
 | F5 | [Non-HTTP Trigger Support](./f5-non-http-triggers.md) | ✅ POC validated | Blob/Timer/Queue trigger indexing, display, and execution |
 | F6 | [MCP Server Integration](./f6-mcp-server.md) | 📋 Proposed | Expose fnx runtime + templates as an MCP server |
+| F7 | [Install-Time Warmup](./f7-install-warmup.md) | 📋 Proposed | Pre-download host + bundle during `npm install` |
+| F8 | [Homepage Improvements](./f8-homepage-improvements.md) | 📋 Proposed | Transform host homepage into a developer productivity hub |
 
 ## Relationship to PRD
 
