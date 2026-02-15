@@ -34,6 +34,29 @@ A CDN-hosted JSON registry (`sku-profiles.json`) that maps each SKU to its curre
 }
 ```
 
+### `hostPackageUrl` — Platform RIDs
+
+The `hostPackageUrl` map uses .NET Runtime Identifiers (RIDs) as keys. Each key maps to a platform-specific self-contained host zip. The CLI detects the user's OS + architecture at runtime and selects the correct download.
+
+| RID | OS | Architecture | Status | Notes |
+|-----|-----|-------------|--------|-------|
+| `osx-arm64` | macOS | Apple Silicon (M1–M4) | ✅ POC | Most common Mac dev machine |
+| `osx-x64` | macOS | Intel | ✅ POC | Older Macs, some CI runners |
+| `linux-x64` | Linux | x64 | ✅ POC | WSL, CI/CD, containers, devboxes |
+| `win-x64` | Windows | x64 | ✅ POC | Standard Windows dev machine |
+| `linux-arm64` | Linux | ARM64 | 🔮 Future | Graviton, Ampere, Raspberry Pi |
+| `win-arm64` | Windows | ARM64 | 🔮 Future | Surface Pro X, Snapdragon laptops |
+
+RID detection:
+```javascript
+os.platform() + os.arch()  →  RID
+// darwin + arm64  →  osx-arm64
+// linux  + x64    →  linux-x64
+// win32  + x64    →  win-x64
+```
+
+Every profile MUST include all actively supported RIDs. If a user's platform is missing, fnx errors with available RIDs listed.
+
 ## SKUs
 
 | Key | Display Name | Cadence |
