@@ -30,6 +30,7 @@ export async function main(args) {
 
   const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
   const port = getFlag(args, '--port') || '7071';
+  const verbose = args.includes('--verbose');
 
   // Read config files early (needed for SKU resolution and env vars)
   const appConfig = await readJsonFile(resolvePath(scriptRoot, 'app.config.json'));
@@ -104,6 +105,7 @@ export async function main(args) {
     extensionBundleVersion: profile.extensionBundleVersion,
     mergedValues,
     profile,
+    verbose,
   });
 }
 
@@ -138,6 +140,7 @@ Options:
   --scriptroot     Path to the function app directory. Defaults to the current directory.
                    Must contain host.json and either app.config.json or local.settings.json.
   --port <port>    Port for the host HTTP listener. Default: 7071.
+  --verbose        Show all host output (unfiltered). Default: clean output only.
   -v, --version    Display the version of func-emu.
   -h, --help       Display this help information.
 
