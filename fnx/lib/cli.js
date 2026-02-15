@@ -179,39 +179,18 @@ export async function main(args) {
 }
 
 async function startTemplatesMcp() {
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const templatesMcpDir = join(__dirname, '..', 'templates-mcp');
-  const templatesRoot = join(templatesMcpDir, 'templates');
+  const { runStdioMcpServer } = await import('./mcp-server.js');
+  const { getTemplateTools } = await import('./mcp-tools/templates.js');
+  const { getSkuTools } = await import('./mcp-tools/sku.js');
 
-  // Import from templates-mcp's own dist (it has the MCP SDK in its node_modules)
-  const { createServer, validateTemplates, logValidationResult } = await import('../templates-mcp/dist/src/server-factory.js');
+  const templateTools = await getTemplateTools();
+  const skuTools = getSkuTools();
 
-  // Validate templates on startup
-  const validationResult = await validateTemplates(templatesRoot, false);
-  logValidationResult(validationResult);
-
-  const server = createServer({
+  await runStdioMcpServer({
     name: 'fnx-templates-mcp',
     version: '0.1.0',
-    templatesRoot,
+    tools: [...templateTools, ...skuTools],
   });
-
-  // Use dynamic import to resolve StdioServerTransport from templates-mcp's node_modules
-  const { createRequire } = await import('node:module');
-  const require = createRequire(join(templatesMcpDir, 'package.json'));
-  const sdkPath = require.resolve('@modelcontextprotocol/sdk/server/stdio.js');
-  const { StdioServerTransport } = await import(sdkPath);
-
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-
-  const shutdown = async (signal) => {
-    console.error(`[INFO] Received ${signal}, shutting down...`);
-    try { await server.close(); } catch { /* ignore */ }
-    process.exit(0);
-  };
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 export function getFlag(args, flag) {
