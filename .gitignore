@@ -17,6 +17,9 @@ __blobstorage__/
 __queuestorage__/
 AzuriteConfig
 
+# Git worktrees (parallel FRD development)
+worktrees/
+
 # OS files
 .DS_Store
 Thumbs.db

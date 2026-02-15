@@ -37,6 +37,7 @@ The PM Agent and Test Agent can run in parallel after the Engineer Agent complet
 | **PM** | Validate PRD requirements are met by the implementation | `docs/prd.md`, all source files | Checklist of PRD requirements mapped to implementation |
 | **Engineer** | Scaffold all code from `docs/implementation.md` spec | `cdn-server/`, `fnx/`, `tests/` | All files created, CLI runs without errors |
 | **Test** | Execute `docs/testing.md` plan, validate end-to-end | `docs/testing.md`, running system | Tests 1-6 (P0) pass |
+| **Merge Specialist** | Integrate parallel FRD feature branches into `main` | Feature branches, `docs/prd-docs/` | All branches merged, no conflicts, post-merge validation passes |
 
 ## Handoff Protocol
 
