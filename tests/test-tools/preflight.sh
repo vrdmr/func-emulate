@@ -21,7 +21,7 @@ echo "═══ Pre-flight Checks ═══"
 check "Node.js ≥ 18"              node -e "process.exit(parseInt(process.version.slice(1)) >= 18 ? 0 : 1)"
 check "func CLI available"        func --version
 check "python3 available"         python3 --version
-check "Host zips built (≥2)"      bash -c '[[ $(ls cdn-server/hosts/*/Azure.Functions.Host.*.zip 2>/dev/null | wc -l) -ge 2 ]]'
+check "Host zips built (≥2)"      bash -c '[[ $(ls cdn-server/hosts/*/azure-functions-v*.zip 2>/dev/null | wc -l) -ge 2 ]]'
 check "CDN server responding"     curl -sf http://localhost:4566/api/profiles
 check "fnx CLI runnable"     node fnx/bin/fnx
 check "test-node-app ready"       test -f tests/test-node-app/host.json

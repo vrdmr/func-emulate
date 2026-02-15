@@ -73,13 +73,13 @@ jobs:
         shell: bash
         run: |
           cd host/publish
-          zip -r -q "../../Azure.Functions.Host.${{ matrix.rid }}.zip" .
+          zip -r -q "../../azure-functions-v${{ inputs.host_tag }}-${{ matrix.rid }}.zip" .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: host-${{ matrix.rid }}
-          path: Azure.Functions.Host.${{ matrix.rid }}.zip
+          path: azure-functions-v${{ inputs.host_tag }}-${{ matrix.rid }}.zip
 
   release:
     needs: build

@@ -32,40 +32,26 @@ For detailed output, run fnx with --verbose flag.
 ### Prerequisites
 
 - **Node.js 18+**
-- **.NET 8+ SDK** (for building host binaries from source)
-- **Azure Functions Core Tools v4** (`func` CLI, for scaffolding test apps)
 
-### 1. Build host packages (~20 min)
+That's it. Host binaries are downloaded automatically from [GitHub Releases](https://github.com/vrdmr/func-emulate/releases).
 
-```bash
-./tests/build-hosts.sh
-```
-
-This clones [Azure/azure-functions-host](https://github.com/Azure/azure-functions-host), checks out 5 release tags, and produces self-contained builds for your platform as zips in `cdn-server/hosts/`.
-
-### 2. Start the CDN server
-
-```bash
-cd cdn-server && node server.js &
-```
-
-Serves SKU profiles and host packages on `http://localhost:4566`. The fnx CLI fetches profiles and downloads hosts from here.
-
-### 3. Run with a SKU
+### 1. Run with a SKU
 
 ```bash
 # Default (Flex Consumption, latest host)
-node fnx/bin/fnx start --scriptroot ./tests/test-node-app
+node fnx/bin/fnx start --scriptroot ./my-function-app
 
 # Specific SKU
-node fnx/bin/fnx start --sku windows-consumption --scriptroot ./tests/test-node-app --port 7072
+node fnx/bin/fnx start --sku windows-consumption --scriptroot ./my-function-app --port 7072
 
 # Side-by-side comparison (two terminals!)
-node fnx/bin/fnx start --sku flex --port 7071 --scriptroot ./tests/test-node-app
-node fnx/bin/fnx start --sku windows-consumption --port 7072 --scriptroot ./tests/test-node-app
+node fnx/bin/fnx start --sku flex --port 7071 --scriptroot ./my-function-app
+node fnx/bin/fnx start --sku windows-consumption --port 7072 --scriptroot ./my-function-app
 ```
 
-### 4. List available SKUs
+On first run, fnx fetches the SKU profile registry from GitHub, downloads the correct host binary (~256MB), and caches it at `~/.fnx/hosts/{version}/`. Subsequent runs start instantly.
+
+### 2. List available SKUs
 
 ```bash
 node fnx/bin/fnx start --sku list
@@ -83,6 +69,18 @@ Available SKU profiles:
   linux-consumption       4.1044.400           [4.18.*, 5.0.0)   deprecated
 ```
 
+### 3. Use a custom profiles source
+
+```bash
+# Point to a different profiles JSON (URL, local file, or inline JSON)
+node fnx/bin/fnx start --profiles https://example.com/my-profiles.json --scriptroot ./my-app
+node fnx/bin/fnx start --profiles ./my-profiles.json --scriptroot ./my-app
+
+# Or via environment variable
+export FUNC_PROFILES_URL=https://example.com/my-profiles.json
+node fnx/bin/fnx start --scriptroot ./my-app
+```
+
 ## CLI Reference
 
 ```
@@ -96,6 +94,7 @@ Options:
                    Resolution: CLI flag → app.config.json → local.settings.json → default "flex"
   --scriptroot     Path to function app directory (default: current directory)
   --port <port>    Host HTTP port (default: 7071)
+  --profiles <src> Profiles source: URL, local file path, or inline JSON
   --verbose        Show all host output (unfiltered)
   -v, --version    Show version
   -h, --help       Show full help with examples
@@ -127,35 +126,34 @@ Values from both files are merged and injected as environment variables into the
 
 | Variable | Description |
 |----------|-------------|
-| `FNX_PROFILES_URL` | Override the SKU profiles endpoint (default: `http://localhost:4566/api/profiles`). Can be a GitHub raw URL or any HTTP endpoint serving the profiles JSON. |
+| `FUNC_PROFILES_URL` | Override the SKU profiles endpoint. Default: fetches from GitHub. Can be any URL or local file path serving the profiles JSON. |
 
 ## Project Structure
 
 ```
-├── fnx/                    # The CLI (zero npm dependencies)
-│   ├── bin/fnx             # Entry point
+├── fnx/                         # The CLI (zero npm dependencies)
+│   ├── bin/fnx                  # Entry point
 │   ├── lib/cli.js               # Argument parsing, config merging, orchestration
-│   ├── lib/profile-resolver.js  # Fetch/cache SKU profiles (CDN → cache → bundled)
+│   ├── lib/profile-resolver.js  # Fetch/cache SKU profiles (GitHub → cache → bundled)
 │   ├── lib/host-manager.js      # Download/extract/cache host packages
 │   ├── lib/host-launcher.js     # Spawn host process, filter logs
 │   └── profiles/sku-profiles.json  # Bundled fallback profiles
-├── cdn-server/                  # Local CDN mock (serves profiles + host zips)
+├── cdn-server/                  # Local CDN mock (dev/testing only)
 │   ├── server.js
 │   ├── profiles/sku-profiles.json
-│   └── hosts/                   # Built host zips (populated by tests/build-hosts.sh)
+│   └── hosts/                   # Locally-built host zips
 ├── tests/                       # Test apps, tools, and reports
-│   ├── build-hosts.sh           # Builds 5 host versions from azure-functions-host
-├── tests/                       # Test apps, tools, and reports
+│   ├── build-hosts.sh           # Builds host versions from azure-functions-host source
 │   ├── test-node-app/           # Node.js V4 function app
 │   ├── test-python-app/         # Python V2 function app
 │   ├── test-tools/              # Test helper scripts
-│   ├── TEST_REPORT.md           # Full test report
-│   └── RETEST_CHECKLIST.md      # Re-test guide
+│   └── TEST_REPORT.md           # Full test report
+├── .github/workflows/           # CI
+│   └── build-hosts.yml          # Multi-platform host build + GitHub Release upload
 ├── docs/                        # Spec documents
 │   ├── prd.md                   # Product Requirements
 │   ├── implementation.md        # Implementation Spec
 │   ├── testing.md               # Test Plan
-│   ├── initial-thoughts.md      # Initial design thinking
 │   └── npm-release-plan.md      # npm publish roadmap
 ```
 

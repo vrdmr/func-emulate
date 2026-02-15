@@ -54,7 +54,7 @@ fi
 for tag in "${TAGS[@]}"; do
   version="${tag#v}"  # strip leading 'v' → "4.1047.100"
   zip_dir="$OUTPUT_DIR/$version"
-  zip_file="$zip_dir/Azure.Functions.Host.${RID}.zip"
+  zip_file="$zip_dir/azure-functions-v${version}-${RID}.zip"
 
   if [ -f "$zip_file" ]; then
     echo "[$version] Already built, skipping."
@@ -105,5 +105,5 @@ echo ""
 echo "════════════════════════════════════"
 echo "All host builds complete!"
 echo "Output: $OUTPUT_DIR/"
-ls -la "$OUTPUT_DIR"/*/Azure.Functions.Host.*.zip 2>/dev/null || echo "(no zips found)"
+ls -la "$OUTPUT_DIR"/*/azure-functions-v*.zip 2>/dev/null || echo "(no zips found)"
 echo "════════════════════════════════════"
