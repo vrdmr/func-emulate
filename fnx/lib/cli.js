@@ -2,7 +2,7 @@ import { resolve as resolvePath, dirname, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolveProfile, listProfiles, setProfilesSource } from './profile-resolver.js';
-import { ensureHost } from './host-manager.js';
+import { ensureHost, ensureBundle } from './host-manager.js';
 import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
 
@@ -93,9 +93,17 @@ export async function main(args) {
   // 2. Ensure host is downloaded
   const hostDir = await ensureHost(profile);
   console.log(`  Host path:         ${hostDir}`);
+
+  // 3. Pre-download the correct extension bundle for this SKU
+  //    This resolves the exact version from CDN index, capped by maxExtensionBundleVersion,
+  //    and downloads it so the host finds it cached and never fetches a wrong version.
+  const resolvedBundleVersion = await ensureBundle(profile);
+  if (resolvedBundleVersion) {
+    console.log(`  Bundle resolved:   ${resolvedBundleVersion}`);
+  }
   console.log();
 
-  // 3. Merge config: app.config.json Values + local.settings.json Values
+  // 4. Merge config: app.config.json Values + local.settings.json Values
   const mergedValues = {
     ...(appConfig?.Values || {}),
     ...(localSettings?.Values || {}),
@@ -115,7 +123,7 @@ export async function main(args) {
     process.exit(1);
   }
 
-  // 4. Create shared host state and start live MCP server
+  // 5. Create shared host state and start live MCP server
   const hostState = createHostState();
 
   if (!noMcp) {
@@ -126,17 +134,23 @@ export async function main(args) {
     // Don't await — host startup should not depend on MCP server
   }
 
-  // 5. Launch host
-  // Clamp extension bundle version range if profile defines a max
-  let effectiveBundleVersion = profile.extensionBundleVersion;
-  if (profile.maxExtensionBundleVersion) {
-    // Rewrite upper bound: e.g. "[4.19.*, 5.0.0)" → "[4.19.*, 4.25.1)"
-    // This prevents the host from downloading a bundle newer than this host supports
-    const maxParts = profile.maxExtensionBundleVersion.split('.').map(Number);
-    const ceilVersion = `${maxParts[0]}.${maxParts[1]}.${(maxParts[2] || 0) + 1}`;
-    const lowerBound = effectiveBundleVersion.match(/^\[([^\],]+)/);
-    if (lowerBound) {
-      effectiveBundleVersion = `[${lowerBound[1]}, ${ceilVersion})`;
+  // 6. Launch host
+  // Pin the bundle version to what we pre-downloaded, so the host uses exactly that.
+  // If bundle resolution failed (offline, no match), fall back to the clamped range.
+  let effectiveBundleVersion;
+  if (resolvedBundleVersion) {
+    // Exact pin: host will find this version cached and use it
+    effectiveBundleVersion = `[${resolvedBundleVersion}, ${resolvedBundleVersion}]`;
+  } else {
+    // Fallback: clamp range if maxExtensionBundleVersion is set
+    effectiveBundleVersion = profile.extensionBundleVersion;
+    if (profile.maxExtensionBundleVersion) {
+      const maxParts = profile.maxExtensionBundleVersion.split('.').map(Number);
+      const ceilVersion = `${maxParts[0]}.${maxParts[1]}.${(maxParts[2] || 0) + 1}`;
+      const lowerBound = effectiveBundleVersion.match(/^\[([^\],]+)/);
+      if (lowerBound) {
+        effectiveBundleVersion = `[${lowerBound[1]}, ${ceilVersion})`;
+      }
     }
   }
 

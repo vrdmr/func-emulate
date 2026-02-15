@@ -14,17 +14,28 @@ SKU-aware extension bundle version resolution. The profile specifies a bundle ve
 
 ## How It Works
 
+### Pre-Download (fnx controls the version)
+
+Unlike the previous approach of letting the host resolve bundles at startup, fnx now **pre-downloads the exact bundle version** before launching the host. This guarantees the host uses exactly the version fnx selected.
+
+**Flow:**
+1. fnx fetches the CDN bundle index (`ExtensionBundles/.../index.json`) — all available versions
+2. fnx resolves the best version that matches both `extensionBundleVersion` range AND `maxExtensionBundleVersion` cap
+3. fnx downloads that exact version to `~/.fnx/bundles/Microsoft.Azure.Functions.ExtensionBundle/{version}/`
+4. fnx pins the host's bundle version env var to `[{version}, {version}]` (exact match)
+5. Host finds the bundle cached, uses it without any CDN fetch
+
 Three env vars set before spawning the host:
 
 ```javascript
 // Tell the host it's in a local dev context (enables bundle download)
 FUNCTIONS_CORETOOLS_ENVIRONMENT = 'true'
 
-// Where to cache downloaded bundles
+// Where to cache downloaded bundles (fnx pre-populates this)
 'AzureFunctionsJobHost:extensionBundle:downloadPath' = '~/.fnx/bundles/Microsoft.Azure.Functions.ExtensionBundle'
 
-// SKU-specific version range override (clamped by maxExtensionBundleVersion)
-'AzureFunctionsJobHost:extensionBundle:version' = '[4.22.*, 4.99.1)'  // from profile, upper-bounded
+// Pinned to exact pre-downloaded version (e.g. for windows-consumption capped at 4.25.0)
+'AzureFunctionsJobHost:extensionBundle:version' = '[4.23.1, 4.23.1]'  // exact pin
 ```
 
 ### Bundle Version Capping
@@ -34,13 +45,23 @@ Not every host version supports every bundle version. A host at `4.1045.200` mig
 **How it works:**
 1. Profile defines `extensionBundleVersion: "[4.19.*, 5.0.0)"` (the range the SKU intends)
 2. Profile also defines `maxExtensionBundleVersion: "4.25.0"` (the ceiling this host supports)
-3. fnx rewrites the range upper bound: `[4.19.*, 5.0.0)` → `[4.19.*, 4.25.1)`
-4. The host's bundle resolver now cannot download anything above `4.25.0`
+3. fnx queries CDN index and finds the highest version within range AND under cap → e.g. `4.23.1`
+4. fnx downloads `4.23.1` to cache, pins host env var to `[4.23.1, 4.23.1]`
+5. The host has no choice — it uses exactly `4.23.1`
+
+**Real-world resolution (from CDN index):**
+```
+flex:          [4.22.*, 5.0.0)  max=4.99.0  → 4.30.0 (latest)
+linux-premium: [4.21.*, 5.0.0)  max=4.30.0  → 4.30.0
+win-con:       [4.19.*, 5.0.0)  max=4.25.0  → 4.23.1 (not 4.30.0!)
+lin-con:       [4.18.*, 5.0.0)  max=4.22.0  → 4.21.0 (not 4.30.0!)
+```
 
 **Why this matters:**
 - Extension bundles ship new extension DLLs. A newer bundle may use host APIs that don't exist in an older host, causing runtime failures.
-- Without capping, `[4.19.*, 5.0.0)` would let the host grab `4.30.0` even on a host that only supports up to `4.25.0`.
+- Without capping, the host would grab the latest matching version (e.g. `4.30.0`) even on a host that only supports up to `4.25.0`.
 - The cap is set per-SKU by the release pipeline based on validated compatibility.
+- Pre-downloading ensures the host **never talks to CDN for bundles** — fnx is the single source of truth.
 
 The host handles all bundle resolution, version matching, download, and extraction:
 

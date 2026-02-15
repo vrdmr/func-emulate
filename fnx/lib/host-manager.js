@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, chmod, rm, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
@@ -7,6 +7,9 @@ import { execSync } from 'node:child_process';
 import { arch } from 'node:os';
 
 const HOST_CACHE = join(homedir(), '.fnx', 'hosts');
+const BUNDLE_CACHE = join(homedir(), '.fnx', 'bundles');
+const BUNDLE_CDN = 'https://functionscdn.azureedge.net/public/ExtensionBundles';
+const BUNDLE_ID = 'Microsoft.Azure.Functions.ExtensionBundle';
 
 function getPlatformRid() {
   const os = platform();
@@ -127,6 +130,141 @@ async function patchWorkerConfigs(hostDir) {
       console.log(`  Patched python worker config: ${old} → ${bestPython}`);
     }
   } catch { /* non-fatal */ }
+}
+
+// ─── Extension Bundle Pre-Download ──────────────────────────────────────
+// Downloads the correct extension bundle BEFORE launching the host.
+// This ensures the host finds the bundle cached and never fetches a wrong version.
+
+function parseVersionRange(range) {
+  // Parse "[4.19.*, 5.0.0)" → { minMajor, minMinor, maxVersion }
+  const match = range.match(/^\[(\d+)\.(\d+)\.\*,\s*(\d+\.\d+\.\d+)\)$/);
+  if (!match) return null;
+  return {
+    minMajor: parseInt(match[1], 10),
+    minMinor: parseInt(match[2], 10),
+    upperBound: match[3].split('.').map(Number),
+  };
+}
+
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function findBestBundleVersion(allVersions, range, maxVersion) {
+  const parsed = parseVersionRange(range);
+  if (!parsed) return null;
+
+  const candidates = allVersions.filter(v => {
+    const parts = v.split('.').map(Number);
+    // Must match major and be >= minMinor
+    if (parts[0] !== parsed.minMajor) return false;
+    if (parts[1] < parsed.minMinor) return false;
+    // Must be below upper bound
+    if (compareVersions(v, parsed.upperBound.join('.')) >= 0) return false;
+    // Must be at or below maxVersion cap
+    if (maxVersion && compareVersions(v, maxVersion) > 0) return false;
+    return true;
+  });
+
+  if (candidates.length === 0) return null;
+  candidates.sort(compareVersions);
+  return candidates[candidates.length - 1]; // highest valid version
+}
+
+export async function ensureBundle(profile) {
+  const bundleDir = join(BUNDLE_CACHE, BUNDLE_ID);
+  const range = profile.extensionBundleVersion;
+  const maxVersion = profile.maxExtensionBundleVersion;
+
+  // Fetch CDN index to get all available versions
+  console.log('  Resolving extension bundle...');
+  let allVersions;
+  try {
+    const indexUrl = `${BUNDLE_CDN}/${BUNDLE_ID}/index.json`;
+    const res = await fetch(indexUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    allVersions = await res.json();
+  } catch (err) {
+    // If CDN is unreachable, check if we have any cached version that fits
+    console.log(`  ⚠️  Bundle index fetch failed (${err.message}), checking cache...`);
+    return findCachedBundle(bundleDir, range, maxVersion);
+  }
+
+  const bestVersion = findBestBundleVersion(allVersions, range, maxVersion);
+  if (!bestVersion) {
+    throw new Error(
+      `No extension bundle found matching range ${range}` +
+      (maxVersion ? ` with max ${maxVersion}` : '') +
+      `. Available 4.x: ${allVersions.filter(v => v.startsWith('4.')).sort(compareVersions).join(', ')}`
+    );
+  }
+
+  const versionDir = join(bundleDir, bestVersion);
+  if (existsSync(join(versionDir, 'bundle.json'))) {
+    console.log(`  Bundle ${bestVersion} cached.`);
+    return bestVersion;
+  }
+
+  // Download and extract
+  const zipUrl = `${BUNDLE_CDN}/${BUNDLE_ID}/${bestVersion}/${BUNDLE_ID}.${bestVersion}_any-any.zip`;
+  console.log(`  Downloading bundle ${bestVersion}...`);
+
+  await mkdir(versionDir, { recursive: true });
+  const tempZip = join(versionDir, '_bundle.zip');
+
+  try {
+    const res = await fetch(zipUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+    const total = parseInt(res.headers.get('content-length') || '0', 10);
+    let downloaded = 0;
+    const fileStream = createWriteStream(tempZip);
+    const reader = res.body.getReader();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      fileStream.write(value);
+      downloaded += value.length;
+      if (total > 0) {
+        const pct = Math.round((downloaded / total) * 100);
+        process.stdout.write(`\r  Downloading bundle: ${pct}% (${(downloaded / 1048576).toFixed(1)} MB)`);
+      }
+    }
+    fileStream.end();
+    await new Promise((resolve) => fileStream.on('finish', resolve));
+    console.log('\r  Bundle download complete.                              ');
+
+    // Extract
+    if (platform() === 'win32') {
+      execSync(`powershell -Command "Expand-Archive -Path '${tempZip}' -DestinationPath '${versionDir}' -Force"`,
+        { stdio: 'pipe' });
+    } else {
+      execSync(`unzip -o -q "${tempZip}" -d "${versionDir}"`, { stdio: 'pipe' });
+    }
+    console.log(`  Bundle ${bestVersion} ready.`);
+  } finally {
+    try { await rm(tempZip); } catch { /* ignore */ }
+  }
+
+  return bestVersion;
+}
+
+function findCachedBundle(bundleDir, range, maxVersion) {
+  if (!existsSync(bundleDir)) return null;
+  const cached = readdirSync(bundleDir).filter(d => existsSync(join(bundleDir, d, 'bundle.json')));
+  const best = findBestBundleVersion(cached, range, maxVersion);
+  if (best) {
+    console.log(`  Using cached bundle ${best}.`);
+  }
+  return best;
 }
 
 export { getHostExeName };
