@@ -6,6 +6,9 @@
   "bin": {
     "fnx": "./bin/fnx"
   },
+  "scripts": {
+    "postinstall": "node ./bin/fnx warmup || echo 'fnx: warmup skipped (offline or error). Run fnx warmup manually.'"
+  },
   "dependencies": {},
   "engines": {
     "node": ">=18"

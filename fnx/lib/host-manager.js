@@ -25,13 +25,18 @@ function getHostExeName() {
     : 'Microsoft.Azure.WebJobs.Script.WebHost';
 }
 
-export async function ensureHost(profile) {
+export async function ensureHost(profile, { force = false } = {}) {
   const hostDir = join(HOST_CACHE, profile.hostVersion);
   const hostExe = join(hostDir, getHostExeName());
 
-  if (existsSync(hostExe)) {
+  if (!force && existsSync(hostExe)) {
     console.log('  Host cached, skipping download.');
     return hostDir;
+  }
+
+  // Clean existing dir if forcing re-download
+  if (force && existsSync(hostDir)) {
+    await rm(hostDir, { recursive: true, force: true });
   }
 
   // Determine download URL
@@ -178,7 +183,7 @@ function findBestBundleVersion(allVersions, range, maxVersion) {
   return candidates[candidates.length - 1]; // highest valid version
 }
 
-export async function ensureBundle(profile) {
+export async function ensureBundle(profile, { force = false } = {}) {
   const bundleDir = join(BUNDLE_CACHE, BUNDLE_ID);
   const range = profile.extensionBundleVersion;
   const maxVersion = profile.maxExtensionBundleVersion;
@@ -207,9 +212,14 @@ export async function ensureBundle(profile) {
   }
 
   const versionDir = join(bundleDir, bestVersion);
-  if (existsSync(join(versionDir, 'bundle.json'))) {
+  if (!force && existsSync(join(versionDir, 'bundle.json'))) {
     console.log(`  Bundle ${bestVersion} cached.`);
     return bestVersion;
+  }
+
+  // Clean existing version dir if forcing re-download
+  if (force && existsSync(versionDir)) {
+    await rm(versionDir, { recursive: true, force: true });
   }
 
   // Download and extract
@@ -267,4 +277,4 @@ function findCachedBundle(bundleDir, range, maxVersion) {
   return best;
 }
 
-export { getHostExeName };
+export { getHostExeName, getPlatformRid };
