@@ -41,8 +41,9 @@ export function mcpRequest(messages, timeoutMs = 15000) {
       const lines = buf.split('\n');
       buf = lines.pop();
       for (const line of lines) {
-        if (line.trim()) {
-          try { responses.push(JSON.parse(line)); } catch { /* skip */ }
+        const trimmed = line.trim();
+        if (trimmed) {
+          try { responses.push(JSON.parse(trimmed)); } catch { /* skip */ }
         }
       }
     });
@@ -54,8 +55,9 @@ export function mcpRequest(messages, timeoutMs = 15000) {
 
     child.on('exit', () => {
       clearTimeout(timer);
-      if (buf.trim()) {
-        try { responses.push(JSON.parse(buf.trim())); } catch { /* skip */ }
+      const remaining = buf.trim();
+      if (remaining) {
+        try { responses.push(JSON.parse(remaining)); } catch { /* skip */ }
       }
       resolve(responses);
     });
