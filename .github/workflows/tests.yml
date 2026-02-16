@@ -34,6 +34,14 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Install fnx dependencies
+        run: npm ci
+        working-directory: fnx
+
+      - name: Install test dependencies
+        run: npm ci
+        working-directory: tests
+
       - name: Install templates-mcp dependencies
         run: npm ci
         working-directory: fnx/templates-mcp
@@ -62,6 +70,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+
+      - name: Install fnx dependencies
+        run: npm ci
+        working-directory: fnx
 
       - name: Install templates-mcp dependencies
         run: npm ci

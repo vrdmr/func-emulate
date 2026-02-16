@@ -54,7 +54,7 @@ export function createHostState() {
 // ─── Python executable detection ────────────────────────────────────────
 // The .NET host needs a compatible Python version. The host's bundled worker
 // supports up to 3.13 (3.14 is unsupported). We check:
-//   1. Explicit config (app.config.json "PythonPath")
+//   1. Explicit config (app-config.yaml PythonPath or env var)
 //   2. .venv in the script root
 //   3. System python3.13 → python3.12 → python3.11 → python3 → python
 // This mirrors Core Tools behavior which also searches versioned binaries.
@@ -62,7 +62,7 @@ export function createHostState() {
 const SUPPORTED_PYTHON_VERSIONS = ['3.13', '3.12', '3.11', '3.10', '3.9'];
 
 function findPythonExecutable(scriptRoot, explicitPath) {
-  // 0. Explicit path from config (app.config.json "PythonPath" or env var)
+  // 0. Explicit path from config (app-config.yaml PythonPath or env var)
   if (explicitPath) {
     if (existsSync(explicitPath)) return explicitPath;
     // Maybe it's a command name on PATH
@@ -361,7 +361,7 @@ export async function launchHost(hostDir, opts) {
       } catch { /* non-fatal */ }
     } else {
       console.error(warning('⚠️  Python runtime requested but no compatible python (3.9-3.13) found.'));
-      console.error(dim('   Set "PythonPath" in app.config.json or FNX_PYTHON_PATH env var.'));
+      console.error(dim('   Set "PythonPath" in app-config.yaml configurations or FNX_PYTHON_PATH env var.'));
     }
   }
 

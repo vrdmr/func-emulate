@@ -200,7 +200,7 @@ Only HTTP functions can be invoked. For non-HTTP, upload data to the trigger sou
     'get_app_settings',
     {
       title: 'Get App Settings',
-      description: `Get merged app settings (app.config.json + local.settings.json) with secrets redacted.
+      description: `Get merged app settings (app-config.yaml + local.settings.json) with secrets redacted.
 Shows environment variables injected into the host process.`,
       inputSchema: z.object({}),
     },

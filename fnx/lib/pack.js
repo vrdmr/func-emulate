@@ -90,21 +90,39 @@ async function stageDotnetIsolatedBuild(scriptRoot, tempRoot) {
 }
 
 export async function detectRuntimeFromConfig(scriptRoot) {
-  const appConfigPath = resolvePath(scriptRoot, 'app.config.json');
-  const localSettingsPath = resolvePath(scriptRoot, 'local.settings.json');
+  // Try app-config.yaml first (new format), then fall back to app.config.json (legacy)
+  const { parse: parseYaml } = await import('yaml');
 
-  const parseIfExists = async (filePath) => {
-    try {
-      const raw = await readFile(filePath, 'utf-8');
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
+  const tryRead = async (filePath) => {
+    try { return await readFile(filePath, 'utf-8'); } catch { return null; }
   };
 
-  const appConfig = await parseIfExists(appConfigPath);
-  const localSettings = await parseIfExists(localSettingsPath);
-  return appConfig?.Values?.FUNCTIONS_WORKER_RUNTIME || localSettings?.Values?.FUNCTIONS_WORKER_RUNTIME || null;
+  // app-config.yaml: runtime.name
+  const yamlContent = await tryRead(resolvePath(scriptRoot, 'app-config.yaml'));
+  if (yamlContent) {
+    const config = parseYaml(yamlContent);
+    if (config?.runtime?.name) return config.runtime.name;
+  }
+
+  // Legacy app.config.json: Values.FUNCTIONS_WORKER_RUNTIME
+  const jsonContent = await tryRead(resolvePath(scriptRoot, 'app.config.json'));
+  if (jsonContent) {
+    try {
+      const config = JSON.parse(jsonContent);
+      if (config?.Values?.FUNCTIONS_WORKER_RUNTIME) return config.Values.FUNCTIONS_WORKER_RUNTIME;
+    } catch { /* ignore */ }
+  }
+
+  // local.settings.json fallback
+  const localContent = await tryRead(resolvePath(scriptRoot, 'local.settings.json'));
+  if (localContent) {
+    try {
+      const config = JSON.parse(localContent);
+      if (config?.Values?.FUNCTIONS_WORKER_RUNTIME) return config.Values.FUNCTIONS_WORKER_RUNTIME;
+    } catch { /* ignore */ }
+  }
+
+  return null;
 }
 
 export async function packFunctionApp({ scriptRoot, runtime, outputPath, noBuild = false }) {

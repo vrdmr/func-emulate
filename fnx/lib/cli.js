@@ -10,6 +10,7 @@ import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
 import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
 import { detectRuntimeFromConfig, packFunctionApp } from './pack.js';
+import { loadConfig, migrateConfig, validateConfig, showResolvedConfig } from './config.js';
 import { title, info, funcName, url as urlColor, success, error as errorColor, warning, dim, bold, highlightUrls } from './colors.js';
 
 const FNX_HOME = join(homedir(), '.fnx');
@@ -42,12 +43,16 @@ function hasHelp(args) {
  * 2. Otherwise check cwd for host.json.
  * 3. Fall back to cwd/src if it contains host.json.
  * 4. Error with actionable message if nothing found.
+ *
+ * opts.requireHostJson (default: true) — set to false for commands that
+ * work on config files only (e.g. fnx config migrate).
  */
-function resolveAppPath(args) {
+function resolveAppPath(args, opts = {}) {
+  const requireHostJson = opts.requireHostJson !== false;
   const explicit = getFlag(args, '--app-path');
   if (explicit) {
     const resolved = resolvePath(explicit);
-    if (!existsSync(join(resolved, 'host.json'))) {
+    if (requireHostJson && !existsSync(join(resolved, 'host.json'))) {
       console.error(errorColor(`Error: No host.json found in ${resolved}`));
       console.error(`  The --app-path must point to a directory containing host.json.`);
       console.error(dim(`  Example: fnx start --app-path ./my-function-app`));
@@ -65,6 +70,11 @@ function resolveAppPath(args) {
   if (existsSync(join(srcDir, 'host.json'))) {
     console.log(info(`  Using function app at ${dim('./src')} (found host.json there)`));
     return srcDir;
+  }
+
+  // For config-only commands, fall back to cwd even without host.json
+  if (!requireHostJson) {
+    return cwd;
   }
 
   console.error(errorColor(`Error: No function app found.`));
@@ -100,6 +110,25 @@ export async function main(args) {
     return;
   }
 
+  if (cmd === 'config') {
+    if (hasHelp(args.slice(1))) { printConfigHelp(); return; }
+    const subCmd = args[1];
+    const appPath = resolveAppPath(args, { requireHostJson: false });
+    if (subCmd === 'migrate') {
+      await migrateConfig(appPath);
+    } else if (subCmd === 'validate') {
+      const result = await validateConfig(appPath);
+      if (result.warnings.length) result.warnings.forEach(w => console.log(warning(`  ⚠ ${w}`)));
+      if (result.secrets.length) result.secrets.forEach(s => console.log(errorColor(`  ✗ ${s.path}: ${s.reason}`)));
+      if (result.errors.length) result.errors.forEach(e => console.log(errorColor(`  ✗ ${e}`)));
+      if (result.valid) console.log(success('  ✓ app-config.yaml is valid.'));
+      else process.exit(1);
+    } else {
+      await showResolvedConfig(appPath);
+    }
+    return;
+  }
+
   if (cmd === 'sync') {
     if (hasHelp(args.slice(1))) { printSyncHelp(); return; }
     await runSync(args.slice(1));
@@ -124,6 +153,12 @@ export async function main(args) {
 
   if (hasHelp(args.slice(1))) { printStartHelp(); return; }
 
+  // Handle --sku list early (no config needed)
+  if (getFlag(args, '--sku') === 'list') {
+    await listProfiles();
+    return;
+  }
+
   await maybeWarnForCliUpgrade();
 
   const scriptRoot = resolveAppPath(args);
@@ -143,32 +178,28 @@ export async function main(args) {
     setProfilesSource(profilesSource);
   }
 
-  // Read config files early (needed for SKU resolution and env vars)
-  const appConfig = await readJsonFile(resolvePath(scriptRoot, 'app.config.json'));
-  const localSettings = await readJsonFile(resolvePath(scriptRoot, 'local.settings.json'));
+  // Load and validate app configuration (app-config.yaml + local.settings.json)
+  const appCfg = await loadConfig(scriptRoot);
+  const { mergedValues, workerRuntime } = appCfg;
 
-  // Resolve SKU: CLI flag > app.config.json > local.settings.json > default "flex"
+  if (!workerRuntime) {
+    console.error(errorColor('Error: runtime.name not set in app-config.yaml and FUNCTIONS_WORKER_RUNTIME not in local.settings.json'));
+    process.exit(1);
+  }
+
+  // Resolve SKU: CLI flag > app-config.yaml > default "flex"
   let sku = getFlag(args, '--sku');
   let skuSource = 'CLI flag';
 
-  if (!sku && appConfig?.TargetSku) {
-    sku = appConfig.TargetSku;
-    skuSource = 'app.config.json';
-  }
-  if (!sku && localSettings?.TargetSku) {
-    sku = localSettings.TargetSku;
-    skuSource = 'local.settings.json';
+  if (!sku && appCfg.sku) {
+    sku = appCfg.sku;
+    skuSource = appCfg.skuSource;
   }
   if (!sku) {
     sku = 'flex';
     skuSource = 'default';
     console.log(info(`No --sku specified, defaulting to '${sku}'.`));
     console.log(dim(`Tip: Use --sku <name> to target a specific SKU. Run --sku list to see options.\n`));
-  }
-
-  if (sku === 'list') {
-    await listProfiles();
-    return;
   }
 
   // 1. Resolve profile
@@ -194,19 +225,6 @@ export async function main(args) {
   }
   console.log(`  ${dim('Profile Source:')}    ${info(source)}`);
   console.log();
-
-  // Early validation: merge config and check runtime before downloading anything
-  const mergedValues = {
-    ...(appConfig?.Values || {}),
-    ...(localSettings?.Values || {}),
-  };
-
-  const workerRuntime = mergedValues.FUNCTIONS_WORKER_RUNTIME;
-
-  if (!workerRuntime) {
-    console.error(errorColor('Error: FUNCTIONS_WORKER_RUNTIME not set in app.config.json or local.settings.json'));
-    process.exit(1);
-  }
 
   // F9: .NET isolated worker only — block in-process projects with guidance
   const dotnetRuntimes = ['dotnet', 'dotnet-isolated'];
@@ -440,6 +458,7 @@ ${title('Commands:')}
   ${funcName('start')}            Launch the Azure Functions host runtime for a specific SKU.
   ${funcName('sync')}             Sync cached host/extensions with current catalog profile.
   ${funcName('pack')}             Package a Functions app into a deployment zip.
+  ${funcName('config')}           Show, validate, or migrate app configuration.
   ${funcName('warmup')}           Pre-download host binaries and extension bundles.
   ${funcName('templates-mcp')}    Start the Azure Functions templates MCP server (stdio).
 
@@ -603,4 +622,34 @@ ${title('VS Code Configuration:')}
       }
     }
   }`.trim());
+}
+
+function printConfigHelp() {
+  console.log(`
+${bold(title('fnx config'))} — Show, validate, or migrate app configuration.
+
+${title('Usage:')} fnx config [subcommand] [options]
+
+${title('Subcommands:')}
+  ${funcName('(none)')}           Show resolved config with provenance (which file each value comes from).
+  ${funcName('migrate')}          Create app-config.yaml from local.settings.json (extract non-secrets).
+  ${funcName('validate')}         Validate app-config.yaml (schema, secrets, allowlist) without starting.
+
+${title('Options:')}
+  ${success('--app-path')} <dir>  Path to the function app directory (default: cwd).
+  ${success('-h')}, ${success('--help')}         Show this help message.
+
+${title('Configuration Files:')}
+  ${funcName('app-config.yaml')}       Non-secret behavioral config (committed to source control).
+                          Contains runtime, SKU target, scale settings, and app settings.
+  ${funcName('local.settings.json')}   Secrets and connection strings (git-ignored).
+                          Values here override app-config.yaml values.
+
+${title('Precedence:')} CLI flags > local.settings.json > app-config.yaml > defaults
+
+${title('Examples:')}
+  fnx config                               Show resolved config
+  fnx config migrate                       Create app-config.yaml from local.settings.json
+  fnx config validate                      Check app-config.yaml for errors
+  fnx config validate --app-path ./my-app  Validate a specific app`.trim());
 }
