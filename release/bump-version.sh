@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# bump-version.sh — Bump version for both fnx packages
+# bump-version.sh — Bump version in both fnx package.json files
+#
+# Called by release.sh. Can also be used standalone.
 #
 # Usage:
 #   ./release/bump-version.sh           # Bump patch (0.1.0 → 0.1.1)
 #   ./release/bump-version.sh minor     # Bump minor (0.1.0 → 0.2.0)
 #   ./release/bump-version.sh major     # Bump major (0.1.0 → 1.0.0)
 #   ./release/bump-version.sh 0.3.0     # Set explicit version
+#
+# Steps:
+#   1. Read current version from fnx/package.json
+#   2. Compute new version (patch/minor/major increment, or use explicit)
+#   3. Write new version to fnx/package.json and fnx/templates-mcp/package.json
+#   4. Output new version to stdout (last line) for callers to capture
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -47,8 +55,5 @@ npm version "$NEW_VER" --no-git-tag-version --quiet
 echo "  ✓ fnx/templates-mcp/package.json → $NEW_VER"
 
 echo ""
-echo "Done. Commit and tag:"
-echo "  git add fnx/package.json fnx/templates-mcp/package.json"
-echo "  git commit -m 'chore: bump version to $NEW_VER'"
-echo "  git tag v$NEW_VER"
-echo "  git push origin main --tags"
+echo "Done. Run the release:"
+echo "  ./release/release.sh           # dry-run first with --dry-run"
