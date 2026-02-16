@@ -1,11 +1,10 @@
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, resolve as resolvePath, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const CACHE_DIR = join(homedir(), '.fnx', 'profiles');
 const CACHE_FILE = join(CACHE_DIR, 'sku-profiles.json');
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 const DEFAULT_CDN_URL = 'https://raw.githubusercontent.com/vrdmr/func-emulate/main/fnx/profiles/sku-profiles.json';
 
@@ -26,70 +25,65 @@ function isJsonString(str) {
   return str.trimStart().startsWith('{');
 }
 
-async function fetchRegistry() {
-  // If an explicit source was provided (--profiles flag or inline JSON), use it directly
+async function persistCache(rawJson) {
+  await mkdir(CACHE_DIR, { recursive: true });
+  await writeFile(CACHE_FILE, rawJson);
+}
+
+export async function fetchRegistryWithMeta() {
+  // If an explicit source was provided (--profiles flag or inline JSON), use it directly.
   if (profilesSource) {
-    // Inline JSON string
     if (isJsonString(profilesSource)) {
-      return JSON.parse(profilesSource);
+      return { registry: JSON.parse(profilesSource), source: 'inline-json' };
     }
 
-    // URL (http/https)
     if (isUrl(profilesSource)) {
       try {
         const res = await fetch(profilesSource);
-        if (res.ok) {
-          const json = await res.text();
-          await mkdir(CACHE_DIR, { recursive: true });
-          await writeFile(CACHE_FILE, json);
-          return JSON.parse(json);
-        }
-      } catch { /* fall through to error */ }
-      throw new Error(`Cannot fetch profiles from: ${profilesSource}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.text();
+        await persistCache(json);
+        return { registry: JSON.parse(json), source: 'remote', url: profilesSource };
+      } catch {
+        throw new Error(`Cannot fetch profiles from: ${profilesSource}`);
+      }
     }
 
-    // Local file path
     const filePath = isAbsolute(profilesSource) ? profilesSource : resolvePath(process.cwd(), profilesSource);
     try {
-      return JSON.parse(await readFile(filePath, 'utf-8'));
+      return { registry: JSON.parse(await readFile(filePath, 'utf-8')), source: 'local-file', path: filePath };
     } catch (err) {
       throw new Error(`Cannot read profiles file: ${filePath} (${err.message})`);
     }
   }
 
-  // Default resolution chain: env var → cache → CDN → stale cache → bundled
+  // Default behavior: always attempt CDN first to detect upgrades/rollbacks quickly,
+  // then fall back to cache, then bundled profiles.
   const cdnUrl = process.env.FUNC_PROFILES_URL || DEFAULT_CDN_URL;
 
-  // 1. Try cache (if fresh)
-  try {
-    const cacheStat = await stat(CACHE_FILE);
-    if (Date.now() - cacheStat.mtimeMs < CACHE_TTL_MS) {
-      return JSON.parse(await readFile(CACHE_FILE, 'utf-8'));
-    }
-  } catch { /* no cache or stale */ }
-
-  // 2. Try CDN
   try {
     const res = await fetch(cdnUrl);
     if (res.ok) {
       const json = await res.text();
-      await mkdir(CACHE_DIR, { recursive: true });
-      await writeFile(CACHE_FILE, json);
-      return JSON.parse(json);
+      await persistCache(json);
+      return { registry: JSON.parse(json), source: 'remote', url: cdnUrl };
     }
   } catch { /* CDN unreachable */ }
 
-  // 3. Try stale cache
   try {
-    return JSON.parse(await readFile(CACHE_FILE, 'utf-8'));
-  } catch { /* no cache at all */ }
+    return { registry: JSON.parse(await readFile(CACHE_FILE, 'utf-8')), source: 'cache' };
+  } catch { /* no cache */ }
 
-  // 4. Fall back to bundled profiles
   try {
-    return JSON.parse(await readFile(BUNDLED_PROFILES_PATH, 'utf-8'));
+    return { registry: JSON.parse(await readFile(BUNDLED_PROFILES_PATH, 'utf-8')), source: 'bundled' };
   } catch {
     throw new Error('Cannot load SKU profiles: CDN unreachable, no cache, no bundled profiles.');
   }
+}
+
+async function fetchRegistry() {
+  const { registry } = await fetchRegistryWithMeta();
+  return registry;
 }
 
 export async function resolveProfile(skuName) {
