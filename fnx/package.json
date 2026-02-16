@@ -4,7 +4,8 @@
   "type": "module",
   "description": "fnx (Phoenix Emulate) — SKU-aware Azure Functions local emulator",
   "bin": {
-    "fnx": "./bin/fnx"
+    "fnx": "./bin/fnx",
+    "fnx-template-mcp": "./bin/fnx-template-mcp"
   },
   "scripts": {
     "postinstall": "node ./bin/fnx warmup || echo 'fnx: warmup skipped (offline or error). Run fnx warmup manually.'"
