@@ -14,13 +14,8 @@
 import { createServer as createHttpServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const templatesMcpDir = join(__dirname, '..', 'templates-mcp');
-
-// Resolve MCP SDK from templates-mcp's node_modules
-const require = createRequire(join(templatesMcpDir, 'package.json'));
 
 // ─── Tool registration (called per session) ─────────────────────────
 
@@ -248,11 +243,11 @@ Quick health check without digging through verbose logs.`,
 // ─── Start live MCP server ──────────────────────────────────────────
 
 export async function startLiveMcpServer(hostState, mcpPort) {
-  const { McpServer } = await import(require.resolve('@modelcontextprotocol/sdk/server/mcp.js'));
+  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
   const { StreamableHTTPServerTransport } = await import(
-    require.resolve('@modelcontextprotocol/sdk/server/streamableHttp.js')
+    '@modelcontextprotocol/sdk/server/streamableHttp.js'
   );
-  const { z } = await import(require.resolve('zod'));
+  const { z } = await import('zod');
   const { randomUUID } = await import('node:crypto');
 
   // Factory: create a new McpServer per session (SDK requirement)
