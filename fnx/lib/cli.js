@@ -294,7 +294,7 @@ MCP server (for VS Code Copilot / AI assistants):
   # .vscode/mcp.json — live host data (when fnx start is running):
   # {
   #   "servers": {
-  #     "fnx-live": {
+  #     "fnx-functions-debug": {
   #       "type": "http",
   #       "url": "http://127.0.0.1:7072/mcp"
   #     }
