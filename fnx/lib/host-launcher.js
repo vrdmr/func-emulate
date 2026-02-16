@@ -382,8 +382,18 @@ export async function launchHost(hostDir, opts) {
     });
   }
 
-  process.on('SIGINT', () => { stopAzurite(); child.kill('SIGINT'); });
-  process.on('SIGTERM', () => { stopAzurite(); child.kill('SIGTERM'); });
+  process.on('SIGINT', () => {
+    stopAzurite();
+    child.kill('SIGINT');
+    if (hostState._mcpServer) hostState._mcpServer.close();
+    setTimeout(() => process.exit(0), 500);
+  });
+  process.on('SIGTERM', () => {
+    stopAzurite();
+    child.kill('SIGTERM');
+    if (hostState._mcpServer) hostState._mcpServer.close();
+    setTimeout(() => process.exit(0), 500);
+  });
 
   return new Promise((resolve, reject) => {
     child.on('error', (err) => {
