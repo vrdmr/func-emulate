@@ -67,9 +67,14 @@ fi
 ok "On main branch"
 
 if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
-  fail "Working directory is not clean. Commit or stash changes first."
+  if [[ "$DRY_RUN" == true ]]; then
+    warn "Working directory is not clean (OK for dry run)"
+  else
+    fail "Working directory is not clean. Commit or stash changes first."
+  fi
+else
+  ok "Working directory clean"
 fi
-ok "Working directory clean"
 
 git -C "$REPO_ROOT" pull origin main --quiet
 ok "main is up to date"
