@@ -1,0 +1,6 @@
+local:
+  targetSku: flex
+runtime:
+  name: node
+configurations:
+  AzureWebJobsFeatureFlags: EnableWorkerIndexing

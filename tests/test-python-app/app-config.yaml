@@ -1,0 +1,17 @@
+# Azure Functions App Configuration
+# Commit this to source control. Do NOT put secrets here.
+# Secrets and connection strings go in local.settings.json (git-ignored).
+#
+# Reference: https://learn.microsoft.com/en-us/azure/azure-functions/functions-app-settings
+
+# Local emulator (fnx) settings
+local:
+  targetSku: flex
+
+# Runtime configuration
+runtime:
+  name: python
+
+# App settings (non-secret behavioral config)
+configurations:
+  AzureWebJobsFeatureFlags: EnableWorkerIndexing
