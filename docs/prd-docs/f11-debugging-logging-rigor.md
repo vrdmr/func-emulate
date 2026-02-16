@@ -1,6 +1,6 @@
 # F11: Debugging & Logging Test Rigor — Matching Core Tools
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented  
 **PRD Section:** Testing & quality  
 **Depends on:** F4 (CLI surface)  
 **Source:** Core Tools repo (`azure-functions-core-tools/test/Cli/`)

@@ -1,6 +1,6 @@
 # F8: Homepage Improvements
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented  
 **PRD Section:** N/A (new initiative)  
 **Depends on:** None (Phase 1); F2 host version info (Phase 2)
 
