@@ -1,5 +1,6 @@
 import { resolve as resolvePath, dirname, join } from 'node:path';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +34,43 @@ async function findOpenPort(start, maxRetries = 10) {
 
 function hasHelp(args) {
   return args.includes('-h') || args.includes('--help');
+}
+
+/**
+ * Resolve the function app directory.
+ * 1. If --app-path is given, use it — but verify host.json exists.
+ * 2. Otherwise check cwd for host.json.
+ * 3. Fall back to cwd/src if it contains host.json.
+ * 4. Error with actionable message if nothing found.
+ */
+function resolveAppPath(args) {
+  const explicit = getFlag(args, '--app-path');
+  if (explicit) {
+    const resolved = resolvePath(explicit);
+    if (!existsSync(join(resolved, 'host.json'))) {
+      console.error(errorColor(`Error: No host.json found in ${resolved}`));
+      console.error(`  The --app-path must point to a directory containing host.json.`);
+      console.error(dim(`  Example: fnx start --app-path ./my-function-app`));
+      process.exit(1);
+    }
+    return resolved;
+  }
+
+  const cwd = process.cwd();
+  if (existsSync(join(cwd, 'host.json'))) {
+    return cwd;
+  }
+
+  const srcDir = join(cwd, 'src');
+  if (existsSync(join(srcDir, 'host.json'))) {
+    console.log(info(`  Using function app at ${dim('./src')} (found host.json there)`));
+    return srcDir;
+  }
+
+  console.error(errorColor(`Error: No function app found.`));
+  console.error(`  Could not find host.json in the current directory or ./src.`);
+  console.error(dim(`  Use --app-path <dir> to specify the function app location.`));
+  process.exit(1);
 }
 
 export async function main(args) {
@@ -70,7 +108,7 @@ export async function main(args) {
 
   if (cmd === 'pack') {
     if (hasHelp(args.slice(1))) { printPackHelp(); return; }
-    const scriptRoot = getFlag(args, '--app-path') || process.cwd();
+    const scriptRoot = resolveAppPath(args);
     const runtime = getFlag(args, '--runtime') || await detectRuntimeFromConfig(scriptRoot);
     const outputPath = getFlag(args, '--output');
     const noBuild = args.includes('--no-build');
@@ -88,7 +126,7 @@ export async function main(args) {
 
   await maybeWarnForCliUpgrade();
 
-  const scriptRoot = getFlag(args, '--app-path') || process.cwd();
+  const scriptRoot = resolveAppPath(args);
   const requestedPort = parseInt(getFlag(args, '--port') || '7071');
   const port = await findOpenPort(requestedPort);
   if (port !== requestedPort) {
