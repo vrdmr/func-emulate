@@ -57,7 +57,9 @@ export async function main(args) {
 
   if (cmd === 'sync') {
     await runSync(args.slice(1));
-    
+    return;
+  }
+
   if (cmd === 'pack') {
     const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
     const runtime = getFlag(args, '--runtime') || await detectRuntimeFromConfig(scriptRoot);
@@ -144,22 +146,7 @@ export async function main(args) {
   console.log(`  Profile Source:    ${source}`);
   console.log();
 
-  printHostDriftWarning(profile.hostVersion);
-
-  // 2. Ensure host is downloaded
-  const hostDir = await ensureHost(profile, { keepVersions: DEFAULT_KEEP_VERSIONS });
-  console.log(`  Host path:         ${hostDir}`);
-
-  // 3. Pre-download the correct extension bundle for this SKU
-  //    This resolves the exact version from CDN index, capped by maxExtensionBundleVersion,
-  //    and downloads it so the host finds it cached and never fetches a wrong version.
-  const resolvedBundleVersion = await ensureBundle(profile, { keepVersions: DEFAULT_KEEP_VERSIONS });
-  if (resolvedBundleVersion) {
-    console.log(`  Bundle resolved:   ${resolvedBundleVersion}`);
-  }
-  console.log();
-
-  // 4. Merge config: app.config.json Values + local.settings.json Values
+  // Early validation: merge config and check runtime before downloading anything
   const mergedValues = {
     ...(appConfig?.Values || {}),
     ...(localSettings?.Values || {}),
@@ -182,7 +169,22 @@ export async function main(args) {
     }
   }
 
-  // 5. Create shared host state and start live MCP server
+  printHostDriftWarning(profile.hostVersion);
+
+  // 2. Ensure host is downloaded
+  const hostDir = await ensureHost(profile, { keepVersions: DEFAULT_KEEP_VERSIONS });
+  console.log(`  Host path:         ${hostDir}`);
+
+  // 3. Pre-download the correct extension bundle for this SKU
+  //    This resolves the exact version from CDN index, capped by maxExtensionBundleVersion,
+  //    and downloads it so the host finds it cached and never fetches a wrong version.
+  const resolvedBundleVersion = await ensureBundle(profile, { keepVersions: DEFAULT_KEEP_VERSIONS });
+  if (resolvedBundleVersion) {
+    console.log(`  Bundle resolved:   ${resolvedBundleVersion}`);
+  }
+  console.log();
+
+  // 4. Create shared host state and start live MCP server
   const hostState = createHostState();
 
   if (!noMcp) {
