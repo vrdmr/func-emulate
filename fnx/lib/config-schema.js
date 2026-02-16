@@ -9,7 +9,7 @@ export const STRUCTURED_FIELDS = {
   'runtime.name': {
     envVar: 'FUNCTIONS_WORKER_RUNTIME',
     required: true,
-    allowed: ['python', 'node', 'dotnet-isolated', 'java', 'powershell', 'custom'],
+    allowed: ['python', 'node', 'dotnet-isolated', 'dotnet', 'java', 'powershell', 'custom'],
     description: 'Language runtime for the function app',
   },
   'runtime.version': {

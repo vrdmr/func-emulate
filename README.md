@@ -91,10 +91,9 @@ Actions:
 
 Options:
   --sku <name>     Target SKU (flex, linux-premium, windows-consumption, etc.)
-                   Resolution: CLI flag → app.config.json → local.settings.json → default "flex"
-  --scriptroot     Path to function app directory (default: current directory)
+                   Resolution: CLI flag → app-config.yaml → local.settings.json → default "flex"
+  --app-path       Path to function app directory (default: current directory)
   --port <port>    Host HTTP port (default: 7071)
-  --profiles <src> Profiles source: URL, local file path, or inline JSON
   --verbose        Show all host output (unfiltered)
   -v, --version    Show version
   -h, --help       Show full help with examples
@@ -106,20 +105,42 @@ fnx reads two config files from the function app directory:
 
 | File | Purpose | Git tracked? |
 |------|---------|-------------|
-| `app.config.json` | Non-secret settings (`TargetSku`, `FUNCTIONS_WORKER_RUNTIME`, feature flags) | ✅ Yes |
+| `app-config.yaml` | Non-secret behavioral settings (runtime, SKU, scale, app settings) | ✅ Yes |
 | `local.settings.json` | Secrets and connection strings | ❌ No (.gitignored) |
 
-Values from both files are merged and injected as environment variables into the host process. `local.settings.json` values take precedence.
+Values from both files are merged and injected as environment variables into the host process. `local.settings.json` values take precedence over `app-config.yaml`.
 
-**Example `app.config.json`:**
-```json
-{
-  "TargetSku": "flex",
-  "Values": {
-    "FUNCTIONS_WORKER_RUNTIME": "node",
-    "AzureWebJobsFeatureFlags": "EnableWorkerIndexing"
-  }
-}
+**Example `app-config.yaml`:**
+```yaml
+# Azure Functions App Configuration
+# Commit this to source control. Do NOT put secrets here.
+
+# Local emulator (fnx) settings
+local:
+  targetSku: flex
+
+# Runtime configuration
+runtime:
+  name: node
+
+# App settings (non-secret behavioral config)
+configurations:
+  AzureWebJobsFeatureFlags: EnableWorkerIndexing
+```
+
+### Config Commands
+
+```bash
+fnx config                  # Show resolved config with provenance
+fnx config migrate          # Create app-config.yaml from local.settings.json
+fnx config validate         # Validate app-config.yaml (schema + secret detection)
+```
+
+### Auto-Creation
+
+On first `fnx start`, if no `app-config.yaml` exists:
+- If `local.settings.json` exists → auto-creates `app-config.yaml` (extracts non-secrets)
+- If neither exists → interactive prompt to generate both files
 ```
 
 ## Environment Variables
@@ -133,7 +154,10 @@ Values from both files are merged and injected as environment variables into the
 ```
 ├── fnx/                         # The CLI (zero npm dependencies)
 │   ├── bin/fnx                  # Entry point
-│   ├── lib/cli.js               # Argument parsing, config merging, orchestration
+│   ├── lib/cli.js               # Argument parsing, config loading, orchestration
+│   ├── lib/config.js            # YAML config loader, validator, auto-creator
+│   ├── lib/config-schema.js     # Canonical mapping: YAML paths → env vars
+│   ├── lib/secret-patterns.js   # Secret detection heuristics
 │   ├── lib/profile-resolver.js  # Fetch/cache SKU profiles (GitHub → cache → bundled)
 │   ├── lib/host-manager.js      # Download/extract/cache host packages
 │   ├── lib/host-launcher.js     # Spawn host process, filter logs
@@ -159,9 +183,10 @@ Values from both files are merged and injected as environment variables into the
 
 ## How It Works
 
-1. **Profile resolution**: CLI reads `--sku` flag (or `app.config.json` → `local.settings.json` → default `flex`), fetches the SKU profile from CDN (with 1hr cache + bundled fallback)
-2. **Host download**: Downloads the platform-specific host zip for the profile's `hostVersion`, extracts to `~/.fnx/hosts/{version}/`, caches for reuse
-3. **Host launch**: Spawns the self-contained .NET host executable with merged env vars from both config files. Filters host output for clean display (like `func start`)
+1. **Config loading**: Reads `app-config.yaml` (or auto-creates from `local.settings.json`), validates schema + secret detection, maps structured YAML to env vars
+2. **Profile resolution**: CLI reads `--sku` flag (or `app-config.yaml` → default `flex`), fetches the SKU profile from CDN (with 1hr cache + bundled fallback)
+3. **Host download**: Downloads the platform-specific host zip for the profile's `hostVersion`, extracts to `~/.fnx/hosts/{version}/`, caches for reuse
+4. **Host launch**: Spawns the self-contained .NET host executable with merged env vars from config. Filters host output for clean display (like `func start`)
 
 ## Supported Runtimes
 
