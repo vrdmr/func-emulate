@@ -6,7 +6,7 @@
  */
 
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const templatesMcpDist = join(__dirname, '..', '..', 'templates-mcp', 'dist', 'src');
@@ -15,16 +15,21 @@ const templatesRoot = join(__dirname, '..', '..', 'templates-mcp', 'templates');
 let _handlers = null;
 let _templates = null;
 
+// Dynamic import() requires file:// URLs on Windows (backslash paths fail)
+function toImportUrl(filePath) {
+  return pathToFileURL(filePath).href;
+}
+
 async function loadHandlers() {
   if (!_handlers) {
-    _handlers = await import(join(templatesMcpDist, 'handlers.js'));
+    _handlers = await import(toImportUrl(join(templatesMcpDist, 'handlers.js')));
   }
   return _handlers;
 }
 
 async function loadTemplates() {
   if (!_templates) {
-    _templates = await import(join(templatesMcpDist, 'templates.js'));
+    _templates = await import(toImportUrl(join(templatesMcpDist, 'templates.js')));
   }
   return _templates;
 }

@@ -25,7 +25,9 @@ export async function runStdioMcpServer({ name, version, tools }) {
 
   function sendResponse(response) {
     const json = JSON.stringify(response);
-    process.stdout.write(json + '\n');
+    return new Promise((resolve) => {
+      process.stdout.write(json + '\n', resolve);
+    });
   }
 
   // Track pending async tool calls so we don't exit before they complete
