@@ -1,11 +1,27 @@
 import { resolve as resolvePath, dirname, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { resolveProfile, listProfiles, setProfilesSource } from './profile-resolver.js';
 import { ensureHost, ensureBundle } from './host-manager.js';
 import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
 import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
+
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const srv = createServer();
+    srv.once('error', () => resolve(false));
+    srv.listen(port, '127.0.0.1', () => { srv.close(() => resolve(true)); });
+  });
+}
+
+async function findOpenPort(start, maxRetries = 10) {
+  for (let i = 0; i < maxRetries; i++) {
+    if (await isPortFree(start + i)) return start + i;
+  }
+  return start; // fall through — let the host report the error
+}
 
 export async function main(args) {
   const cmd = args[0];
@@ -43,8 +59,12 @@ export async function main(args) {
   }
 
   const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
-  const port = getFlag(args, '--port') || '7071';
-  const mcpPort = getFlag(args, '--mcp-port') || String(parseInt(port) + 1);
+  const requestedPort = parseInt(getFlag(args, '--port') || '7071');
+  const port = await findOpenPort(requestedPort);
+  if (port !== requestedPort) {
+    console.log(`  Port ${requestedPort} in use, using ${port} instead.`);
+  }
+  const mcpPort = getFlag(args, '--mcp-port') || String(port + 1);
   const verbose = args.includes('--verbose');
   const noMcp = args.includes('--no-mcp');
   const noAzurite = args.includes('--no-azurite');
