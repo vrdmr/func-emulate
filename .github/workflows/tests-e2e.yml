@@ -1,0 +1,55 @@
+# E2E: Full end-to-end tests including CLI startup, cross-SKU, and
+# startup-failure scenarios. These spawn `fnx start` which may attempt
+# host/bundle downloads — too slow for every PR, run on schedule instead.
+#
+# Triggers:
+#   - Daily at 06:00 UTC
+#   - Manual dispatch (workflow_dispatch)
+#   - Push to main (catches regressions on merge)
+
+name: E2E Tests
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install templates-mcp dependencies
+        run: npm ci
+        working-directory: fnx/templates-mcp
+
+      - name: Build templates-mcp
+        run: npx tsc -p tsconfig.json
+        working-directory: fnx/templates-mcp
+
+      - name: Make fnx executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x fnx/bin/fnx fnx/bin/fnx-template-mcp
+
+      - name: Run all E2E tests
+        shell: bash
+        run: node --test tests/e2e/*.test.js
+
+      - name: Run MCP protocol tests
+        shell: bash
+        run: node --test tests/tests-templates-mcp/*.test.js
