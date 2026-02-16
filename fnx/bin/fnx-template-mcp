@@ -1,3 +1,21 @@
 #!/usr/bin/env node
-import { main } from '../lib/cli.js';
-main(['templates-mcp']);
+/**
+ * Standalone MCP entrypoint for Azure Functions templates.
+ * Bypasses cli.js entirely — never imports host-manager, host-launcher,
+ * or any module that triggers host downloads.
+ *
+ * Usage: npx fnx-template-mcp (stdio transport)
+ */
+
+import { runStdioMcpServer } from '../lib/mcp-server.js';
+import { getTemplateTools } from '../lib/mcp-tools/templates.js';
+import { getSkuTools } from '../lib/mcp-tools/sku.js';
+
+const templateTools = await getTemplateTools();
+const skuTools = getSkuTools();
+
+await runStdioMcpServer({
+  name: 'fnx-templates-mcp',
+  version: '0.1.0',
+  tools: [...templateTools, ...skuTools],
+});

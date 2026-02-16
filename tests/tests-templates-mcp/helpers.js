@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FNX_BIN = resolvePath(__dirname, '..', '..', 'fnx', 'bin', 'fnx');
+export const FNX_TEMPLATE_MCP_BIN = resolvePath(__dirname, '..', '..', 'fnx', 'bin', 'fnx-template-mcp');
 
 export const INIT_MSG = {
   jsonrpc: '2.0',
@@ -22,14 +23,17 @@ export const INIT_MSG = {
 };
 
 /**
- * Spawn `fnx templates-mcp`, write JSON-RPC messages to stdin, collect responses.
+ * Spawn an MCP server, write JSON-RPC messages to stdin, collect responses.
  * @param {object[]} messages - JSON-RPC message objects
  * @param {number} [timeoutMs=15000] - max wait time
+ * @param {object} [opts] - options
+ * @param {string[]} [opts.command] - [bin, ...args] to spawn (default: fnx templates-mcp)
  * @returns {Promise<object[]>} parsed JSON-RPC responses
  */
-export function mcpRequest(messages, timeoutMs = 15000) {
+export function mcpRequest(messages, timeoutMs = 15000, opts = {}) {
+  const command = opts.command || [FNX_BIN, 'templates-mcp'];
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [FNX_BIN, 'templates-mcp'], {
+    const child = spawn('node', command, {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
