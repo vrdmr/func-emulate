@@ -1,6 +1,6 @@
 {
   "name": "@vrdmr/fnx-test",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "SKU-aware Azure Functions local emulator",
   "type": "module",
   "bin": {
