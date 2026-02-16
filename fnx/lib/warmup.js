@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { resolveProfile, listProfiles, fetchRegistryWithMeta } from './profile-resolver.js';
 import { ensureHost, ensureBundle, getHostExeName, getPlatformRid } from './host-manager.js';
+import { title, info, success, warning, dim } from './colors.js';
 
 const FNX_DIR = join(homedir(), '.fnx');
 const META_FILE = join(FNX_DIR, '_meta.json');
@@ -57,9 +58,9 @@ async function runWarmup(args) {
   const rid = getPlatformRid();
 
   console.log();
-  console.log(`fnx warmup — pre-downloading assets for ${all ? 'ALL SKUs' : 'offline use'}`);
+  console.log(title(`fnx warmup — pre-downloading assets for ${all ? 'ALL SKUs' : 'offline use'}`));
   console.log();
-  console.log(`  Platform:        ${rid}`);
+  console.log(`  ${dim('Platform:')}        ${info(rid)}`);
 
   const meta = await loadMeta();
 
@@ -68,10 +69,10 @@ async function runWarmup(args) {
       console.log();
       const profile = await resolveProfile(skuName);
 
-      console.log(`  Target SKU:      ${profile.displayName} (${skuName})`);
-      console.log(`  Host Version:    ${profile.hostVersion}`);
+      console.log(`  ${dim('Target SKU:')}      ${info(`${profile.displayName} (${skuName})`)}`);
+      console.log(`  ${dim('Host Version:')}    ${info(profile.hostVersion)}`);
       if (profile.maxExtensionBundleVersion) {
-        console.log(`  Bundle Range:    ${profile.extensionBundleVersion} (max: ${profile.maxExtensionBundleVersion})`);
+        console.log(`  ${dim('Bundle Range:')}    ${info(`${profile.extensionBundleVersion} (max: ${profile.maxExtensionBundleVersion})`)}`);
       }
       console.log();
 
@@ -99,9 +100,9 @@ async function runWarmup(args) {
       }
 
       console.log();
-      console.log(`  ✓ fnx start --sku ${skuName} will work offline.`);
+      console.log(success(`  ✓ fnx start --sku ${skuName} will work offline.`));
     } catch (err) {
-      console.error(`  ⚠️  Warmup failed for ${skuName}: ${err.message}`);
+      console.error(warning(`  ⚠️  Warmup failed for ${skuName}: ${err.message}`));
     }
   }
 
@@ -113,7 +114,7 @@ async function runWarmup(args) {
   }
 
   console.log();
-  console.log('  Done.');
+  console.log(success('  Done.'));
   console.log();
 }
 

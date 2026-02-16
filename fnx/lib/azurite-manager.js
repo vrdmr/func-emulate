@@ -3,6 +3,7 @@ import { createConnection } from 'node:net';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { info, url as urlColor, warning, error as errorColor } from './colors.js';
 
 const BLOB_PORT = 10000;
 const QUEUE_PORT = 10001;
@@ -75,7 +76,7 @@ function findAzurite() {
  * Install azurite into ~/.fnx/tools/azurite/ if not already present.
  */
 function installAzurite() {
-  console.log('[fnx] Installing Azurite to ~/.fnx/tools/azurite/ (first-time only)...');
+  console.log(info('[fnx] Installing Azurite to ~/.fnx/tools/azurite/ (first-time only)...'));
   mkdirSync(AZURITE_INSTALL_DIR, { recursive: true });
 
   // Initialize a minimal package.json if missing so npm install works
@@ -91,14 +92,14 @@ function installAzurite() {
       timeout: 120_000,
     });
   } catch (err) {
-    console.error('[fnx] Failed to install Azurite. Install manually: npm install -g azurite');
-    console.error(`      ${err.message}`);
+    console.error(errorColor('[fnx] Failed to install Azurite. Install manually: npm install -g azurite'));
+    console.error(warning(`      ${err.message}`));
     return null;
   }
 
   const installed = join(AZURITE_INSTALL_DIR, 'node_modules', '.bin', 'azurite');
   if (existsSync(installed)) {
-    console.log('[fnx] Azurite installed successfully.');
+    console.log(info('[fnx] Azurite installed successfully.'));
     return installed;
   }
   return null;
@@ -127,23 +128,23 @@ export async function ensureAzurite(mergedValues, opts = {}) {
   }
 
   const storageVal = mergedValues?.AzureWebJobsStorage || '(empty)';
-  console.log(`[fnx] Detected AzureWebJobsStorage=${storageVal}`);
+  console.log(info(`[fnx] Detected AzureWebJobsStorage=${storageVal}`));
 
   // Check if Azurite is already running
   if (await isAzuriteRunning()) {
-    console.log('[fnx] Using existing Azurite instance on default ports.');
+    console.log(info('[fnx] Using existing Azurite instance on default ports.'));
     return null;
   }
 
   // Find or install azurite
   const azuriteBin = findOrInstallAzurite();
   if (!azuriteBin) {
-    console.error('[fnx] ⚠️  Azurite not available. Storage triggers may fail.');
-    console.error('     Install with: npm install -g azurite');
+    console.error(warning('[fnx] ⚠️  Azurite not available. Storage triggers may fail.'));
+    console.error(warning('     Install with: npm install -g azurite'));
     return null;
   }
 
-  console.log('[fnx] Starting Azurite storage emulator...');
+  console.log(info('[fnx] Starting Azurite storage emulator...'));
 
   const azuriteArgs = [
     '--blobHost', '127.0.0.1', '--blobPort', String(BLOB_PORT),
@@ -161,13 +162,13 @@ export async function ensureAzurite(mergedValues, opts = {}) {
   });
 
   azuriteProcess.on('error', (err) => {
-    console.error(`[fnx] Azurite failed to start: ${err.message}`);
+    console.error(errorColor(`[fnx] Azurite failed to start: ${err.message}`));
     azuriteProcess = null;
   });
 
   azuriteProcess.on('exit', (code) => {
     if (code && code !== 0) {
-      console.error(`[fnx] Azurite exited unexpectedly with code ${code}.`);
+      console.error(errorColor(`[fnx] Azurite exited unexpectedly with code ${code}.`));
     }
     azuriteProcess = null;
   });
@@ -175,13 +176,13 @@ export async function ensureAzurite(mergedValues, opts = {}) {
   // Wait for Azurite to be ready
   const ready = await waitForTcp(BLOB_PORT, { timeoutMs: 15000 });
   if (!ready) {
-    console.error('[fnx] ⚠️  Azurite did not become ready in time. Storage triggers may fail.');
+    console.error(warning('[fnx] ⚠️  Azurite did not become ready in time. Storage triggers may fail.'));
     return azuriteProcess;
   }
 
-  console.log(`[fnx] Azurite Blob  → http://127.0.0.1:${BLOB_PORT}`);
-  console.log(`[fnx] Azurite Queue → http://127.0.0.1:${QUEUE_PORT}`);
-  console.log(`[fnx] Azurite Table → http://127.0.0.1:${TABLE_PORT}`);
+  console.log(info(`[fnx] Azurite Blob  → ${urlColor(`http://127.0.0.1:${BLOB_PORT}`)}`));
+  console.log(info(`[fnx] Azurite Queue → ${urlColor(`http://127.0.0.1:${QUEUE_PORT}`)}`));
+  console.log(info(`[fnx] Azurite Table → ${urlColor(`http://127.0.0.1:${TABLE_PORT}`)}`));
 
   return azuriteProcess;
 }

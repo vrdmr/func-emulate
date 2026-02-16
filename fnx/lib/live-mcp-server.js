@@ -16,6 +16,7 @@
  */
 
 import { createServer as createHttpServer } from 'node:http';
+import { url as urlColor, warning } from './colors.js';
 
 // ─── Tool registration (called per session) ─────────────────────────
 
@@ -341,9 +342,9 @@ export async function startLiveMcpServer(hostState, mcpPort) {
         httpServer.removeListener('error', onError);
         // Runtime errors after startup
         httpServer.on('error', (err) => {
-          console.error(`  ⚠️  MCP server error: ${err.message}`);
+          console.error(warning(`  ⚠️  MCP server error: ${err.message}`));
         });
-        console.log(`  Functions Debug MCP Server: http://127.0.0.1:${port}/mcp`);
+        console.log(`  Functions Debug MCP Server: ${urlColor(`http://127.0.0.1:${port}/mcp`)}`);
         resolve(httpServer);
       });
     }

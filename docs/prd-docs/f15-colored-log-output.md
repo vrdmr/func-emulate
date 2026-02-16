@@ -1,6 +1,6 @@
 # F15: Colored Log Output
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented  
 **PRD Section:** Developer experience, CLI polish  
 **Depends on:** F4 (CLI surface), F11 (logging rigor)
 
@@ -159,12 +159,12 @@ Update `createLogFilter()` in `host-launcher.js` to:
 
 ## Success Criteria
 
-- [ ] Function names appear in DarkYellow in the function listing
-- [ ] URLs appear in DarkGreen everywhere (function list, MCP, listening)
-- [ ] Errors appear in Red, warnings in DarkYellow
-- [ ] `NO_COLOR=1 fnx start` produces no ANSI escape codes
-- [ ] `fnx start | cat` produces no ANSI escape codes
-- [ ] Color scheme matches `func start` output (visual parity)
+- [x] Function names appear in DarkYellow in the function listing
+- [x] URLs appear in DarkGreen everywhere (function list, MCP, listening)
+- [x] Errors appear in Red, warnings in DarkYellow
+- [x] `NO_COLOR=1 fnx start` produces no ANSI escape codes
+- [x] `fnx start | cat` produces no ANSI escape codes
+- [x] Color scheme matches `func start` output (visual parity)
 
 ## Reference
 
