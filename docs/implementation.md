@@ -20,7 +20,7 @@ This is NOT a replacement for `func` — it's a POC to validate that:
 ### Process Tree (POC)
 
 ```
-fnx start --sku flex --scriptroot ./my-node-app
+fnx start --sku flex --app-path ./my-node-app
   │
   ├── Fetches sku-profiles.json from CDN server (http://localhost:4566/api/profiles)
   ├── Resolves: flex → host 4.1047.100, bundle [4.22.*, 5.0.0)
@@ -81,7 +81,7 @@ POC has three components (each can be built independently by a separate agent):
 │  AGENT 3: fnx/ + test-node-app/                                   │
 │  Node.js CLI (~350 lines, zero deps)                                   │
 │                                                                        │
-│  fnx start --sku flex --scriptroot ./test-node-app                │
+│  fnx start --sku flex --app-path ./test-node-app                │
 │    1. Fetch profiles from cdn-server (http://localhost:4566)            │
 │    2. Resolve flex → host 4.1047.100                                   │
 │    3. Download host zip from cdn-server (if not cached)                 │
@@ -713,13 +713,13 @@ export async function main(args) {
   const cmd = args[0];
 
   if (cmd !== 'start') {
-    console.log('Usage: fnx start --sku <sku-name> [--scriptroot <path>] [--port <port>]');
+    console.log('Usage: fnx start --sku <sku-name> [--app-path <path>] [--port <port>]');
     console.log('       fnx start --sku list');
     process.exit(1);
   }
 
   const sku = getFlag(args, '--sku');
-  const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
+  const scriptRoot = getFlag(args, '--app-path') || process.cwd();
   const port = getFlag(args, '--port') || '7071';
 
   if (!sku) {
@@ -1141,7 +1141,7 @@ cd ..
 ```bash
 cd /Users/varad/work/new-core-tools/fnx
 
-node bin/fnx start --sku flex --scriptroot ../test-node-app
+node bin/fnx start --sku flex --app-path ../test-node-app
 ```
 
 Expected output:
@@ -1185,7 +1185,7 @@ curl http://localhost:7071/api/hello
 In a **second terminal**, same test app but different SKU and port:
 
 ```bash
-node bin/fnx start --sku windows-consumption --scriptroot ../test-node-app --port 7072
+node bin/fnx start --sku windows-consumption --app-path ../test-node-app --port 7072
 ```
 
 Expected output:

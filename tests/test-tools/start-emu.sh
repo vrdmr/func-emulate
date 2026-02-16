@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: ./tests/test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./tests/test-node-app
+# Usage: ./tests/test-tools/start-emu.sh --sku flex --port 7071 --app-path ./tests/test-node-app
 # Output: EMU_PID=<pid> on stdout (for eval)
 # Exit 1 if host doesn't respond within 60s
 set -euo pipefail
@@ -12,7 +12,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --sku) SKU="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
-    --scriptroot) SCRIPTROOT="$2"; shift 2 ;;
+    --app-path) SCRIPTROOT="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -20,10 +20,10 @@ done
 PORT="${PORT:-7071}"
 SCRIPTROOT="${SCRIPTROOT:-./tests/test-node-app}"
 
-echo "Starting fnx --sku $SKU --port $PORT --scriptroot $SCRIPTROOT" >&2
+echo "Starting fnx --sku $SKU --port $PORT --app-path $SCRIPTROOT" >&2
 
 node "$SCRIPT_DIR/fnx/bin/fnx" start \
-  --sku "$SKU" --port "$PORT" --scriptroot "$SCRIPTROOT" &
+  --sku "$SKU" --port "$PORT" --app-path "$SCRIPTROOT" &
 EMU_PID=$!
 
 # Poll for host readiness (check HTTP endpoint, not just process alive)

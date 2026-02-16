@@ -37,7 +37,7 @@
 - **Description**: When running a Python function app, the host starts but returns HTTP 503 "Function host is not running" instead of serving the function
 - **Severity**: Medium (Python is a core runtime but not blocking for POC demo)
 - **Reproduction**:
-  1. Start host with `--sku flex --scriptroot ./test-python-app --port 7076`
+  1. Start host with `--sku flex --app-path ./test-python-app --port 7076`
   2. Host process starts (PID visible in ps)
   3. Endpoint returns 503 instead of 200
 - **Likely Cause**: Python worker may need PYTHONPATH or venv activation to be passed through environment variables
@@ -94,7 +94,7 @@ Available SKU profiles:
   flex                    4.1047.100           [4.22.*, 5.0.0)   GA
   [... profiles loaded from cache ...]
 
-$ node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+$ node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
 Host cached, skipping download.
 [... host starts normally using cached binary ...]
 ```
@@ -140,10 +140,10 @@ To demonstrate the POC:
 cd cdn-server && node server.js
 
 # Terminal 2: Start Flex (latest)
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
 
 # Terminal 3: Start Windows Consumption (older)
-node fnx/bin/fnx start --sku windows-consumption --scriptroot ./test-node-app --port 7072
+node fnx/bin/fnx start --sku windows-consumption --app-path ./test-node-app --port 7072
 
 # Terminal 4: Test both
 curl http://localhost:7071/api/hello  # Latest host (4.1047.100)

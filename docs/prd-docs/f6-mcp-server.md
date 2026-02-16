@@ -56,7 +56,7 @@ No running host required. Works offline with bundled templates.
 When `fnx start` launches the host, it also exposes an MCP endpoint over HTTP/SSE on the same port (or `--mcp-port`). This adds live host context on top of the template tools:
 
 ```
-fnx start --sku flex --scriptroot ./my-app --port 7071
+fnx start --sku flex --app-path ./my-app --port 7071
   │
   ├── Host process on port 7071 (existing)
   │     └── /api/hello, blob_trigger, etc.
@@ -216,7 +216,7 @@ The existing [azure-functions-templates-mcp-server](https://github.com/manvkaur/
 When fnx is NOT running a host (no `fnx start`), the MCP server can still serve:
 - Template catalog (all `get_template*` and `get_languages_list` tools)
 - SKU profile information (`get_sku_profile`)
-- Project metadata if `--scriptroot` is provided
+- Project metadata if `--app-path` is provided
 
 This makes fnx useful as a pure templates MCP server even without host execution.
 

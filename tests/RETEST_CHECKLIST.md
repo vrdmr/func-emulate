@@ -47,13 +47,13 @@ eval $(./test-tools/start-cdn.sh)
 rm -rf ~/.fnx/hosts/
 
 # First run (should download)
-eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --app-path ./test-node-app)
 ls ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
 # Should exist
 ./test-tools/cleanup.sh $EMU_PID
 
 # Second run (should use cache)
-eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --app-path ./test-node-app)
 # Check output for "cached" or "skipping download"
 ./test-tools/cleanup.sh $EMU_PID
 ```
@@ -63,7 +63,7 @@ eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node
 
 #### Test 4: Host Startup — Flex
 ```bash
-eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --app-path ./test-node-app)
 
 # Verify function responds
 ./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
@@ -79,7 +79,7 @@ eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node
 
 #### Test 5: Host Startup — Windows Consumption
 ```bash
-eval $(./test-tools/start-emu.sh --sku windows-consumption --port 7072 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku windows-consumption --port 7072 --app-path ./test-node-app)
 
 ./test-tools/check-endpoint.sh http://localhost:7072/api/hello 200
 
@@ -92,10 +92,10 @@ eval $(./test-tools/start-emu.sh --sku windows-consumption --port 7072 --scriptr
 #### Test 6: Side-by-Side SKU Comparison ⭐ **THE MONEY SHOT**
 ```bash
 # Start two SKUs simultaneously
-eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --app-path ./test-node-app)
 FLEX_PID=$EMU_PID
 
-eval $(./test-tools/start-emu.sh --sku linux-consumption --port 7072 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku linux-consumption --port 7072 --app-path ./test-node-app)
 LINUX_PID=$EMU_PID
 
 # Both should respond
@@ -122,7 +122,7 @@ for SKU_PORT in "flex:7071" "linux-premium:7072" "windows-consumption:7073" "win
   SKU="${SKU_PORT%%:*}"
   PORT="${SKU_PORT##*:}"
   echo "Testing $SKU on port $PORT..."
-  eval $(./test-tools/start-emu.sh --sku "$SKU" --port "$PORT" --scriptroot ./test-node-app)
+  eval $(./test-tools/start-emu.sh --sku "$SKU" --port "$PORT" --app-path ./test-node-app)
   ./test-tools/check-endpoint.sh "http://localhost:${PORT}/api/hello" 200
   ./test-tools/cleanup.sh $EMU_PID
 done
@@ -137,7 +137,7 @@ done
 ./test-tools/cleanup.sh $CDN_PID
 
 # With cached host
-eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --app-path ./test-node-app)
 ./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
 ./test-tools/cleanup.sh $EMU_PID
 
@@ -151,13 +151,13 @@ eval $(./test-tools/start-cdn.sh)
 #### Test 9: Error Handling
 ```bash
 # Missing scriptroot
-node fnx/bin/fnx start --sku flex --scriptroot /tmp/nonexistent 2>&1 | grep -i "FUNCTIONS_WORKER_RUNTIME"
+node fnx/bin/fnx start --sku flex --app-path /tmp/nonexistent 2>&1 | grep -i "FUNCTIONS_WORKER_RUNTIME"
 # Should show error about missing runtime
 
 # Dotnet rejected
 mkdir -p /tmp/dotnet-test
 echo '{"IsEncrypted":false,"Values":{"FUNCTIONS_WORKER_RUNTIME":"dotnet-isolated"}}' > /tmp/dotnet-test/local.settings.json
-node fnx/bin/fnx start --sku flex --scriptroot /tmp/dotnet-test 2>&1 | grep -i "non-dotnet"
+node fnx/bin/fnx start --sku flex --app-path /tmp/dotnet-test 2>&1 | grep -i "non-dotnet"
 rm -rf /tmp/dotnet-test
 # Should show error about dotnet not supported
 ```
@@ -169,7 +169,7 @@ rm -rf /tmp/dotnet-test
 ```bash
 source test-python-app/.venv/bin/activate
 
-eval $(./test-tools/start-emu.sh --sku flex --port 7076 --scriptroot ./test-python-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7076 --app-path ./test-python-app)
 
 ./test-tools/check-endpoint.sh http://localhost:7076/api/hello 200
 
@@ -183,12 +183,12 @@ deactivate
 #### Test 11: Node vs Python on Same SKU
 ```bash
 # Node app on Flex
-eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --app-path ./test-node-app)
 NODE_PID=$EMU_PID
 
 # Python app on Flex (same SKU!)
 source test-python-app/.venv/bin/activate
-eval $(./test-tools/start-emu.sh --sku flex --port 7076 --scriptroot ./test-python-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7076 --app-path ./test-python-app)
 PY_PID=$EMU_PID
 
 # Both should respond
@@ -286,7 +286,7 @@ Take screenshots/video of Test 6 for the demo!
 
 5. Manually test a simple function:
    ```bash
-   node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+   node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
    # In another terminal:
    curl http://localhost:7071/api/hello
    ```

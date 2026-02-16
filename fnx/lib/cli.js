@@ -70,7 +70,7 @@ export async function main(args) {
 
   if (cmd === 'pack') {
     if (hasHelp(args.slice(1))) { printPackHelp(); return; }
-    const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
+    const scriptRoot = getFlag(args, '--app-path') || process.cwd();
     const runtime = getFlag(args, '--runtime') || await detectRuntimeFromConfig(scriptRoot);
     const outputPath = getFlag(args, '--output');
     const noBuild = args.includes('--no-build');
@@ -88,7 +88,7 @@ export async function main(args) {
 
   await maybeWarnForCliUpgrade();
 
-  const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
+  const scriptRoot = getFlag(args, '--app-path') || process.cwd();
   const requestedPort = parseInt(getFlag(args, '--port') || '7071');
   const port = await findOpenPort(requestedPort);
   if (port !== requestedPort) {
@@ -415,7 +415,7 @@ ${title('Common Options:')}
   ${success('-h')}, ${success('--help')}       Display this help information.
 
 ${title('Start Options:')}      ${dim('(fnx start)')}
-  ${success('--scriptroot')} <dir>  Path to the function app directory (default: cwd).
+  ${success('--app-path')} <dir>  Path to the function app directory (default: cwd).
   ${success('--port')} <port>       Port for the host HTTP listener (default: 7071).
   ${success('--mcp-port')} <port>   Port for the live MCP server (default: host port + 1).
   ${success('--no-mcp')}            Disable the live MCP server.
@@ -426,7 +426,7 @@ ${title('Sync Options:')}       ${dim('(fnx sync [host|extensions])')}
   ${success('--force')}             Re-download even if already cached.
 
 ${title('Pack Options:')}       ${dim('(fnx pack)')}
-  ${success('--scriptroot')} <dir>  Path to the function app directory (default: cwd).
+  ${success('--app-path')} <dir>  Path to the function app directory (default: cwd).
   ${success('--runtime')} <name>    Runtime identifier (default: auto-detected from config).
   ${success('--output')} <file>     Output zip path (default: <app-name>.zip).
   ${success('--no-build')}          Skip build steps for java/dotnet-isolated.
@@ -442,7 +442,7 @@ ${title('Examples:')}
   fnx start                              Start with default SKU (flex)
   fnx start --sku windows-consumption    Emulate Windows Consumption
   fnx start --sku flex --port 8080       Custom port
-  fnx pack --scriptroot ./my-app         Package function app as zip
+  fnx pack --app-path ./my-app         Package function app as zip
   fnx sync host --force                  Force re-download host binary
   fnx warmup --all                       Pre-download all SKUs
   fnx templates-mcp                      Start templates MCP server
@@ -461,7 +461,7 @@ ${title('Usage:')} fnx start [options]
 
 ${title('Options:')}
   ${success('--sku')} <name>       Target SKU to emulate (default: flex). Use ${success('--sku list')} to see options.
-  ${success('--scriptroot')} <dir> Path to the function app directory (default: cwd).
+  ${success('--app-path')} <dir> Path to the function app directory (default: cwd).
   ${success('--port')} <port>      Port for the host HTTP listener (default: 7071).
   ${success('--mcp-port')} <port>  Port for the live MCP server (default: host port + 1).
   ${success('--verbose')}          Show all host output (unfiltered).
@@ -502,7 +502,7 @@ ${bold(title('fnx pack'))} — Package a Functions app into a deployment zip.
 ${title('Usage:')} fnx pack [options]
 
 ${title('Options:')}
-  ${success('--scriptroot')} <dir> Path to the function app directory (default: cwd).
+  ${success('--app-path')} <dir> Path to the function app directory (default: cwd).
   ${success('--runtime')} <name>   Runtime identifier (default: auto-detected from config).
   ${success('--output')} <file>    Output zip path (default: <app-name>.zip).
   ${success('--no-build')}         Skip build steps for java/dotnet-isolated.
@@ -512,7 +512,7 @@ ${title('Supported runtimes:')} node, python, java, powershell, dotnet-isolated
 
 ${title('Examples:')}
   fnx pack                              Package current directory
-  fnx pack --scriptroot ./my-app        Package a specific app
+  fnx pack --app-path ./my-app        Package a specific app
   fnx pack --runtime python --no-build  Skip build step`.trim());
 }
 

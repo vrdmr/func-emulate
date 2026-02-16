@@ -11,7 +11,7 @@ npm install -g @vrdmr/fnx-test
 Or run without installing:
 
 ```bash
-npx @vrdmr/fnx-test start --sku flex --scriptroot ./my-app
+npx @vrdmr/fnx-test start --sku flex --app-path ./my-app
 ```
 
 ## Quick Start
@@ -21,10 +21,10 @@ npx @vrdmr/fnx-test start --sku flex --scriptroot ./my-app
 fnx start --sku list
 
 # Run your function app with the Flex Consumption host
-fnx start --sku flex --scriptroot ./my-function-app
+fnx start --sku flex --app-path ./my-function-app
 
 # Run with Windows Consumption host
-fnx start --sku windows-consumption --scriptroot ./my-function-app
+fnx start --sku windows-consumption --app-path ./my-function-app
 ```
 
 ## What It Does
@@ -53,12 +53,12 @@ fnx start --sku flex
 ## Commands
 
 ```bash
-fnx start --sku <sku> --scriptroot <path>   # Run function app
+fnx start --sku <sku> --app-path <path>   # Run function app
 fnx start --sku list                         # List available SKUs
 fnx warmup [--sku <sku>] [--all]            # Pre-download host + bundle
 fnx sync [host|extensions] [--sku <sku>]    # Reconcile cache with latest catalog / rollback
 fnx templates-mcp                            # Start MCP server for AI agents
-fnx pack --scriptroot <path>                # Package function app as deployment zip
+fnx pack --app-path <path>                # Package function app as deployment zip
 ```
 
 
