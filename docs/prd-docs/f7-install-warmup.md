@@ -1,6 +1,6 @@
 # F7: Install-Time Warmup (`fnx warmup`)
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented  
 **PRD Section:** 6.6 (Host Version Management)  
 **Depends on:** F1 (profiles), F2 (host manager), F3 (extension bundles)
 

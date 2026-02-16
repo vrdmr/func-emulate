@@ -11,10 +11,16 @@ Individual feature specs broken out from the [PRD](../prd.md). Each FRD is self-
 | F3 | [Extension Bundle Support](./f3-extension-bundle-support.md) | ✅ POC validated | SKU-aware bundle version resolution + auto-download |
 | F4 | [CLI Surface & Config](./f4-cli-surface-config.md) | ✅ POC validated | `--sku` flag, config merging, help UX |
 | F5 | [Non-HTTP Trigger Support](./f5-non-http-triggers.md) | ✅ POC validated | Blob/Timer/Queue trigger indexing, display, and execution |
-| F6 | [MCP Server Integration](./f6-mcp-server.md) | 📋 Proposed | Expose fnx runtime + templates as an MCP server |
-| F7 | [Install-Time Warmup](./f7-install-warmup.md) | 📋 Proposed | Pre-download host + bundle during `npm install` |
-| F8 | [Homepage Improvements](./f8-homepage-improvements.md) | 📋 Proposed | Transform host homepage into a developer productivity hub |
+| F6 | [MCP Server Integration](./f6-mcp-server.md) | ✅ Implemented | Expose fnx runtime + templates as an MCP server |
+| F7 | [Install-Time Warmup](./f7-install-warmup.md) | ✅ Implemented | Pre-download host + bundle during `npm install` |
+| F8 | [Homepage Improvements](./f8-homepage-improvements.md) | ✅ Implemented | Transform host homepage into a developer productivity hub |
+| F9 | [.NET Isolated Worker Only](./f9-dotnet-isolated-only.md) | ✅ Implemented | Block in-process .NET projects with migration guidance |
+| F10 | [Standalone Template MCP Server](./f10-template-mcp-standalone.md) | ✅ Implemented | Fast, host-free MCP server entrypoint for AI agents |
+| F11 | [Debugging & Logging Test Rigor](./f11-debugging-logging-rigor.md) | ✅ Implemented | Test framework + unit/E2E tests for logging and debugging |
+| F12 | [Comprehensive E2E & Unit Tests](./f12-comprehensive-testing.md) | ✅ Implemented | Full test suite for Template MCP + emulator |
+| F13 | [Azurite as Lazy Dependency](./f13-azurite-dependency.md) | ✅ Implemented | Auto-detect, install, and start Azurite for storage triggers |
+| F14 | [npm Release & Distribution](./f14-npm-release.md) | 📋 Proposed | npm publish plan for `fnx` package |
 
 ## Relationship to PRD
 
-The PRD (`docs/prd.md`) defines the overall vision: make `func start` SKU-aware. These FRDs break the implementation into shippable units. F1–F5 were validated in the fnx POC. F6 is a new capability that extends fnx with AI-tooling integration.
+The PRD (`docs/prd.md`) defines the overall vision: make `func start` SKU-aware. These FRDs break the implementation into shippable units. F1–F5 were validated in the fnx POC. F6–F13 have been implemented. F14 covers npm distribution.

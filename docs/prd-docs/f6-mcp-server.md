@@ -1,6 +1,6 @@
 # F6: MCP Server Integration
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented  
 **PRD Section:** N/A (new capability)  
 **Depends on:** F1 (profiles), F2 (host manager), F5 (trigger support)
 

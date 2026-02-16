@@ -1,6 +1,6 @@
 # F9: .NET Isolated Worker Only — No In-Process Model
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented  
 **PRD Section:** Runtime support  
 **Depends on:** F1 (SKU profiles), F2 (host version manager)
 
