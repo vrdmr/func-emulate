@@ -66,11 +66,37 @@ if [[ "$BRANCH" != "main" ]]; then
 fi
 ok "On main branch"
 
-if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
-  if [[ "$DRY_RUN" == true ]]; then
-    warn "Working directory is not clean (OK for dry run)"
+DIRTY_FILES=$(git -C "$REPO_ROOT" status --porcelain)
+if [[ -n "$DIRTY_FILES" ]]; then
+  warn "Working directory is not clean:"
+  echo "$DIRTY_FILES" | sed 's/^/    /'
+  echo ""
+
+  # Check if any dirty files would end up in the package
+  DIRTY_IN_PKG=false
+  while IFS= read -r line; do
+    file="${line:3}"
+    if [[ "$file" == fnx/bin/* || "$file" == fnx/lib/* || "$file" == fnx/profiles/* || "$file" == fnx/README.md || "$file" == fnx/package.json ]]; then
+      DIRTY_IN_PKG=true
+    fi
+  done <<< "$DIRTY_FILES"
+
+  if [[ "$DIRTY_IN_PKG" == true ]]; then
+    warn "Some dirty files are inside the published package (fnx/bin, fnx/lib, fnx/profiles)"
   else
-    fail "Working directory is not clean. Commit or stash changes first."
+    echo "  None of the dirty files are inside the published package."
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    ok "Continuing anyway (dry run)"
+  else
+    echo ""
+    read -r -p "  Continue with release? [y/N] " REPLY
+    if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+      echo "  Aborted. Clean up with: git stash or git checkout <file>"
+      exit 1
+    fi
+    ok "User confirmed — continuing"
   fi
 else
   ok "Working directory clean"
