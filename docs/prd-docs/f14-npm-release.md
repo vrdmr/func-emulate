@@ -1,6 +1,6 @@
 # F14: npm Release & Distribution
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented    
 **PRD Section:** Release & distribution  
 **Depends on:** F1 (SKU profiles), F2 (host version manager), F4 (CLI surface)  
 **Source:** `docs/npm-release-plan.md`
