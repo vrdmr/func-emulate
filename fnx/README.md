@@ -58,6 +58,7 @@ fnx start --sku list                         # List available SKUs
 fnx warmup [--sku <sku>] [--all]            # Pre-download host + bundle
 fnx sync [host|extensions] [--sku <sku>]    # Reconcile cache with latest catalog / rollback
 fnx templates-mcp                            # Start MCP server for AI agents
+fnx pack --scriptroot <path>                # Package function app as deployment zip
 ```
 
 

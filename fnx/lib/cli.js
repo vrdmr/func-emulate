@@ -8,6 +8,7 @@ import { ensureHost, ensureBundle, getCachedHostVersions, compareVersions, DEFAU
 import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
 import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
+import { detectRuntimeFromConfig, packFunctionApp } from './pack.js';
 
 const FNX_HOME = join(homedir(), '.fnx');
 const VERSION_CHECK_FILE = join(FNX_HOME, 'version-check.json');
@@ -56,6 +57,13 @@ export async function main(args) {
 
   if (cmd === 'sync') {
     await runSync(args.slice(1));
+    
+  if (cmd === 'pack') {
+    const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
+    const runtime = getFlag(args, '--runtime') || await detectRuntimeFromConfig(scriptRoot);
+    const outputPath = getFlag(args, '--output');
+    const noBuild = args.includes('--no-build');
+    await packFunctionApp({ scriptRoot, runtime, outputPath, noBuild });
     return;
   }
 
@@ -345,6 +353,8 @@ Actions:
                    Downloads and caches the correct host version automatically.
   sync             Sync cached host/extensions with current catalog profile.
                    Use: fnx sync, fnx sync host, fnx sync extensions.
+  pack             Package a Functions app into a deployment zip (func pack equivalent).
+                   Supports python, node, java, powershell, and dotnet-isolated.
   warmup           Pre-download host binaries and extension bundles for offline use.
                    Runs automatically as postinstall hook. Use --dry-run to preview.
   templates-mcp    Start the Azure Functions templates MCP server (stdio transport).
@@ -369,6 +379,10 @@ Options:
   --no-mcp         Disable the live MCP server (host-only mode).
   --no-azurite     Skip automatic Azurite start (for users who manage Azurite separately).
   --verbose        Show all host output (unfiltered). Default: clean output only.
+  --runtime <name> Runtime used by pack. If omitted, reads FUNCTIONS_WORKER_RUNTIME
+                   from app.config.json/local.settings.json.
+  --output <file>  Output zip path for pack. Default: <scriptroot-name>.zip.
+  --no-build       Skip build steps for java/dotnet-isolated during pack.
   -v, --version    Display the version of fnx.
   -h, --help       Display this help information.
 
@@ -378,6 +392,60 @@ Available SKUs:
   windows-consumption    Windows Consumption (classic)
   windows-dedicated      Windows Dedicated (App Service Plan)
   linux-consumption      Linux Consumption (retiring)
+
+Configuration:
+  app.config.json        Non-secret app settings (committed to source control).
+                         Contains TargetSku and Values (e.g. FUNCTIONS_WORKER_RUNTIME).
+  local.settings.json    Secrets and connection strings (git-ignored).
+                         Values here override app.config.json Values.
+
+  Config values from both files are merged and injected as environment
+  variables into the host process. local.settings.json values take precedence.
+
+Examples:
+  fnx start                           Start with default SKU (flex) in current directory
+  fnx start --sku flex                Emulate Flex Consumption
+  fnx start --sku windows-consumption Emulate Windows Consumption (older host version)
+  fnx start --sku list                List all available SKU profiles with host versions
+  fnx start --sku flex --port 8080    Start on a custom port
+  fnx start --scriptroot ./my-app     Start from a specific function app directory
+  fnx pack --scriptroot ./my-app      Package function app as zip deployment artifact
+
+Side-by-side comparison:
+  # Terminal 1: Run as Flex Consumption
+  fnx start --sku flex --port 7071
+
+  # Terminal 2: Run as Windows Consumption (different host version)
+  fnx start --sku windows-consumption --port 7072
+
+  # Compare behavior across SKUs with the same function app!
+
+MCP server (for VS Code Copilot / AI assistants):
+  fnx templates-mcp                    Start templates MCP server (stdio)
+  fnx start                            Also starts live MCP server on port+1
+  fnx start --mcp-port 9000            Live MCP server on custom port
+  fnx start --no-mcp                   Disable live MCP server
+
+  # .vscode/mcp.json — templates only (stdio):
+  # {
+  #   "servers": {
+  #     "azure-functions-templates": {
+  #       "type": "stdio",
+  #       "command": "fnx",
+  #       "args": ["templates-mcp"]
+  #     }
+  #   }
+  # }
+  #
+  # .vscode/mcp.json — live host data (when fnx start is running):
+  # {
+  #   "servers": {
+  #     "fnx-functions-debug": {
+  #       "type": "http",
+  #       "url": "http://127.0.0.1:7072/mcp"
+  #     }
+  #   }
+  # }
 
 Supported runtimes: node, python, java, powershell, dotnet-isolated
   (.NET in-process / Microsoft.NET.Sdk.Functions is not supported — isolated worker model only)
