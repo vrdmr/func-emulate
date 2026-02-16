@@ -171,6 +171,13 @@ export class FnxCommand {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         child.kill('SIGTERM');
+        // Follow up with SIGKILL and stream cleanup to prevent event loop hangs.
+        // fetch() inside the child can keep the process alive after SIGTERM.
+        setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch { /* already dead */ }
+          if (child.stdout) child.stdout.destroy();
+          if (child.stderr) child.stderr.destroy();
+        }, 1000);
         resolve({
           stdout: watcher.stdout,
           stderr: watcher.stderr,

@@ -169,7 +169,56 @@ Node.js, Python, Java, PowerShell. Dotnet/dotnet-isolated use in-process hosting
 
 ## Test Results
 
-**9/11 tests passed** (81.8%) — see [tests/TEST_REPORT.md](tests/TEST_REPORT.md) for details.
+**158 automated tests** (114 unit + 44 E2E) — all passing.
+
+### Running Tests
+
+```bash
+# Unit tests only (fast, no network needed)
+node --test tests/unit/*.test.js
+
+# E2E tests — MCP server (spawns fnx templates-mcp over stdio)
+node --test tests/e2e/mcp-stdio.test.js tests/e2e/mcp-tools.test.js
+
+# E2E tests — CLI startup/failure scenarios
+node --test tests/e2e/startup-failure.test.js tests/e2e/cross-sku.test.js
+
+# E2E tests — existing logging/verbose tests
+node --test tests/e2e/start-logging.test.js tests/e2e/verbose-mode.test.js
+
+# MCP protocol tests (from F6/F10 — spawns full server per test)
+node --test tests/tests-templates-mcp/*.test.js
+
+# Everything at once
+node --test tests/unit/*.test.js tests/e2e/*.test.js tests/tests-templates-mcp/*.test.js
+```
+
+### Test Suites
+
+| Suite | Tests | What it covers |
+|-------|-------|----------------|
+| `tests/unit/log-filter.test.js` | 18 | Log filtering, host state management |
+| `tests/unit/console-output.test.js` | 10 | Clean/verbose output formatting |
+| `tests/unit/config-layering.test.js` | 19 | CLI flags, config merge, SKU precedence |
+| `tests/unit/mcp-templates.test.js` | 24 | Template tool handlers, path safety, metadata |
+| `tests/unit/profile-resolver.test.js` | 16 | SKU resolution, inline JSON, file path, errors |
+| `tests/unit/host-manager.test.js` | 12 | Platform detection, host cache, bundle capping |
+| `tests/unit/config-merge.test.js` | 15 | Env construction, secret redaction, bundle calc |
+| `tests/e2e/mcp-stdio.test.js` | 11 | MCP stdio transport, concurrent calls, shutdown |
+| `tests/e2e/mcp-tools.test.js` | 14 | MCP tool invocation (template + SKU tools) |
+| `tests/e2e/startup-failure.test.js` | 7 | Invalid project, .NET in-process detection |
+| `tests/e2e/cross-sku.test.js` | 12 | Multi-SKU resolution, --sku list, version order |
+
+### Test Fixtures
+
+Test fixtures in `tests/fixtures/` provide deterministic inputs:
+- `valid-node-app/` — Minimal Node.js function app
+- `invalid-project/` — Broken host.json for error-path testing
+- `inprocess-dotnet/` — In-process .NET project for F9 detection tests
+
+### Manual Integration Tests
+
+**9/11 manual tests passed** (81.8%) — see [tests/TEST_REPORT.md](tests/TEST_REPORT.md) for details.
 
 Highlights:
 - ✅ Side-by-side: Two different host versions (flex + win-consumption) serving the same app simultaneously

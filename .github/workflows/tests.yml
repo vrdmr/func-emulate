@@ -1,11 +1,12 @@
-# CI: Run fnx test suite (unit + E2E) on every push and PR.
+# CI: Run fast tests on every push and PR.
 #
-# Unit tests: Pure logic tests (log filtering, config layering, assertions).
-#   No external dependencies — runs instantly.
+# Unit tests: Pure logic tests (log filtering, config layering, profile
+#   resolution, host manager, config merge, MCP templates). No network.
 #
-# E2E tests: Spawn `fnx` CLI subprocesses and validate output.
-#   Uses bundled SKU profiles (no CDN server needed for CLI flag tests).
-#   Tests that require a running host are timeout-guarded.
+# MCP tests: Spawn `fnx templates-mcp` over stdio and validate JSON-RPC.
+#   Requires templates-mcp build. No host download needed.
+#
+# E2E tests run separately — see tests-e2e.yml (daily + merge to main).
 
 name: Tests
 
@@ -33,37 +34,20 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Install templates-mcp dependencies
+        run: npm ci
+        working-directory: fnx/templates-mcp
+
+      - name: Build templates-mcp
+        run: npx tsc -p tsconfig.json
+        working-directory: fnx/templates-mcp
+
       - name: Run unit tests
         shell: bash
         run: node --test tests/unit/*.test.js
 
-  e2e-tests:
-    name: E2E Tests
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: [20]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Make fnx executable (Unix)
-        if: runner.os != 'Windows'
-        run: chmod +x fnx/bin/fnx
-
-      - name: Run E2E tests
-        shell: bash
-        run: node --test tests/e2e/*.test.js
-
   mcp-tests:
-    name: MCP Templates Tests
+    name: MCP Protocol Tests
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -91,6 +75,10 @@ jobs:
         if: runner.os != 'Windows'
         run: chmod +x fnx/bin/fnx fnx/bin/fnx-template-mcp
 
-      - name: Run MCP tests
+      - name: Run MCP protocol tests
         shell: bash
         run: node --test tests/tests-templates-mcp/*.test.js
+
+      - name: Run MCP E2E tests
+        shell: bash
+        run: node --test tests/e2e/mcp-stdio.test.js tests/e2e/mcp-tools.test.js
