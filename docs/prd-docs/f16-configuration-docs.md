@@ -1,6 +1,6 @@
 # F16: app-config.yaml — Configuration as Code
 
-**Status:** 🚧 In Progress  
+**Status:** ✅ Implemented  
 **PRD Section:** Developer experience, configuration  
 **Depends on:** F4 (CLI surface)
 
