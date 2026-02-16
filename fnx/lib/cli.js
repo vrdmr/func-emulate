@@ -1,13 +1,18 @@
 import { resolve as resolvePath, dirname, join } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { resolveProfile, listProfiles, setProfilesSource } from './profile-resolver.js';
-import { ensureHost, ensureBundle } from './host-manager.js';
+import { resolveProfile, listProfiles, setProfilesSource, fetchRegistryWithMeta } from './profile-resolver.js';
+import { ensureHost, ensureBundle, getCachedHostVersions, compareVersions, DEFAULT_KEEP_VERSIONS } from './host-manager.js';
 import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
 import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
 import { detectRuntimeFromConfig, packFunctionApp } from './pack.js';
+
+const FNX_HOME = join(homedir(), '.fnx');
+const VERSION_CHECK_FILE = join(FNX_HOME, 'version-check.json');
+const VERSION_CHECK_TTL_MS = 24 * 60 * 60 * 1000;
 
 function isPortFree(port) {
   return new Promise((resolve) => {
@@ -34,11 +39,7 @@ export async function main(args) {
   }
 
   if (cmd === '-v' || cmd === '--version') {
-    const { readFileSync } = await import('node:fs');
-    const { fileURLToPath } = await import('node:url');
-    const { dirname, join } = await import('node:path');
-    const dir = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(readFileSync(join(dir, '..', 'package.json'), 'utf-8'));
+    const pkg = await getFnxPackage();
     console.log(`fnx v${pkg.version}`);
     process.exit(0);
   }
@@ -54,6 +55,9 @@ export async function main(args) {
     return;
   }
 
+  if (cmd === 'sync') {
+    await runSync(args.slice(1));
+    
   if (cmd === 'pack') {
     const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
     const runtime = getFlag(args, '--runtime') || await detectRuntimeFromConfig(scriptRoot);
@@ -68,6 +72,8 @@ export async function main(args) {
     printHelp();
     process.exit(1);
   }
+
+  await maybeWarnForCliUpgrade();
 
   const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
   const requestedPort = parseInt(getFlag(args, '--port') || '7071');
@@ -120,23 +126,34 @@ export async function main(args) {
   } else {
     console.log(`Resolving SKU profile: ${sku}...`);
   }
-  const profile = await resolveProfile(sku);
+
+  const { registry, source } = await fetchRegistryWithMeta();
+  const profile = registry.profiles[sku];
+  if (!profile) {
+    const valid = Object.keys(registry.profiles).join(', ');
+    throw new Error(`Unknown SKU '${sku}'. Available: ${valid}`);
+  }
+
+  profile.name = sku;
   console.log(`  Target SKU:        ${profile.displayName}`);
   console.log(`  Host Version:      ${profile.hostVersion}`);
   console.log(`  Extension Bundle:  ${profile.extensionBundleVersion}`);
   if (profile.maxExtensionBundleVersion) {
     console.log(`  Max Bundle Cap:    ${profile.maxExtensionBundleVersion}`);
   }
+  console.log(`  Profile Source:    ${source}`);
   console.log();
 
+  printHostDriftWarning(profile.hostVersion);
+
   // 2. Ensure host is downloaded
-  const hostDir = await ensureHost(profile);
+  const hostDir = await ensureHost(profile, { keepVersions: DEFAULT_KEEP_VERSIONS });
   console.log(`  Host path:         ${hostDir}`);
 
   // 3. Pre-download the correct extension bundle for this SKU
   //    This resolves the exact version from CDN index, capped by maxExtensionBundleVersion,
   //    and downloads it so the host finds it cached and never fetches a wrong version.
-  const resolvedBundleVersion = await ensureBundle(profile);
+  const resolvedBundleVersion = await ensureBundle(profile, { keepVersions: DEFAULT_KEEP_VERSIONS });
   if (resolvedBundleVersion) {
     console.log(`  Bundle resolved:   ${resolvedBundleVersion}`);
   }
@@ -211,6 +228,91 @@ export async function main(args) {
   });
 }
 
+async function runSync(args) {
+  const target = ['host', 'extensions'].includes(args[0]) ? args[0] : 'all';
+  const force = args.includes('--force');
+  const keep = parseInt(getFlag(args, '--keep') || String(DEFAULT_KEEP_VERSIONS), 10);
+  const sku = getFlag(args, '--sku') || 'flex';
+  const profilesSource = getFlag(args, '--profiles');
+  if (profilesSource) setProfilesSource(profilesSource);
+
+  if (sku === 'list') {
+    await listProfiles();
+    return;
+  }
+
+  const profile = await resolveProfile(sku);
+  profile.name = sku;
+
+  console.log(`Syncing SKU '${sku}' (${profile.displayName})...`);
+  if (target === 'all' || target === 'host') {
+    await ensureHost(profile, { force, keepVersions: keep });
+    console.log('  ✓ Host synchronized.');
+  }
+  if (target === 'all' || target === 'extensions') {
+    const bundle = await ensureBundle(profile, { force, keepVersions: keep });
+    console.log(`  ✓ Extensions synchronized (${bundle || 'cached'}).`);
+  }
+
+  console.log(`  Retention policy: keep latest ${keep} version(s).`);
+}
+
+function printHostDriftWarning(targetHostVersion) {
+  const cached = getCachedHostVersions();
+  if (cached.length === 0) return;
+
+  const highest = [...cached].sort(compareVersions).pop();
+  if (!highest) return;
+
+  if (compareVersions(targetHostVersion, highest) > 0) {
+    console.log(`  ℹ️  New host available: ${targetHostVersion} (local latest: ${highest}).`);
+    console.log('     Run `fnx sync` or `fnx sync host` to download it.\n');
+  } else if (compareVersions(targetHostVersion, highest) < 0) {
+    console.log(`  ⚠️  Host rollback detected: local ${highest}, catalog ${targetHostVersion}.`);
+    console.log('     Run `fnx sync` or `fnx sync host` to align with the supported version.\n');
+  }
+}
+
+async function maybeWarnForCliUpgrade() {
+  try {
+    const pkg = await getFnxPackage();
+    const current = pkg.version;
+    const cached = await readJsonFile(VERSION_CHECK_FILE);
+    const now = Date.now();
+
+    if (cached?.checkedAt && now - new Date(cached.checkedAt).getTime() < VERSION_CHECK_TTL_MS) {
+      if (cached.latestVersion && compareVersions(cached.latestVersion, current) > 0) {
+        printUpgradeTip(cached.latestVersion);
+      }
+      return;
+    }
+
+    const registryUrl = `https://registry.npmjs.org/${encodeURIComponent(pkg.name)}/latest`;
+    const res = await fetch(registryUrl);
+    if (!res.ok) return;
+    const latest = await res.json();
+
+    await mkdir(FNX_HOME, { recursive: true });
+    await writeFile(VERSION_CHECK_FILE, JSON.stringify({ checkedAt: new Date().toISOString(), latestVersion: latest.version }, null, 2));
+
+    if (latest.version && compareVersions(latest.version, current) > 0) {
+      printUpgradeTip(latest.version);
+    }
+  } catch {
+    // non-fatal: offline/private registry/etc.
+  }
+}
+
+function printUpgradeTip(latestVersion) {
+  console.log(`  ℹ️  A newer fnx version is available (${latestVersion}).`);
+  console.log('     Run `npm i -g @vrdmr/fnx-test@latest` to upgrade.\n');
+}
+
+async function getFnxPackage() {
+  const dir = dirname(fileURLToPath(import.meta.url));
+  return JSON.parse(await readFile(join(dir, '..', 'package.json'), 'utf-8'));
+}
+
 async function startTemplatesMcp() {
   const { runStdioMcpServer } = await import('./mcp-server.js');
   const { getTemplateTools } = await import('./mcp-tools/templates.js');
@@ -249,6 +351,8 @@ Usage: fnx <action> [-/--options]
 Actions:
   start            Launch the Azure Functions host runtime for a specific SKU.
                    Downloads and caches the correct host version automatically.
+  sync             Sync cached host/extensions with current catalog profile.
+                   Use: fnx sync, fnx sync host, fnx sync extensions.
   pack             Package a Functions app into a deployment zip (func pack equivalent).
                    Supports python, node, java, powershell, and dotnet-isolated.
   warmup           Pre-download host binaries and extension bundles for offline use.
@@ -265,13 +369,15 @@ Options:
                    Must contain host.json and either app.config.json or local.settings.json.
   --port <port>    Port for the host HTTP listener. Default: 7071.
   --mcp-port <p>   Port for the live MCP server. Default: host port + 1 (7072).
-  --no-mcp         Disable the live MCP server (host-only mode).
-  --no-azurite     Skip automatic Azurite start (for users who manage Azurite separately).
   --profiles <src> SKU profiles source. Can be:
                    • A URL (http/https) to a profiles JSON endpoint
                    • A local file path to a profiles JSON file
                    • Inline JSON string (e.g. '{"profiles":{...}}')
                    Default: FUNC_PROFILES_URL env var, or http://localhost:4566/api/profiles.
+  --keep <n>       For sync only: keep latest N host/bundle versions in cache (default: 2).
+  --force          For sync only: re-download assets even if already cached.
+  --no-mcp         Disable the live MCP server (host-only mode).
+  --no-azurite     Skip automatic Azurite start (for users who manage Azurite separately).
   --verbose        Show all host output (unfiltered). Default: clean output only.
   --runtime <name> Runtime used by pack. If omitted, reads FUNCTIONS_WORKER_RUNTIME
                    from app.config.json/local.settings.json.

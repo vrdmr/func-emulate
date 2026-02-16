@@ -1,15 +1,20 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, chmod, rm, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { dirname } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { createWriteStream } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { arch } from 'node:os';
 
-const HOST_CACHE = join(homedir(), '.fnx', 'hosts');
-const BUNDLE_CACHE = join(homedir(), '.fnx', 'bundles');
+const FNX_HOME = join(homedir(), '.fnx');
+const HOST_CACHE = join(FNX_HOME, 'hosts');
+const BUNDLE_CACHE = join(FNX_HOME, 'bundles');
 const BUNDLE_CDN = 'https://functionscdn.azureedge.net/public/ExtensionBundles';
 const BUNDLE_ID = 'Microsoft.Azure.Functions.ExtensionBundle';
+const HOST_META_FILE = join(HOST_CACHE, '.metadata.json');
+const BUNDLE_META_FILE = join(BUNDLE_CACHE, '.metadata.json');
+const DEFAULT_KEEP_VERSIONS = 2;
 
 function getPlatformRid() {
   const os = platform();
@@ -25,12 +30,108 @@ function getHostExeName() {
     : 'Microsoft.Azure.WebJobs.Script.WebHost';
 }
 
-export async function ensureHost(profile, { force = false } = {}) {
+function parseVersion(version) {
+  // Accepts versions like 4.1047.100, 1.2.3-beta.1, v4.5.6.
+  // Non-numeric suffixes are ignored for numeric precedence.
+  const cleaned = String(version || '').trim().replace(/^v/i, '');
+  return cleaned.split('.').map((part) => {
+    const match = part.match(/^(\d+)/);
+    return match ? Number(match[1]) : 0;
+  });
+}
+
+function compareVersions(a, b) {
+  const pa = parseVersion(a);
+  const pb = parseVersion(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+
+  // Stable tie-breaker when numeric parts are equal.
+  return String(a).localeCompare(String(b));
+}
+
+async function readMetadata(filePath) {
+  try {
+    return JSON.parse(await readFile(filePath, 'utf-8'));
+  } catch {
+    return { versions: {} };
+  }
+}
+
+async function writeMetadata(filePath, meta) {
+  await mkdir(dirname(filePath), { recursive: true });
+  await writeFile(filePath, JSON.stringify(meta, null, 2));
+}
+
+function toIsoNow() {
+  return new Date().toISOString();
+}
+
+async function updateVersionMetadata(filePath, version, updates) {
+  const meta = await readMetadata(filePath);
+  const existing = meta.versions[version] || {};
+  meta.versions[version] = {
+    ...existing,
+    version,
+    ...updates,
+  };
+  await writeMetadata(filePath, meta);
+}
+
+function getSortedVersionEntries(meta) {
+  return Object.values(meta.versions || {}).sort((a, b) => compareVersions(b.version, a.version));
+}
+
+async function pruneHostCache({ keep = DEFAULT_KEEP_VERSIONS, protect = [] } = {}) {
+  const meta = await readMetadata(HOST_META_FILE);
+  const protectedSet = new Set(protect);
+  const sorted = getSortedVersionEntries(meta);
+
+  for (let i = keep; i < sorted.length; i++) {
+    const entry = sorted[i];
+    if (protectedSet.has(entry.version)) continue;
+    const dir = join(HOST_CACHE, entry.version);
+    if (existsSync(dir)) {
+      await rm(dir, { recursive: true, force: true });
+    }
+    delete meta.versions[entry.version];
+  }
+
+  await writeMetadata(HOST_META_FILE, meta);
+}
+
+async function pruneBundleCache({ keep = DEFAULT_KEEP_VERSIONS, protect = [] } = {}) {
+  const meta = await readMetadata(BUNDLE_META_FILE);
+  const protectedSet = new Set(protect);
+  const sorted = getSortedVersionEntries(meta);
+
+  for (let i = keep; i < sorted.length; i++) {
+    const entry = sorted[i];
+    if (protectedSet.has(entry.version)) continue;
+    const dir = join(BUNDLE_CACHE, BUNDLE_ID, entry.version);
+    if (existsSync(dir)) {
+      await rm(dir, { recursive: true, force: true });
+    }
+    delete meta.versions[entry.version];
+  }
+
+  await writeMetadata(BUNDLE_META_FILE, meta);
+}
+
+export async function ensureHost(profile, { force = false, keepVersions = DEFAULT_KEEP_VERSIONS } = {}) {
   const hostDir = join(HOST_CACHE, profile.hostVersion);
   const hostExe = join(hostDir, getHostExeName());
 
   if (!force && existsSync(hostExe)) {
     console.log('  Host cached, skipping download.');
+    await updateVersionMetadata(HOST_META_FILE, profile.hostVersion, {
+      lastUsedAt: toIsoNow(),
+      sku: profile.name || profile.displayName,
+      rid: getPlatformRid(),
+      dependencies: { extensionBundleVersion: profile.extensionBundleVersion },
+    });
     return hostDir;
   }
 
@@ -103,6 +204,15 @@ export async function ensureHost(profile, { force = false } = {}) {
   // Patch worker configs: replace 'python' → 'python3' on Unix where python3 exists but python doesn't
   await patchWorkerConfigs(hostDir);
 
+  await updateVersionMetadata(HOST_META_FILE, profile.hostVersion, {
+    downloadedAt: toIsoNow(),
+    lastUsedAt: toIsoNow(),
+    sku: profile.name || profile.displayName,
+    rid,
+    dependencies: { extensionBundleVersion: profile.extensionBundleVersion },
+  });
+  await pruneHostCache({ keep: keepVersions, protect: [profile.hostVersion] });
+
   return hostDir;
 }
 
@@ -152,16 +262,6 @@ function parseVersionRange(range) {
   };
 }
 
-function compareVersions(a, b) {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
-
 function findBestBundleVersion(allVersions, range, maxVersion) {
   const parsed = parseVersionRange(range);
   if (!parsed) return null;
@@ -183,7 +283,7 @@ function findBestBundleVersion(allVersions, range, maxVersion) {
   return candidates[candidates.length - 1]; // highest valid version
 }
 
-export async function ensureBundle(profile, { force = false } = {}) {
+export async function ensureBundle(profile, { force = false, keepVersions = DEFAULT_KEEP_VERSIONS } = {}) {
   const bundleDir = join(BUNDLE_CACHE, BUNDLE_ID);
   const range = profile.extensionBundleVersion;
   const maxVersion = profile.maxExtensionBundleVersion;
@@ -214,6 +314,11 @@ export async function ensureBundle(profile, { force = false } = {}) {
   const versionDir = join(bundleDir, bestVersion);
   if (!force && existsSync(join(versionDir, 'bundle.json'))) {
     console.log(`  Bundle ${bestVersion} cached.`);
+    await updateVersionMetadata(BUNDLE_META_FILE, bestVersion, {
+      lastUsedAt: toIsoNow(),
+      sku: profile.name || profile.displayName,
+      dependencies: { hostVersion: profile.hostVersion },
+    });
     return bestVersion;
   }
 
@@ -264,6 +369,14 @@ export async function ensureBundle(profile, { force = false } = {}) {
     try { await rm(tempZip); } catch { /* ignore */ }
   }
 
+  await updateVersionMetadata(BUNDLE_META_FILE, bestVersion, {
+    downloadedAt: toIsoNow(),
+    lastUsedAt: toIsoNow(),
+    sku: profile.name || profile.displayName,
+    dependencies: { hostVersion: profile.hostVersion },
+  });
+  await pruneBundleCache({ keep: keepVersions, protect: [bestVersion] });
+
   return bestVersion;
 }
 
@@ -277,4 +390,9 @@ function findCachedBundle(bundleDir, range, maxVersion) {
   return best;
 }
 
-export { getHostExeName, getPlatformRid };
+export function getCachedHostVersions() {
+  if (!existsSync(HOST_CACHE)) return [];
+  return readdirSync(HOST_CACHE).filter((v) => existsSync(join(HOST_CACHE, v, getHostExeName())));
+}
+
+export { getHostExeName, getPlatformRid, compareVersions, parseVersion, DEFAULT_KEEP_VERSIONS };

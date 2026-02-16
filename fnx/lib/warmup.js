@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { resolveProfile, listProfiles } from './profile-resolver.js';
+import { resolveProfile, listProfiles, fetchRegistryWithMeta } from './profile-resolver.js';
 import { ensureHost, ensureBundle, getHostExeName, getPlatformRid } from './host-manager.js';
 
 const FNX_DIR = join(homedir(), '.fnx');
@@ -143,9 +143,8 @@ function findAnyCachedBundle(bundleDir) {
 
 async function getAllSkuNames() {
   try {
-    const profilesPath = new URL('../profiles/sku-profiles.json', import.meta.url).pathname;
-    const registry = JSON.parse(await readFile(profilesPath, 'utf-8'));
-    return Object.keys(registry.profiles);
+    const { registry } = await fetchRegistryWithMeta();
+    return Object.keys(registry.profiles || {});
   } catch {
     return ['flex', 'linux-premium', 'windows-consumption', 'windows-dedicated', 'linux-consumption'];
   }

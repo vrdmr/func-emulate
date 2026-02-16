@@ -56,9 +56,20 @@ fnx start --sku flex
 fnx start --sku <sku> --scriptroot <path>   # Run function app
 fnx start --sku list                         # List available SKUs
 fnx warmup [--sku <sku>] [--all]            # Pre-download host + bundle
+fnx sync [host|extensions] [--sku <sku>]    # Reconcile cache with latest catalog / rollback
 fnx templates-mcp                            # Start MCP server for AI agents
 fnx pack --scriptroot <path>                # Package function app as deployment zip
 ```
+
+
+## Upgrades, Rollbacks, and Cache Retention
+
+- On `fnx start`, `fnx warmup`, and `fnx sync`, fnx attempts to refresh the SKU catalog from CDN first.
+- If catalog host version is newer than your local cache, fnx highlights that and recommends `fnx sync` (or `fnx sync host`).
+- If catalog host version is lower than a locally cached version (service rollback), fnx warns and recommends syncing back to the supported host.
+- `fnx sync` defaults to keeping only the latest 2 host and bundle versions to avoid cache bloat (`--keep <n>` to override).
+- fnx also checks npm for newer fnx CLI releases and prints an upgrade tip when available.
+- Version comparisons use numeric dot-segment precedence (e.g. `4.1047.100 > 4.1046.999`) with support for `v` prefixes and pre-release suffixes.
 
 ## MCP Server (for AI Agents)
 
