@@ -1,7 +1,7 @@
 {
-  "name": "fnx-templates-mcp",
+  "name": "@vrdmr/fnx-templates-mcp",
   "version": "0.1.0",
-  "description": "Azure Functions templates MCP server (embedded in fnx). Based on azure-functions-templates-mcp-server by Manvir Kaur.",
+  "description": "Azure Functions templates MCP server — discover and scaffold function templates via AI agents. Based on azure-functions-templates-mcp-server by Manvir Kaur.",
   "type": "module",
   "main": "dist/src/server-factory.js",
   "exports": {
@@ -14,6 +14,24 @@
     "./handlers": {
       "import": "./dist/src/handlers.js"
     }
+  },
+  "files": [
+    "dist/",
+    "templates/",
+    "README.md"
+  ],
+  "keywords": [
+    "azure-functions",
+    "mcp",
+    "templates",
+    "serverless",
+    "model-context-protocol",
+    "ai-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vrdmr/func-emulate",
+    "directory": "fnx/templates-mcp"
   },
   "license": "MIT",
   "engines": {
