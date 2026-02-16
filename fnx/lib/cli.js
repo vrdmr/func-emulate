@@ -359,109 +359,57 @@ function printHelp() {
 ${bold(title('Azure Functions Local Emulator (fnx — Phoenix Emulate)'))}
 SKU-aware host runtime for local development.
 
-${title('Usage:')} fnx <action> [-/--options]
+${title('Usage:')} fnx <command> [options]
 
-${title('Actions:')}
+${title('Commands:')}
   ${funcName('start')}            Launch the Azure Functions host runtime for a specific SKU.
-                    Downloads and caches the correct host version automatically.
   ${funcName('sync')}             Sync cached host/extensions with current catalog profile.
-                    Use: fnx sync, fnx sync host, fnx sync extensions.
-  ${funcName('pack')}             Package a Functions app into a deployment zip (func pack equivalent).
-                    Supports python, node, java, powershell, and dotnet-isolated.
-  ${funcName('warmup')}           Pre-download host binaries and extension bundles for offline use.
-                    Runs automatically as postinstall hook. Use --dry-run to preview.
-  ${funcName('templates-mcp')}    Start the Azure Functions templates MCP server (stdio transport).
-                    Drop-in replacement for manvir-templates-mcp-server.
-                    Provides 68 templates across 4 languages via MCP protocol.
+  ${funcName('pack')}             Package a Functions app into a deployment zip.
+  ${funcName('warmup')}           Pre-download host binaries and extension bundles.
+  ${funcName('templates-mcp')}    Start the Azure Functions templates MCP server (stdio).
 
-${title('Options:')}
-  ${success('--sku')} <name>     Target SKU to emulate. Determines which host version runs.
-                    Resolution order: CLI flag → app.config.json → local.settings.json → default (flex).
-                    Use --sku list to see all available SKUs.
-  ${success('--scriptroot')}     Path to the function app directory. Defaults to the current directory.
-                    Must contain host.json and either app.config.json or local.settings.json.
-  ${success('--port')} <port>    Port for the host HTTP listener. Default: 7071.
-  ${success('--mcp-port')} <p>   Port for the live MCP server. Default: host port + 1 (7072).
-  ${success('--profiles')} <src> SKU profiles source. Can be:
-                    • A URL (http/https) to a profiles JSON endpoint
-                    • A local file path to a profiles JSON file
-                    • Inline JSON string (e.g. '{"profiles":{...}}')
-                    Default: FUNC_PROFILES_URL env var, or ${urlColor('http://localhost:4566/api/profiles')}.
-  ${success('--keep')} <n>       For sync only: keep latest N host/bundle versions in cache (default: 2).
-  ${success('--force')}          For sync only: re-download assets even if already cached.
-  ${success('--no-mcp')}         Disable the live MCP server (host-only mode).
-  ${success('--no-azurite')}     Skip automatic Azurite start (for users who manage Azurite separately).
-  ${success('--verbose')}        Show all host output (unfiltered). Default: clean output only.
-  ${success('--runtime')} <name> Runtime used by pack. If omitted, reads FUNCTIONS_WORKER_RUNTIME
-                    from app.config.json/local.settings.json.
-  ${success('--output')} <file>  Output zip path for pack. Default: <scriptroot-name>.zip.
-  ${success('--no-build')}       Skip build steps for java/dotnet-isolated during pack.
+  Run ${dim('fnx <command> -h')} for command-specific options.
+
+${title('Common Options:')}
+  ${success('--sku')} <name>     Target SKU to emulate (default: flex).
+                    Use ${success('--sku list')} to see all available SKUs.
+  ${success('--profiles')} <src> Custom SKU profiles source (URL, file path, or inline JSON).
+  ${success('--verbose')}        Show all host output (unfiltered).
   ${success('-v')}, ${success('--version')}    Display the version of fnx.
   ${success('-h')}, ${success('--help')}       Display this help information.
 
+${title('Start Options:')}      ${dim('(fnx start)')}
+  ${success('--scriptroot')} <dir>  Path to the function app directory (default: cwd).
+  ${success('--port')} <port>       Port for the host HTTP listener (default: 7071).
+  ${success('--mcp-port')} <port>   Port for the live MCP server (default: host port + 1).
+  ${success('--no-mcp')}            Disable the live MCP server.
+  ${success('--no-azurite')}        Skip automatic Azurite start.
+
+${title('Sync Options:')}       ${dim('(fnx sync [host|extensions])')}
+  ${success('--keep')} <n>          Keep latest N versions in cache (default: 2).
+  ${success('--force')}             Re-download even if already cached.
+
+${title('Pack Options:')}       ${dim('(fnx pack)')}
+  ${success('--scriptroot')} <dir>  Path to the function app directory (default: cwd).
+  ${success('--runtime')} <name>    Runtime identifier (default: auto-detected from config).
+  ${success('--output')} <file>     Output zip path (default: <app-name>.zip).
+  ${success('--no-build')}          Skip build steps for java/dotnet-isolated.
+
 ${title('Available SKUs:')}
-  ${funcName('flex')}                   Azure Functions Flex Consumption (latest host, default)
+  ${funcName('flex')}                   Flex Consumption (latest host, default)
   ${funcName('linux-premium')}          Linux Premium / Elastic Premium
   ${funcName('windows-consumption')}    Windows Consumption (classic)
   ${funcName('windows-dedicated')}      Windows Dedicated (App Service Plan)
   ${funcName('linux-consumption')}      Linux Consumption (retiring)
 
-${title('Configuration:')}
-  app.config.json        Non-secret app settings (committed to source control).
-                          Contains TargetSku and Values (e.g. FUNCTIONS_WORKER_RUNTIME).
-  local.settings.json    Secrets and connection strings (git-ignored).
-                          Values here override app.config.json Values.
-
-  Config values from both files are merged and injected as environment
-  variables into the host process. local.settings.json values take precedence.
-
 ${title('Examples:')}
-  fnx start                           Start with default SKU (flex) in current directory
-  fnx start --sku flex                Emulate Flex Consumption
-  fnx start --sku windows-consumption Emulate Windows Consumption (older host version)
-  fnx start --sku list                List all available SKU profiles with host versions
-  fnx start --sku flex --port 8080    Start on a custom port
-  fnx start --scriptroot ./my-app     Start from a specific function app directory
-  fnx pack --scriptroot ./my-app      Package function app as zip deployment artifact
-
-${title('Side-by-side comparison:')}
-  # Terminal 1: Run as Flex Consumption
-  fnx start --sku flex --port 7071
-
-  # Terminal 2: Run as Windows Consumption (different host version)
-  fnx start --sku windows-consumption --port 7072
-
-  # Compare behavior across SKUs with the same function app!
-
-${title('MCP server')} (for VS Code Copilot / AI assistants):
-  fnx templates-mcp                    Start templates MCP server (stdio)
-  fnx start                            Also starts live MCP server on port+1
-  fnx start --mcp-port 9000            Live MCP server on custom port
-  fnx start --no-mcp                   Disable live MCP server
-
-  # .vscode/mcp.json — templates only (stdio):
-  # {
-  #   "servers": {
-  #     "azure-functions-templates": {
-  #       "type": "stdio",
-  #       "command": "fnx",
-  #       "args": ["templates-mcp"]
-  #     }
-  #   }
-  # }
-  #
-  # .vscode/mcp.json — live host data (when fnx start is running):
-  # {
-  #   "servers": {
-  #     "fnx-functions-debug": {
-  #       "type": "http",
-  #       "url": "${urlColor('http://127.0.0.1:7072/mcp')}"
-  #     }
-  #   }
-  # }
-
-Supported runtimes: node, python, java, powershell, dotnet-isolated
-  (.NET in-process / Microsoft.NET.Sdk.Functions is not supported — isolated worker model only)`.trim());
+  fnx start                              Start with default SKU (flex)
+  fnx start --sku windows-consumption    Emulate Windows Consumption
+  fnx start --sku flex --port 8080       Custom port
+  fnx pack --scriptroot ./my-app         Package function app as zip
+  fnx sync host --force                  Force re-download host binary
+  fnx warmup --all                       Pre-download all SKUs
+  fnx templates-mcp                      Start templates MCP server`.trim());
 }
 
 function printStartHelp() {

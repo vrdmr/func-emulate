@@ -21,6 +21,7 @@ Individual feature specs broken out from the [PRD](../prd.md). Each FRD is self-
 | F13 | [Azurite as Lazy Dependency](./f13-azurite-dependency.md) | ✅ Implemented | Auto-detect, install, and start Azurite for storage triggers |
 | F14 | [npm Release & Distribution](./f14-npm-release.md) | ✅ Implemented | npm publish plan for `fnx` package |
 | F15 | [Colored Log Output](./f15-colored-log-output.md) | ✅ Implemented | ANSI-colored logs matching `func start` theme |
+| F16 | [Configuration Documentation](./f16-configuration-docs.md) | 📋 Proposed | Document config files, merge rules, and validation |
 
 ## Relationship to PRD
 
