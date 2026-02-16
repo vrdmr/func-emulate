@@ -360,13 +360,23 @@ export async function launchHost(hostDir, opts) {
 
   const filter = createLogFilter(verbose, hostState);
 
+  // Start host in its own process group so we can kill it + all child workers together
   const child = spawn(hostExe, [], {
     env,
     stdio: ['inherit', 'pipe', 'pipe'],
     cwd: opts.scriptRoot,
+    detached: true, // creates new process group (pgid = child.pid)
   });
 
   hostState.pid = child.pid;
+
+  // Kill the entire process group (host + Python/Node workers it spawns)
+  function killHostGroup(signal) {
+    try { process.kill(-child.pid, signal); } catch { /* already dead */ }
+  }
+
+  // Ensure the host process group is killed if Node exits unexpectedly
+  process.on('exit', () => killHostGroup('SIGKILL'));
 
   // Process stdout and stderr through the log filter
   for (const stream of [child.stdout, child.stderr]) {
@@ -382,18 +392,21 @@ export async function launchHost(hostDir, opts) {
     });
   }
 
-  process.on('SIGINT', () => {
+  function cleanup(signal) {
     stopAzurite();
-    child.kill('SIGINT');
+    killHostGroup(signal);
     if (hostState._mcpServer) hostState._mcpServer.close();
-    setTimeout(() => process.exit(0), 500);
-  });
-  process.on('SIGTERM', () => {
-    stopAzurite();
-    child.kill('SIGTERM');
-    if (hostState._mcpServer) hostState._mcpServer.close();
-    setTimeout(() => process.exit(0), 500);
-  });
+    // Give the host 2s to shut down gracefully, then force kill the group
+    const forceTimer = setTimeout(() => {
+      killHostGroup('SIGKILL');
+      process.exit(0);
+    }, 2000);
+    forceTimer.unref();
+    child.once('exit', () => process.exit(0));
+  }
+
+  process.on('SIGINT', () => cleanup('SIGINT'));
+  process.on('SIGTERM', () => cleanup('SIGTERM'));
 
   return new Promise((resolve, reject) => {
     child.on('error', (err) => {

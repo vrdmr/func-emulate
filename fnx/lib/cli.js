@@ -12,7 +12,8 @@ function isPortFree(port) {
   return new Promise((resolve) => {
     const srv = createServer();
     srv.once('error', () => resolve(false));
-    srv.listen(port, '127.0.0.1', () => { srv.close(() => resolve(true)); });
+    // Host binds 0.0.0.0, so check that address (catches both IPv4 wildcard and loopback)
+    srv.listen(port, '0.0.0.0', () => { srv.close(() => resolve(true)); });
   });
 }
 
