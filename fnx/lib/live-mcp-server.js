@@ -331,18 +331,34 @@ export async function startLiveMcpServer(hostState, mcpPort) {
   });
 
   return new Promise((resolve, reject) => {
-    httpServer.on('error', (err) => {
-      if (!httpServer.listening) {
-        reject(err);
-      } else {
-        console.error(`  ⚠️  MCP server error: ${err.message}`);
-      }
-    });
+    const maxRetries = 10;
+    let attempt = 0;
+    let port = mcpPort;
 
-    httpServer.listen(mcpPort, '127.0.0.1', () => {
-      console.log(`  Functions Debug MCP Server: http://127.0.0.1:${mcpPort}/mcp`);
-      resolve(httpServer);
-    });
+    function tryListen() {
+      httpServer.once('error', onError);
+      httpServer.listen(port, '127.0.0.1', () => {
+        httpServer.removeListener('error', onError);
+        // Runtime errors after startup
+        httpServer.on('error', (err) => {
+          console.error(`  ⚠️  MCP server error: ${err.message}`);
+        });
+        console.log(`  Functions Debug MCP Server: http://127.0.0.1:${port}/mcp`);
+        resolve(httpServer);
+      });
+    }
+
+    function onError(err) {
+      if (err.code === 'EADDRINUSE' && attempt < maxRetries) {
+        attempt++;
+        port++;
+        tryListen();
+      } else {
+        reject(err);
+      }
+    }
+
+    tryListen();
   });
 }
 
