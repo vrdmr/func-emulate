@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { resolveProfile, listProfiles, setProfilesSource, fetchRegistryWithMeta } from './profile-resolver.js';
+import { resolveProfile, listProfiles, setProfilesSource, fetchRegistryWithMeta, readProfilesSync } from './profile-resolver.js';
 import { ensureHost, ensureBundle, getCachedHostVersions, getCachedBundleVersions, compareVersions, DEFAULT_KEEP_VERSIONS } from './host-manager.js';
 import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
@@ -358,20 +358,40 @@ async function printHelpWithVersionInfo() {
   const pkg = await getFnxPackage();
   const cachedHosts = getCachedHostVersions().sort(compareVersions);
   const cachedBundles = getCachedBundleVersions().sort(compareVersions);
-  const latestHost = cachedHosts.length ? cachedHosts[cachedHosts.length - 1] : null;
-  const latestBundle = cachedBundles.length ? cachedBundles[cachedBundles.length - 1] : null;
+
+  // Build SKU → host version map from cached/bundled profiles (no network)
+  const registry = readProfilesSync();
+  const hostToSkus = {};
+  if (registry?.profiles) {
+    for (const [sku, p] of Object.entries(registry.profiles)) {
+      const v = p.hostVersion;
+      if (!hostToSkus[v]) hostToSkus[v] = [];
+      hostToSkus[v].push(sku);
+    }
+  }
 
   // Fire-and-forget: refresh profile cache in background.
   // Won't block -h — process.exit() will terminate regardless.
-  // Ensures the next invocation has fresh data if CDN responds in time.
   fetchRegistryWithMeta().catch(() => {});
 
   console.log(`
 ${bold(title('Azure Functions Local Emulator (fnx — Phoenix Emulate)'))}
-${dim('fnx Version:')}        ${title(`${pkg.version}`)}
-${dim('Host Version:')}       ${latestHost ? info(latestHost) : dim('(none cached — run fnx warmup)')}
-${dim('Extension Bundle:')}   ${latestBundle ? info(latestBundle) : dim('(none cached)')}
-`);
+${dim('fnx Version:')}        ${title(pkg.version)}`);
+
+  if (cachedHosts.length) {
+    console.log(`${dim('Cached Hosts:')}       ${cachedHosts.map((v) => {
+      const skus = hostToSkus[v];
+      return skus ? `${info(v)} ${dim('(' + skus.join(', ') + ')')}` : info(v);
+    }).join(', ')}`);
+  } else {
+    console.log(`${dim('Cached Hosts:')}       ${dim('(none — run fnx warmup)')}`);
+  }
+
+  if (cachedBundles.length) {
+    console.log(`${dim('Cached Bundles:')}     ${cachedBundles.map((v) => info(v)).join(', ')}`);
+  }
+
+  console.log();
   printHelp();
 }
 
