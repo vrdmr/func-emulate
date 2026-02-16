@@ -1,6 +1,6 @@
 {
   "name": "@vrdmr/fnx-templates-mcp",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Azure Functions templates MCP server — discover and scaffold function templates via AI agents. Based on azure-functions-templates-mcp-server by Manvir Kaur.",
   "type": "module",
   "main": "dist/src/server-factory.js",
