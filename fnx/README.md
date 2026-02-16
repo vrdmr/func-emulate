@@ -57,6 +57,7 @@ fnx start --sku <sku> --scriptroot <path>   # Run function app
 fnx start --sku list                         # List available SKUs
 fnx warmup [--sku <sku>] [--all]            # Pre-download host + bundle
 fnx templates-mcp                            # Start MCP server for AI agents
+fnx pack --scriptroot <path>                # Package function app as deployment zip
 ```
 
 ## MCP Server (for AI Agents)

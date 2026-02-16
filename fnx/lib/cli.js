@@ -7,6 +7,7 @@ import { ensureHost, ensureBundle } from './host-manager.js';
 import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
 import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
+import { detectRuntimeFromConfig, packFunctionApp } from './pack.js';
 
 function isPortFree(port) {
   return new Promise((resolve) => {
@@ -50,6 +51,15 @@ export async function main(args) {
   if (cmd === 'warmup') {
     const { warmup } = await import('./warmup.js');
     await warmup(args.slice(1));
+    return;
+  }
+
+  if (cmd === 'pack') {
+    const scriptRoot = getFlag(args, '--scriptroot') || process.cwd();
+    const runtime = getFlag(args, '--runtime') || await detectRuntimeFromConfig(scriptRoot);
+    const outputPath = getFlag(args, '--output');
+    const noBuild = args.includes('--no-build');
+    await packFunctionApp({ scriptRoot, runtime, outputPath, noBuild });
     return;
   }
 
@@ -239,6 +249,8 @@ Usage: fnx <action> [-/--options]
 Actions:
   start            Launch the Azure Functions host runtime for a specific SKU.
                    Downloads and caches the correct host version automatically.
+  pack             Package a Functions app into a deployment zip (func pack equivalent).
+                   Supports python, node, java, powershell, and dotnet-isolated.
   warmup           Pre-download host binaries and extension bundles for offline use.
                    Runs automatically as postinstall hook. Use --dry-run to preview.
   templates-mcp    Start the Azure Functions templates MCP server (stdio transport).
@@ -261,6 +273,10 @@ Options:
                    • Inline JSON string (e.g. '{"profiles":{...}}')
                    Default: FUNC_PROFILES_URL env var, or http://localhost:4566/api/profiles.
   --verbose        Show all host output (unfiltered). Default: clean output only.
+  --runtime <name> Runtime used by pack. If omitted, reads FUNCTIONS_WORKER_RUNTIME
+                   from app.config.json/local.settings.json.
+  --output <file>  Output zip path for pack. Default: <scriptroot-name>.zip.
+  --no-build       Skip build steps for java/dotnet-isolated during pack.
   -v, --version    Display the version of fnx.
   -h, --help       Display this help information.
 
@@ -287,6 +303,7 @@ Examples:
   fnx start --sku list                List all available SKU profiles with host versions
   fnx start --sku flex --port 8080    Start on a custom port
   fnx start --scriptroot ./my-app     Start from a specific function app directory
+  fnx pack --scriptroot ./my-app      Package function app as zip deployment artifact
 
 Side-by-side comparison:
   # Terminal 1: Run as Flex Consumption
