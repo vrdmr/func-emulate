@@ -25,4 +25,4 @@ Individual feature specs broken out from the [PRD](../prd.md). Each FRD is self-
 
 ## Relationship to PRD
 
-The PRD (`docs/prd.md`) defines the overall vision: make `func start` SKU-aware. These FRDs break the implementation into shippable units. F1–F5 were validated in the fnx POC. F6–F13 have been implemented. F14 covers npm distribution.
+The PRD (`docs/prd.md`) defines the overall vision: make `func start` SKU-aware. These FRDs break the implementation into shippable units. F1–F5 were validated in the fnx POC. F6–F15 have been implemented. F16 covers configuration documentation.

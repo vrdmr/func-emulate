@@ -166,6 +166,15 @@ Update `createLogFilter()` in `host-launcher.js` to:
 - [x] `fnx start | cat` produces no ANSI escape codes
 - [x] Color scheme matches `func start` output (visual parity)
 
+## Additional Improvements (delivered alongside F15)
+
+- **Subcommand help**: `fnx start -h`, `fnx sync -h`, `fnx pack -h`, `fnx warmup -h`, `fnx templates-mcp -h` each show focused help instead of the monolithic help block
+- **Grouped options in `fnx --help`**: Common, Start, Sync, Pack, and Advanced sections so flags are paired with their subcommand
+- **Version info in help**: `fnx --help` shows fnx version, cached host versions (with SKU labels), and cached bundle versions
+- **`--app-path` flag**: Renamed from `--scriptroot`, with smart resolution: explicit path → cwd → `./src` fallback, with host.json validation
+- **Colorized help output**: Section headers, command names, flags, and URLs colored in help text
+- **Background profile refresh**: `fnx --help` fires a non-blocking profile cache refresh
+
 ## Reference
 
 - `repo/src/Cli/func/Common/OutputTheme.cs` — canonical color theme
