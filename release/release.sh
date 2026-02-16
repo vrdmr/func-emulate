@@ -4,9 +4,10 @@ set -euo pipefail
 # release.sh — Build, verify, and publish fnx packages to npm
 #
 # Usage:
-#   ./release/release.sh --dry-run       # Verify everything, don't publish
-#   ./release/release.sh                  # Full release (builds, packs, publishes)
-#   ./release/release.sh --skip-login     # Skip npm login (already authenticated)
+#   ./release/release.sh --dry-run                # Verify everything, don't publish
+#   ./release/release.sh                           # Publish @vrdmr/fnx-test only
+#   ./release/release.sh --include-templates-mcp   # Also publish @vrdmr/fnx-templates-mcp
+#   ./release/release.sh --skip-login              # Skip npm login (already authenticated)
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FNX_DIR="$REPO_ROOT/fnx"
@@ -14,11 +15,13 @@ TEMPLATES_MCP_DIR="$FNX_DIR/templates-mcp"
 
 DRY_RUN=false
 SKIP_LOGIN=false
+INCLUDE_TEMPLATES_MCP=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
     --skip-login) SKIP_LOGIN=true; shift ;;
+    --include-templates-mcp) INCLUDE_TEMPLATES_MCP=true; shift ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -97,7 +100,13 @@ else
   ok "Published $PKG_NAME@$PKG_VER"
 fi
 
-# ── Package 2: @vrdmr/fnx-templates-mcp ──
+# ── Package 2: @vrdmr/fnx-templates-mcp (opt-in) ──
+
+if [[ "$INCLUDE_TEMPLATES_MCP" == false ]]; then
+  banner "Package 2: @vrdmr/fnx-templates-mcp — SKIPPED"
+  echo "  Not included. Use --include-templates-mcp to publish."
+  echo "  (Already published separately by Manvir as azure-functions-templates-mcp-server)"
+else
 
 banner "Package 2: @vrdmr/fnx-templates-mcp"
 
@@ -135,6 +144,8 @@ else
   ok "Published $PKG_NAME2@$PKG_VER2"
 fi
 
+fi  # end --include-templates-mcp
+
 # ── Post-publish verification ──
 
 if [[ "$DRY_RUN" == false ]]; then
@@ -144,20 +155,26 @@ if [[ "$DRY_RUN" == false ]]; then
   sleep 10
 
   npm info "$PKG_NAME" version 2>/dev/null && ok "$PKG_NAME is on npm" || warn "$PKG_NAME not found yet (may take a minute)"
-  npm info "$PKG_NAME2" version 2>/dev/null && ok "$PKG_NAME2 is on npm" || warn "$PKG_NAME2 not found yet (may take a minute)"
+  if [[ "$INCLUDE_TEMPLATES_MCP" == true ]]; then
+    npm info "$PKG_NAME2" version 2>/dev/null && ok "$PKG_NAME2 is on npm" || warn "$PKG_NAME2 not found yet (may take a minute)"
+  fi
 
   echo ""
   echo "  Test with:"
   echo "    npx $PKG_NAME start --sku list"
   echo "    npx $PKG_NAME templates-mcp"
-  echo "    npx $PKG_NAME2"
+  if [[ "$INCLUDE_TEMPLATES_MCP" == true ]]; then
+    echo "    npx $PKG_NAME2"
+  fi
 fi
 
 # ── Done ──
 
 banner "Release complete"
 echo "  $PKG_NAME@$PKG_VER"
-echo "  $PKG_NAME2@$PKG_VER2"
+if [[ "$INCLUDE_TEMPLATES_MCP" == true ]]; then
+  echo "  $PKG_NAME2@$PKG_VER2"
+fi
 if [[ "$DRY_RUN" == true ]]; then
   echo ""
   echo "  This was a dry run. Run without --dry-run to publish."
