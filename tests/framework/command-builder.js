@@ -130,7 +130,7 @@ export class FnxCommand {
 
     const args = [this._action];
     if (this._action === 'start') {
-      args.push('--scriptroot', this._scriptRoot);
+      args.push('--app-path', this._scriptRoot);
       if (this._port) args.push('--port', this._port);
       if (this._verbose) args.push('--verbose');
       if (this._noMcp) args.push('--no-mcp');
@@ -218,7 +218,7 @@ export class FnxCommand {
 
     const args = [this._action];
     if (this._action === 'start') {
-      args.push('--scriptroot', this._scriptRoot);
+      args.push('--app-path', this._scriptRoot);
       if (this._port) args.push('--port', this._port);
       if (this._verbose) args.push('--verbose');
       if (this._noMcp) args.push('--no-mcp');

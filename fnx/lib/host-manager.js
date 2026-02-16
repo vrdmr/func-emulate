@@ -6,6 +6,7 @@ import { homedir, platform } from 'node:os';
 import { createWriteStream } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { arch } from 'node:os';
+import { info, success, warning, dim } from './colors.js';
 
 const FNX_HOME = join(homedir(), '.fnx');
 const HOST_CACHE = join(FNX_HOME, 'hosts');
@@ -125,7 +126,7 @@ export async function ensureHost(profile, { force = false, keepVersions = DEFAUL
   const hostExe = join(hostDir, getHostExeName());
 
   if (!force && existsSync(hostExe)) {
-    console.log('  Host cached, skipping download.');
+    console.log(success('  Host cached, skipping download.'));
     await updateVersionMetadata(HOST_META_FILE, profile.hostVersion, {
       lastUsedAt: toIsoNow(),
       sku: profile.name || profile.displayName,
@@ -150,7 +151,7 @@ export async function ensureHost(profile, { force = false, keepVersions = DEFAUL
     );
   }
 
-  console.log(`  Downloading host ${profile.hostVersion} for ${rid}...`);
+  console.log(info(`  Downloading host ${profile.hostVersion} for ${rid}...`));
 
   await mkdir(hostDir, { recursive: true });
   const tempZip = join(hostDir, '_download.zip');
@@ -196,7 +197,7 @@ export async function ensureHost(profile, { force = false, keepVersions = DEFAUL
       }
     }
 
-    console.log('  Host ready.');
+    console.log(success('  Host ready.'));
   } finally {
     try { await rm(tempZip); } catch { /* ignore */ }
   }
@@ -242,7 +243,7 @@ async function patchWorkerConfigs(hostDir) {
       const old = config.description.defaultExecutablePath;
       config.description.defaultExecutablePath = bestPython;
       await writeFile(workerConfig, JSON.stringify(config, null, 4));
-      console.log(`  Patched python worker config: ${old} → ${bestPython}`);
+      console.log(dim(`  Patched python worker config: ${old} → ${bestPython}`));
     }
   } catch { /* non-fatal */ }
 }
@@ -289,7 +290,7 @@ export async function ensureBundle(profile, { force = false, keepVersions = DEFA
   const maxVersion = profile.maxExtensionBundleVersion;
 
   // Fetch CDN index to get all available versions
-  console.log('  Resolving extension bundle...');
+  console.log(info('  Resolving extension bundle...'));
   let allVersions;
   try {
     const indexUrl = `${BUNDLE_CDN}/${BUNDLE_ID}/index.json`;
@@ -298,7 +299,7 @@ export async function ensureBundle(profile, { force = false, keepVersions = DEFA
     allVersions = await res.json();
   } catch (err) {
     // If CDN is unreachable, check if we have any cached version that fits
-    console.log(`  ⚠️  Bundle index fetch failed (${err.message}), checking cache...`);
+    console.log(warning(`  ⚠️  Bundle index fetch failed (${err.message}), checking cache...`));
     return findCachedBundle(bundleDir, range, maxVersion);
   }
 
@@ -313,7 +314,7 @@ export async function ensureBundle(profile, { force = false, keepVersions = DEFA
 
   const versionDir = join(bundleDir, bestVersion);
   if (!force && existsSync(join(versionDir, 'bundle.json'))) {
-    console.log(`  Bundle ${bestVersion} cached.`);
+    console.log(success(`  Bundle ${bestVersion} cached.`));
     await updateVersionMetadata(BUNDLE_META_FILE, bestVersion, {
       lastUsedAt: toIsoNow(),
       sku: profile.name || profile.displayName,
@@ -329,7 +330,7 @@ export async function ensureBundle(profile, { force = false, keepVersions = DEFA
 
   // Download and extract
   const zipUrl = `${BUNDLE_CDN}/${BUNDLE_ID}/${bestVersion}/${BUNDLE_ID}.${bestVersion}_any-any.zip`;
-  console.log(`  Downloading bundle ${bestVersion}...`);
+  console.log(info(`  Downloading bundle ${bestVersion}...`));
 
   await mkdir(versionDir, { recursive: true });
   const tempZip = join(versionDir, '_bundle.zip');
@@ -364,7 +365,7 @@ export async function ensureBundle(profile, { force = false, keepVersions = DEFA
     } else {
       execSync(`unzip -o -q "${tempZip}" -d "${versionDir}"`, { stdio: 'pipe' });
     }
-    console.log(`  Bundle ${bestVersion} ready.`);
+    console.log(success(`  Bundle ${bestVersion} ready.`));
   } finally {
     try { await rm(tempZip); } catch { /* ignore */ }
   }
@@ -385,7 +386,7 @@ function findCachedBundle(bundleDir, range, maxVersion) {
   const cached = readdirSync(bundleDir).filter(d => existsSync(join(bundleDir, d, 'bundle.json')));
   const best = findBestBundleVersion(cached, range, maxVersion);
   if (best) {
-    console.log(`  Using cached bundle ${best}.`);
+    console.log(success(`  Using cached bundle ${best}.`));
   }
   return best;
 }
@@ -393,6 +394,12 @@ function findCachedBundle(bundleDir, range, maxVersion) {
 export function getCachedHostVersions() {
   if (!existsSync(HOST_CACHE)) return [];
   return readdirSync(HOST_CACHE).filter((v) => existsSync(join(HOST_CACHE, v, getHostExeName())));
+}
+
+export function getCachedBundleVersions() {
+  const bundleDir = join(BUNDLE_CACHE, BUNDLE_ID);
+  if (!existsSync(bundleDir)) return [];
+  return readdirSync(bundleDir).filter((d) => existsSync(join(bundleDir, d, 'bundle.json')));
 }
 
 export { getHostExeName, getPlatformRid, compareVersions, parseVersion, DEFAULT_KEEP_VERSIONS };

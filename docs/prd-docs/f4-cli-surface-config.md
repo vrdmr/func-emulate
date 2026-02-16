@@ -20,7 +20,7 @@ fnx start --sku flex                         # Explicit SKU
 fnx start --sku windows-consumption          # Older host version
 fnx start --sku list                         # Show all SKUs
 fnx start --sku flex --port 8080             # Custom port
-fnx start --scriptroot ./my-app              # Custom app directory
+fnx start --app-path ./my-app              # Custom app directory
 fnx start --profiles ./custom-profiles.json  # Custom profile source
 fnx start --verbose                          # Unfiltered host output
 fnx --version                                # Show version

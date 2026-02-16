@@ -20,8 +20,9 @@ Individual feature specs broken out from the [PRD](../prd.md). Each FRD is self-
 | F12 | [Comprehensive E2E & Unit Tests](./f12-comprehensive-testing.md) | ✅ Implemented | Full test suite for Template MCP + emulator |
 | F13 | [Azurite as Lazy Dependency](./f13-azurite-dependency.md) | ✅ Implemented | Auto-detect, install, and start Azurite for storage triggers |
 | F14 | [npm Release & Distribution](./f14-npm-release.md) | ✅ Implemented | npm publish plan for `fnx` package |
-| F15 | [Colored Log Output](./f15-colored-log-output.md) | 📋 Proposed | ANSI-colored logs matching `func start` theme |
+| F15 | [Colored Log Output](./f15-colored-log-output.md) | ✅ Implemented | ANSI-colored logs matching `func start` theme |
+| F16 | [Configuration Documentation](./f16-configuration-docs.md) | 📋 Proposed | Document config files, merge rules, and validation |
 
 ## Relationship to PRD
 
-The PRD (`docs/prd.md`) defines the overall vision: make `func start` SKU-aware. These FRDs break the implementation into shippable units. F1–F5 were validated in the fnx POC. F6–F13 have been implemented. F14 covers npm distribution.
+The PRD (`docs/prd.md`) defines the overall vision: make `func start` SKU-aware. These FRDs break the implementation into shippable units. F1–F5 were validated in the fnx POC. F6–F15 have been implemented. F16 covers configuration documentation.

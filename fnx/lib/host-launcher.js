@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 import { existsSync } from 'node:fs';
 import { getHostExeName } from './host-manager.js';
 import { ensureAzurite, stopAzurite } from './azurite-manager.js';
+import { title, info, funcName, url as urlColor, success, error as errorColor, warning, dim, highlightUrls } from './colors.js';
 
 // ─── Shared host state (consumed by live MCP server) ─────────────────────
 // This object is populated by the log filter and exposed for the MCP server.
@@ -259,15 +260,15 @@ function createLogFilter(verbose, hostState) {
       }
 
       if (httpFunctions.length > 0 || nonHttpFunctions.length > 0) {
-        console.log('\nFunctions:\n');
+        console.log(title('\nFunctions:\n'));
         for (const fn of httpFunctions) {
-          console.log(`\t${fn.name}: [${fn.methods}] ${baseUrl}/${fn.route}`);
+          console.log(`\t${funcName(fn.name)}: [${fn.methods}] ${urlColor(`${baseUrl}/${fn.route}`)}`);
         }
         for (const fn of nonHttpFunctions) {
-          console.log(`\t${fn.name}: ${fn.triggerType}`);
+          console.log(`\t${funcName(fn.name)}: ${fn.triggerType}`);
         }
         if (!verbose) {
-          console.log('\nFor detailed output, run fnx with --verbose flag.');
+          console.log(dim('\nFor detailed output, run fnx with --verbose flag.'));
         }
         console.log();
       }
@@ -275,6 +276,24 @@ function createLogFilter(verbose, hostState) {
   }
 
   return { processLine, extractFunctionInfo, extractListeningUrl, isSuppressed };
+}
+
+function colorizeHostOutput(line) {
+  // Executing/Executed function invocations
+  const execMatch = line.match(/^(.*?)(Execut(?:ing|ed) 'Functions\.)(\w+)('.*?)(\(Succeeded.*?\)|\(Failed.*?\))?(.*)$/);
+  if (execMatch) {
+    let result = execMatch[1] + execMatch[2] + funcName(execMatch[3]) + execMatch[4];
+    if (execMatch[5]) {
+      result += execMatch[5].startsWith('(Succeeded') ? success(execMatch[5]) : errorColor(execMatch[5]);
+    }
+    result += execMatch[6] || '';
+    return highlightUrls(result);
+  }
+  // "Application started" line
+  if (line.includes('Application started')) {
+    return success(line);
+  }
+  return highlightUrls(line);
 }
 
 export { createLogFilter };
@@ -341,8 +360,8 @@ export async function launchHost(hostDir, opts) {
         }
       } catch { /* non-fatal */ }
     } else {
-      console.error('⚠️  Python runtime requested but no compatible python (3.9-3.13) found.');
-      console.error('   Set "PythonPath" in app.config.json or FNX_PYTHON_PATH env var.');
+      console.error(warning('⚠️  Python runtime requested but no compatible python (3.9-3.13) found.'));
+      console.error(dim('   Set "PythonPath" in app.config.json or FNX_PYTHON_PATH env var.'));
     }
   }
 
@@ -350,11 +369,11 @@ export async function launchHost(hostDir, opts) {
   const azuriteProc = await ensureAzurite(opts.mergedValues, { noAzurite: opts.noAzurite });
 
   console.log();
-  console.log('Azure Functions Local Emulator (fnx — Phoenix Emulate)');
-  console.log(`Emulator Version:  0.1.0`);
-  console.log(`Host Version:      ${opts.profile.hostVersion} (${opts.profile.displayName})`);
+  console.log(title('Azure Functions Local Emulator (fnx — Phoenix Emulate)'));
+  console.log(`${dim('Emulator Version:')}  ${info('0.1.0')}`);
+  console.log(`${dim('Host Version:')}      ${info(`${opts.profile.hostVersion} (${opts.profile.displayName})`)}`);
   if (opts.workerRuntime === 'python' && env['languageWorkers__python__defaultExecutablePath']) {
-    console.log(`Python:            ${env['languageWorkers__python__defaultExecutablePath']} (${env['FUNCTIONS_WORKER_RUNTIME_VERSION'] || 'unknown'})`);
+    console.log(`${dim('Python:')}            ${info(`${env['languageWorkers__python__defaultExecutablePath']} (${env['FUNCTIONS_WORKER_RUNTIME_VERSION'] || 'unknown'})`)}`);
   }
   console.log();
 
@@ -387,7 +406,7 @@ export async function launchHost(hostDir, opts) {
 
       const output = filter.processLine(line);
       if (output) {
-        console.log(output);
+        console.log(colorizeHostOutput(output));
       }
     });
   }
@@ -410,8 +429,8 @@ export async function launchHost(hostDir, opts) {
 
   return new Promise((resolve, reject) => {
     child.on('error', (err) => {
-      console.error(`\nFailed to start host: ${err.message}`);
-      console.error(`Host executable: ${hostExe}`);
+      console.error(errorColor(`\nFailed to start host: ${err.message}`));
+      console.error(dim(`Host executable: ${hostExe}`));
       hostState.state = 'Error';
       reject(err);
     });
@@ -419,9 +438,9 @@ export async function launchHost(hostDir, opts) {
     child.on('exit', (code, signal) => {
       hostState.state = 'Stopped';
       if (signal) {
-        console.log(`\nHost terminated by signal: ${signal}`);
+        console.log(dim(`\nHost terminated by signal: ${signal}`));
       } else if (code !== 0) {
-        console.error(`\nHost exited with code: ${code}`);
+        console.error(errorColor(`\nHost exited with code: ${code}`));
       }
       resolve({ code, hostState });
     });

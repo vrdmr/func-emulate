@@ -167,7 +167,7 @@ Starts fnx with a SKU, waits for the host to be ready (polls the HTTP endpoint),
 
 ```bash
 #!/usr/bin/env bash
-# Usage: ./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app
+# Usage: ./test-tools/start-emu.sh --sku flex --port 7071 --app-path ./test-node-app
 # Output: EMU_PID=<pid> on stdout (for eval)
 # Exit 1 if host doesn't respond within 60s
 set -euo pipefail
@@ -180,7 +180,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --sku) SKU="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
-    --scriptroot) SCRIPTROOT="$2"; shift 2 ;;
+    --app-path) SCRIPTROOT="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -188,10 +188,10 @@ done
 PORT="${PORT:-7071}"
 SCRIPTROOT="${SCRIPTROOT:-./test-node-app}"
 
-echo "Starting fnx --sku $SKU --port $PORT --scriptroot $SCRIPTROOT" >&2
+echo "Starting fnx --sku $SKU --port $PORT --app-path $SCRIPTROOT" >&2
 
 node "$SCRIPT_DIR/fnx/bin/fnx" start \
-  --sku "$SKU" --port "$PORT" --scriptroot "$SCRIPTROOT" &
+  --sku "$SKU" --port "$PORT" --app-path "$SCRIPTROOT" &
 EMU_PID=$!
 
 # Poll for host readiness (check HTTP endpoint, not just process alive)
@@ -341,14 +341,14 @@ With these tools, tests become concise and deterministic:
 
 ```bash
 # Before (fragile):
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071 &
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071 &
 PID=$!
 sleep 15  # hope it's ready...
 curl -s http://localhost:7071/api/hello
 kill $PID 2>/dev/null
 
 # After (deterministic):
-eval $(./test-tools/start-emu.sh --sku flex --port 7071 --scriptroot ./test-node-app)
+eval $(./test-tools/start-emu.sh --sku flex --port 7071 --app-path ./test-node-app)
 ./test-tools/check-endpoint.sh http://localhost:7071/api/hello 200
 ./test-tools/cleanup.sh $EMU_PID
 ```
@@ -409,7 +409,7 @@ node fnx/bin/fnx start --sku list
 # Verify: flex shows 4.1047.100, linux-consumption shows 4.1044.400
 
 # 2b. Invalid SKU name
-node fnx/bin/fnx start --sku nonexistent --scriptroot ./test-node-app 2>&1
+node fnx/bin/fnx start --sku nonexistent --app-path ./test-node-app 2>&1
 # Expected: Error message listing valid SKU names
 
 # 2c. Missing --sku flag
@@ -430,7 +430,7 @@ node fnx/bin/fnx start 2>&1
 rm -rf ~/.fnx/hosts/
 
 # 3a. First run triggers download
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071 &
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071 &
 PID=$!
 sleep 10  # give time for download + extraction + host startup
 
@@ -441,7 +441,7 @@ ls ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
 kill $PID 2>/dev/null
 
 # 3b. Second run uses cache (no download)
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071 &
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071 &
 PID=$!
 sleep 5
 # Expected output includes: "Host cached, skipping download."
@@ -449,7 +449,7 @@ sleep 5
 kill $PID 2>/dev/null
 
 # 3c. Different SKU triggers new download
-node fnx/bin/fnx start --sku windows-consumption --scriptroot ./test-node-app --port 7072 &
+node fnx/bin/fnx start --sku windows-consumption --app-path ./test-node-app --port 7072 &
 PID=$!
 sleep 10
 
@@ -469,7 +469,7 @@ kill $PID 2>/dev/null
 
 ```bash
 # Start with Flex SKU
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
 ```
 
 **Verify** (in another terminal):
@@ -503,7 +503,7 @@ curl -s http://localhost:7071/admin/host/status | jq '.state'
 **What**: Same as Test 4 but with the Windows Consumption profile (older host).
 
 ```bash
-node fnx/bin/fnx start --sku windows-consumption --scriptroot ./test-node-app --port 7072
+node fnx/bin/fnx start --sku windows-consumption --app-path ./test-node-app --port 7072
 ```
 
 **Verify**:
@@ -528,10 +528,10 @@ curl -s http://localhost:7072/api/hello
 
 ```bash
 # Terminal 1:
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
 
 # Terminal 2:
-node fnx/bin/fnx start --sku linux-consumption --scriptroot ./test-node-app --port 7072
+node fnx/bin/fnx start --sku linux-consumption --app-path ./test-node-app --port 7072
 ```
 
 **Verify**:
@@ -561,11 +561,11 @@ ps aux | grep Microsoft.Azure.WebJobs.Script.WebHost | grep -v grep
 
 | SKU | Port | Expected Host Version | Command |
 |-----|------|-----------------------|---------|
-| flex | 7071 | 4.1047.100 | `node bin/fnx start --sku flex --scriptroot ../test-node-app --port 7071` |
-| linux-premium | 7072 | 4.1046.100 | `node bin/fnx start --sku linux-premium --scriptroot ../test-node-app --port 7072` |
-| windows-consumption | 7073 | 4.1045.200 | `node bin/fnx start --sku windows-consumption --scriptroot ../test-node-app --port 7073` |
-| windows-dedicated | 7074 | 4.1045.100 | `node bin/fnx start --sku windows-dedicated --scriptroot ../test-node-app --port 7074` |
-| linux-consumption | 7075 | 4.1044.400 | `node bin/fnx start --sku linux-consumption --scriptroot ../test-node-app --port 7075` |
+| flex | 7071 | 4.1047.100 | `node bin/fnx start --sku flex --app-path ../test-node-app --port 7071` |
+| linux-premium | 7072 | 4.1046.100 | `node bin/fnx start --sku linux-premium --app-path ../test-node-app --port 7072` |
+| windows-consumption | 7073 | 4.1045.200 | `node bin/fnx start --sku windows-consumption --app-path ../test-node-app --port 7073` |
+| windows-dedicated | 7074 | 4.1045.100 | `node bin/fnx start --sku windows-dedicated --app-path ../test-node-app --port 7074` |
+| linux-consumption | 7075 | 4.1044.400 | `node bin/fnx start --sku linux-consumption --app-path ../test-node-app --port 7075` |
 
 For each:
 ```bash
@@ -590,7 +590,7 @@ node fnx/bin/fnx start --sku list
 # Expected: Shows profiles from ~/.fnx/profiles/sku-profiles.json (stale cache)
 
 # 8b. With cached host (from previous runs)
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
 # Expected: Uses cached host, starts normally
 
 # 8c. With no cache at all
@@ -599,7 +599,7 @@ node fnx/bin/fnx start --sku list
 # Expected: Falls back to bundled profiles (from fnx/profiles/sku-profiles.json)
 
 # 8d. With no cache and trying to download host
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
 # Expected: Error — "no host package for platform" or download failure
 # (bundled profiles have localhost URLs, CDN is down, and no cached host)
 ```
@@ -614,13 +614,13 @@ node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
 
 ```bash
 # 9a. No scriptroot / missing local.settings.json
-node fnx/bin/fnx start --sku flex --scriptroot /tmp/nonexistent
+node fnx/bin/fnx start --sku flex --app-path /tmp/nonexistent
 # Expected: Error about missing FUNCTIONS_WORKER_RUNTIME
 
 # 9b. Dotnet runtime rejected
 mkdir -p /tmp/dotnet-app
 echo '{"IsEncrypted":false,"Values":{"FUNCTIONS_WORKER_RUNTIME":"dotnet-isolated"}}' > /tmp/dotnet-app/local.settings.json
-node fnx/bin/fnx start --sku flex --scriptroot /tmp/dotnet-app
+node fnx/bin/fnx start --sku flex --app-path /tmp/dotnet-app
 # Expected: Error — "This POC only supports non-dotnet runtimes"
 
 # 9c. Unknown command
@@ -631,7 +631,7 @@ node fnx/bin/fnx deploy
 mkdir -p ~/.fnx/hosts/4.1047.100
 rm -f ~/.fnx/hosts/4.1047.100/Microsoft.Azure.WebJobs.Script.WebHost
 # (with CDN server running)
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
 # Expected: Re-downloads and extracts host
 ```
 
@@ -654,7 +654,7 @@ ls test-python-app/function_app.py test-python-app/requirements.txt test-python-
 source test-python-app/.venv/bin/activate
 
 # Start with Flex SKU
-node fnx/bin/fnx start --sku flex --scriptroot ./test-python-app --port 7076
+node fnx/bin/fnx start --sku flex --app-path ./test-python-app --port 7076
 ```
 
 **Verify** (in another terminal):
@@ -682,10 +682,10 @@ curl -s http://localhost:7076/api/hello
 
 ```bash
 # Terminal 1: Node app on Flex
-node fnx/bin/fnx start --sku flex --scriptroot ./test-node-app --port 7071
+node fnx/bin/fnx start --sku flex --app-path ./test-node-app --port 7071
 
 # Terminal 2: Python app on Flex (same SKU, same host version!)
-node fnx/bin/fnx start --sku flex --scriptroot ./test-python-app --port 7076
+node fnx/bin/fnx start --sku flex --app-path ./test-python-app --port 7076
 ```
 
 **Verify**:

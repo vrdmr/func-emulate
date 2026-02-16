@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve as resolvePath, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -109,4 +110,18 @@ export async function listProfiles() {
     console.log(`  ${sku}${host}${bundle}${maxBundle}${p.status}`);
   }
   console.log(`\n  Last updated: ${registry.updatedAt}`);
+}
+
+/** Synchronous read: cached profiles → bundled fallback. No network. */
+export function readProfilesSync() {
+  try {
+    if (existsSync(CACHE_FILE)) {
+      return JSON.parse(readFileSync(CACHE_FILE, 'utf-8'));
+    }
+  } catch { /* fall through */ }
+  try {
+    return JSON.parse(readFileSync(BUNDLED_PROFILES_PATH, 'utf-8'));
+  } catch {
+    return null;
+  }
 }
