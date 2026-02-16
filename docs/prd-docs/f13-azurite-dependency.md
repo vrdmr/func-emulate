@@ -133,17 +133,17 @@ Azure Functions runtime is ready
 
 ## Success Criteria
 
-- [ ] `fnx start` with `UseDevelopmentStorage=true` auto-starts Azurite without manual setup
-- [ ] Azurite is installed lazily on first need, not at `npm install fnx`
-- [ ] Azurite stops when `fnx start` exits (SIGINT, SIGTERM)
-- [ ] Existing Azurite instance is detected and reused (no duplicate start)
-- [ ] Storage triggers (Queue, Blob) work out-of-the-box with zero config
-- [ ] Users with real Azure Storage connection strings are unaffected
+- [x] `fnx start` with `UseDevelopmentStorage=true` auto-starts Azurite without manual setup
+- [x] Azurite is installed lazily on first need, not at `npm install fnx`
+- [x] Azurite stops when `fnx start` exits (SIGINT, SIGTERM)
+- [x] Existing Azurite instance is detected and reused (no duplicate start)
+- [x] Storage triggers (Queue, Blob) work out-of-the-box with zero config
+- [x] Users with real Azure Storage connection strings are unaffected
 
-## Open Questions
+## Resolved Questions
 
-- [ ] Install Azurite to project `node_modules` or fnx global cache (`~/.fnx/tools/`)?
-- [ ] Should `fnx start --no-azurite` be an opt-out flag?
-- [ ] Should Azurite data persist across runs (workspace dir) or be ephemeral?
-- [ ] Do we pin a specific Azurite version or use latest?
-- [ ] Should we show Azurite logs inline or only on `--verbose`?
+- **Install location:** fnx global cache (`~/.fnx/tools/azurite/`) — avoids polluting project `node_modules`
+- **Opt-out flag:** Yes — `fnx start --no-azurite` skips Azurite entirely
+- **Data persistence:** Azurite data persists in `~/.fnx/tools/azurite/` across runs (workspace dir)
+- **Version pinning:** Uses latest Azurite at install time; cached thereafter
+- **Log verbosity:** Azurite logs shown only with `--verbose`; startup/port info always shown
