@@ -1,6 +1,10 @@
 /**
- * Live MCP server — exposes running host data over HTTP Streamable transport.
+ * Functions Debug MCP Server — stateless Streamable HTTP transport.
  * Started automatically when `fnx start` launches.
+ *
+ * Follows the official MCP SDK stateless pattern: a fresh McpServer + transport
+ * is created per POST request, cleaned up on response close.
+ * Reference: https://github.com/modelcontextprotocol/typescript-sdk/blob/main/examples/server/src/simpleStatelessStreamableHttp.ts
  *
  * Tools:
  *   get_host_status    — host version, state, uptime, PID, SKU, worker runtime
@@ -12,15 +16,6 @@
  */
 
 import { createServer as createHttpServer } from 'node:http';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const templatesMcpDir = join(__dirname, '..', 'templates-mcp');
-
-// Resolve MCP SDK from templates-mcp's node_modules
-const require = createRequire(join(templatesMcpDir, 'package.json'));
 
 // ─── Tool registration (called per session) ─────────────────────────
 
@@ -245,30 +240,26 @@ Quick health check without digging through verbose logs.`,
   );
 }
 
-// ─── Start live MCP server ──────────────────────────────────────────
+// ─── Start Functions Debug MCP Server (stateless) ───────────────────
 
 export async function startLiveMcpServer(hostState, mcpPort) {
-  const { McpServer } = await import(require.resolve('@modelcontextprotocol/sdk/server/mcp.js'));
+  const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
   const { StreamableHTTPServerTransport } = await import(
-    require.resolve('@modelcontextprotocol/sdk/server/streamableHttp.js')
+    '@modelcontextprotocol/sdk/server/streamableHttp.js'
   );
-  const { z } = await import(require.resolve('zod'));
-  const { randomUUID } = await import('node:crypto');
+  const { z } = await import('zod/v4');
 
-  // Factory: create a new McpServer per session (SDK requirement)
-  function createMcpServer() {
-    const server = new McpServer({
-      name: 'fnx-live',
-      version: '0.1.0',
-    });
-
+  // Factory: creates a fresh McpServer per request (stateless pattern)
+  function getServer() {
+    const server = new McpServer(
+      { name: 'fnx-functions-debug', version: '0.1.0' },
+      { capabilities: { logging: {} } },
+    );
     registerTools(server, hostState, z);
     return server;
   }
 
-  // ─── Start HTTP server with Streamable HTTP transport ───────────────
-
-  const transports = new Map(); // sessionId → { transport, server }
+  // ─── HTTP server with Streamable HTTP transport ─────────────────────
 
   const httpServer = createHttpServer(async (req, res) => {
     // CORS headers for browser-based MCP clients
@@ -283,79 +274,54 @@ export async function startLiveMcpServer(hostState, mcpPort) {
       return;
     }
 
-    // Health check endpoint
+    // Health check
     if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', hostState: hostState.state }));
       return;
     }
 
-    // MCP endpoint at /mcp
+    // MCP endpoint — stateless: new server + transport per POST
     if (req.url === '/mcp' || req.url?.startsWith('/mcp?')) {
-      try {
-        const sessionId = req.headers['mcp-session-id'];
-
-        if (req.method === 'POST') {
-          // Existing session: reuse transport
-          if (sessionId && transports.has(sessionId)) {
-            const { transport } = transports.get(sessionId);
-            await transport.handleRequest(req, res);
-            return;
-          }
-
-          // New session: create server + transport pair
-          const mcpServer = createMcpServer();
+      if (req.method === 'POST') {
+        const server = getServer();
+        try {
           const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => randomUUID(),
-            onsessioninitialized: (sid) => {
-              transports.set(sid, { transport, server: mcpServer });
-            },
+            sessionIdGenerator: undefined, // stateless — no sessions
           });
-
-          transport.onclose = () => {
-            const sid = transport.sessionId;
-            if (sid) transports.delete(sid);
-          };
-
-          await mcpServer.connect(transport);
-          await transport.handleRequest(req, res);
-          return;
-        }
-
-        if (req.method === 'GET') {
-          // SSE stream for notifications
-          if (sessionId && transports.has(sessionId)) {
-            const { transport } = transports.get(sessionId);
-            await transport.handleRequest(req, res);
-            return;
+          await server.connect(transport);
+          await transport.handleRequest(req, res, await readBody(req));
+          res.on('close', () => {
+            transport.close();
+            server.close();
+          });
+        } catch (err) {
+          console.error('[MCP] Error handling request:', err.message);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32603, message: 'Internal server error' },
+              id: null,
+            }));
           }
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Missing or invalid session ID for GET (SSE) request' }));
-          return;
         }
-
-        if (req.method === 'DELETE') {
-          if (sessionId && transports.has(sessionId)) {
-            const { transport, server: mcpServer } = transports.get(sessionId);
-            await transport.handleRequest(req, res);
-            transports.delete(sessionId);
-            await mcpServer.close();
-            return;
-          }
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Session not found' }));
-          return;
-        }
-
-        res.writeHead(405, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Method not allowed. Use POST, GET, or DELETE.' }));
-      } catch (err) {
-        console.error('[MCP] Error handling request:', err.message);
-        if (!res.headersSent) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Internal server error' }));
-        }
+        return;
       }
+
+      // GET and DELETE not supported in stateless mode
+      if (req.method === 'GET' || req.method === 'DELETE') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Method not allowed.' },
+          id: null,
+        }));
+        return;
+      }
+
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Method not allowed. Use POST.' }));
       return;
     }
 
@@ -365,18 +331,50 @@ export async function startLiveMcpServer(hostState, mcpPort) {
   });
 
   return new Promise((resolve, reject) => {
-    httpServer.on('error', (err) => {
-      // Only reject during startup; after that, log and continue
-      if (!httpServer.listening) {
-        reject(err);
+    const maxRetries = 10;
+    let attempt = 0;
+    let port = mcpPort;
+
+    function tryListen() {
+      httpServer.once('error', onError);
+      httpServer.listen(port, '127.0.0.1', () => {
+        httpServer.removeListener('error', onError);
+        // Runtime errors after startup
+        httpServer.on('error', (err) => {
+          console.error(`  ⚠️  MCP server error: ${err.message}`);
+        });
+        console.log(`  Functions Debug MCP Server: http://127.0.0.1:${port}/mcp`);
+        resolve(httpServer);
+      });
+    }
+
+    function onError(err) {
+      if (err.code === 'EADDRINUSE' && attempt < maxRetries) {
+        attempt++;
+        port++;
+        tryListen();
       } else {
-        console.error(`  ⚠️  MCP server error: ${err.message}`);
+        reject(err);
+      }
+    }
+
+    tryListen();
+  });
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString()));
+      } catch {
+        resolve(undefined);
       }
     });
-
-    httpServer.listen(mcpPort, '127.0.0.1', () => {
-      console.log(`  MCP Server:      http://127.0.0.1:${mcpPort}/mcp (Streamable HTTP)`);
-      resolve(httpServer);
-    });
+    req.on('error', reject);
   });
 }
