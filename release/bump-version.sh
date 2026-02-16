@@ -36,24 +36,23 @@ elif [[ "$BUMP" =~ ^(patch|minor|major)$ ]]; then
   esac
   NEW_VER="$MAJ.$MIN.$PAT"
 else
-  echo "Usage: $0 [patch|minor|major|<version>]"
-  echo "  Default: patch"
+  echo "Usage: $0 [patch|minor|major|<version>]" >&2
+  echo "  Default: patch" >&2
   exit 1
 fi
 
 CURRENT=$(node -e "console.log(require('$REPO_ROOT/fnx/package.json').version)")
-echo "Bumping $CURRENT → $NEW_VER"
+echo "Bumping $CURRENT → $NEW_VER" >&2
 
 # fnx
 cd "$REPO_ROOT/fnx"
-npm version "$NEW_VER" --no-git-tag-version --quiet
-echo "  ✓ fnx/package.json → $NEW_VER"
+npm version "$NEW_VER" --no-git-tag-version --quiet >/dev/null
+echo "  ✓ fnx/package.json → $NEW_VER" >&2
 
 # templates-mcp
 cd "$REPO_ROOT/fnx/templates-mcp"
-npm version "$NEW_VER" --no-git-tag-version --quiet
-echo "  ✓ fnx/templates-mcp/package.json → $NEW_VER"
+npm version "$NEW_VER" --no-git-tag-version --quiet >/dev/null
+echo "  ✓ fnx/templates-mcp/package.json → $NEW_VER" >&2
 
-echo ""
-echo "Done. Run the release:"
-echo "  ./release/release.sh           # dry-run first with --dry-run"
+# Output ONLY the version to stdout for callers
+echo "$NEW_VER"
