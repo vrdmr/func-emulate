@@ -410,7 +410,6 @@ ${title('Commands:')}
 ${title('Common Options:')}
   ${success('--sku')} <name>     Target SKU to emulate (default: flex).
                     Use ${success('--sku list')} to see all available SKUs.
-  ${success('--profiles')} <src> Custom SKU profiles source (URL, file path, or inline JSON).
   ${success('--verbose')}        Show all host output (unfiltered).
   ${success('-v')}, ${success('--version')}    Display the version of fnx.
   ${success('-h')}, ${success('--help')}       Display this help information.
@@ -446,7 +445,12 @@ ${title('Examples:')}
   fnx pack --scriptroot ./my-app         Package function app as zip
   fnx sync host --force                  Force re-download host binary
   fnx warmup --all                       Pre-download all SKUs
-  fnx templates-mcp                      Start templates MCP server`.trim());
+  fnx templates-mcp                      Start templates MCP server
+
+${dim('Advanced Options:')}
+  ${success('--profiles')} <src> Override SKU profiles source. Can be a URL, local file path,
+                    or inline JSON. Default: CDN → cached → bundled.
+                    Set FUNC_PROFILES_URL env var for persistent override.`.trim());
 }
 
 function printStartHelp() {
@@ -460,7 +464,6 @@ ${title('Options:')}
   ${success('--scriptroot')} <dir> Path to the function app directory (default: cwd).
   ${success('--port')} <port>      Port for the host HTTP listener (default: 7071).
   ${success('--mcp-port')} <port>  Port for the live MCP server (default: host port + 1).
-  ${success('--profiles')} <src>   Custom SKU profiles source (URL, file path, or inline JSON).
   ${success('--verbose')}          Show all host output (unfiltered).
   ${success('--no-mcp')}           Disable the live MCP server.
   ${success('--no-azurite')}       Skip automatic Azurite start.
@@ -483,7 +486,6 @@ ${title('Options:')}
   ${success('--sku')} <name>       Target SKU to sync (default: flex). Use ${success('--sku list')} to see options.
   ${success('--keep')} <n>         Keep latest N versions in cache (default: 2).
   ${success('--force')}            Re-download even if already cached.
-  ${success('--profiles')} <src>   Custom SKU profiles source.
   ${success('-h')}, ${success('--help')}         Show this help message.
 
 ${title('Examples:')}
