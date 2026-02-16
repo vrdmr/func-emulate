@@ -1,0 +1,5 @@
+# Exclude everything not in "files" field as safety net
+templates-mcp/
+tests/
+*.test.js
+.gitignore
