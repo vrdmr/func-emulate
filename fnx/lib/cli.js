@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { resolveProfile, listProfiles, setProfilesSource, fetchRegistryWithMeta } from './profile-resolver.js';
-import { ensureHost, ensureBundle, getCachedHostVersions, compareVersions, DEFAULT_KEEP_VERSIONS } from './host-manager.js';
+import { ensureHost, ensureBundle, getCachedHostVersions, getCachedBundleVersions, compareVersions, DEFAULT_KEEP_VERSIONS } from './host-manager.js';
 import { launchHost, createHostState } from './host-launcher.js';
 import { startLiveMcpServer } from './live-mcp-server.js';
 import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
@@ -39,7 +39,7 @@ export async function main(args) {
   const cmd = args[0];
 
   if (cmd === '-h' || cmd === '--help' || cmd === 'help' || !cmd) {
-    printHelp();
+    await printHelpWithVersionInfo();
     process.exit(cmd ? 0 : 1);
   }
 
@@ -354,12 +354,29 @@ export async function readJsonFile(filePath) {
   }
 }
 
-function printHelp() {
+async function printHelpWithVersionInfo() {
+  const pkg = await getFnxPackage();
+  const cachedHosts = getCachedHostVersions().sort(compareVersions);
+  const cachedBundles = getCachedBundleVersions().sort(compareVersions);
+  const latestHost = cachedHosts.length ? cachedHosts[cachedHosts.length - 1] : null;
+  const latestBundle = cachedBundles.length ? cachedBundles[cachedBundles.length - 1] : null;
+
+  // Fire-and-forget: refresh profile cache in background.
+  // Won't block -h — process.exit() will terminate regardless.
+  // Ensures the next invocation has fresh data if CDN responds in time.
+  fetchRegistryWithMeta().catch(() => {});
+
   console.log(`
 ${bold(title('Azure Functions Local Emulator (fnx — Phoenix Emulate)'))}
-SKU-aware host runtime for local development.
+${dim('fnx Version:')}        ${title(`${pkg.version}`)}
+${dim('Host Version:')}       ${latestHost ? info(latestHost) : dim('(none cached — run fnx warmup)')}
+${dim('Extension Bundle:')}   ${latestBundle ? info(latestBundle) : dim('(none cached)')}
+`);
+  printHelp();
+}
 
-${title('Usage:')} fnx <command> [options]
+function printHelp() {
+  console.log(`${title('Usage:')} fnx <command> [options]
 
 ${title('Commands:')}
   ${funcName('start')}            Launch the Azure Functions host runtime for a specific SKU.

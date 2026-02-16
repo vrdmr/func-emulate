@@ -396,4 +396,10 @@ export function getCachedHostVersions() {
   return readdirSync(HOST_CACHE).filter((v) => existsSync(join(HOST_CACHE, v, getHostExeName())));
 }
 
+export function getCachedBundleVersions() {
+  const bundleDir = join(BUNDLE_CACHE, BUNDLE_ID);
+  if (!existsSync(bundleDir)) return [];
+  return readdirSync(bundleDir).filter((d) => existsSync(join(bundleDir, d, 'bundle.json')));
+}
+
 export { getHostExeName, getPlatformRid, compareVersions, parseVersion, DEFAULT_KEEP_VERSIONS };
