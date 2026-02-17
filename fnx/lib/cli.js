@@ -12,6 +12,7 @@ import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
 import { detectRuntimeFromConfig, packFunctionApp } from './pack.js';
 import { loadConfig, migrateConfig, validateConfig, showResolvedConfig } from './config.js';
 import { title, info, funcName, url as urlColor, success, error as errorColor, warning, dim, bold, highlightUrls } from './colors.js';
+import { renderBanner } from './help-art.js';
 
 const FNX_HOME = join(homedir(), '.fnx');
 const VERSION_CHECK_FILE = join(FNX_HOME, 'version-check.json');
@@ -438,6 +439,7 @@ async function printHelpWithVersionInfo() {
   // Won't block -h — process.exit() will terminate regardless.
   fetchRegistryWithMeta().catch(() => {});
 
+  console.log(renderBanner());
   console.log(`
 ${bold(title('Azure Functions Local Emulator (fnx — Phoenix Emulate)'))}
 ${dim('fnx Version:')}        ${title(pkg.version)}`);
