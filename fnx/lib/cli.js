@@ -12,6 +12,7 @@ import { detectDotnetModel, printInProcessError } from './dotnet-detector.js';
 import { detectRuntimeFromConfig, packFunctionApp } from './pack.js';
 import { loadConfig, migrateConfig, validateConfig, showResolvedConfig } from './config.js';
 import { title, info, funcName, url as urlColor, success, error as errorColor, warning, dim, bold, highlightUrls } from './colors.js';
+import { renderAsciiFooter } from './help-art.js';
 
 const FNX_HOME = join(homedir(), '.fnx');
 const VERSION_CHECK_FILE = join(FNX_HOME, 'version-check.json');
@@ -87,7 +88,8 @@ export async function main(args) {
   const cmd = args[0];
 
   if (cmd === '-h' || cmd === '--help' || cmd === 'help' || !cmd) {
-    await printHelpWithVersionInfo();
+    const showAscii = args.includes('--ascii');
+    await printHelpWithVersionInfo(showAscii);
     process.exit(cmd ? 0 : 1);
   }
 
@@ -418,7 +420,7 @@ export async function readJsonFile(filePath) {
   }
 }
 
-async function printHelpWithVersionInfo() {
+async function printHelpWithVersionInfo(showAscii = false) {
   const pkg = await getFnxPackage();
   const cachedHosts = getCachedHostVersions().sort(compareVersions);
   const cachedBundles = getCachedBundleVersions().sort(compareVersions);
@@ -457,6 +459,10 @@ ${dim('fnx Version:')}        ${title(pkg.version)}`);
 
   console.log();
   printHelp();
+
+  if (showAscii) {
+    console.log('\n' + renderAsciiFooter());
+  }
 }
 
 function printHelp() {
@@ -479,6 +485,7 @@ ${title('Common Options:')}
   ${success('--verbose')}        Show all host output (unfiltered).
   ${success('-v')}, ${success('--version')}    Display the version of fnx.
   ${success('-h')}, ${success('--help')}       Display this help information.
+  ${success('--ascii')}          Show ASCII art + QR code (use with -h).
 
 ${title('Start Options:')}      ${dim('(fnx start)')}
   ${success('--app-path')} <dir>  Path to the function app directory (default: cwd).
