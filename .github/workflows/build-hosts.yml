@@ -27,9 +27,9 @@ jobs:
         include:
           - os: ubuntu-latest
             rid: linux-x64
-          - os: macos-13        # Intel
+          - os: macos-latest      # Apple Silicon — cross-compiles osx-x64
             rid: osx-x64
-          - os: macos-14        # Apple Silicon
+          - os: macos-latest      # Apple Silicon native
             rid: osx-arm64
           - os: windows-latest
             rid: win-x64
@@ -60,6 +60,7 @@ jobs:
           fi
 
       - name: Build self-contained host
+        shell: bash
         working-directory: host
         run: |
           dotnet publish src/WebJobs.Script.WebHost/WebJobs.Script.WebHost.csproj \
@@ -69,17 +70,26 @@ jobs:
             -p:PublishReadyToRun=false \
             -o ./publish
 
-      - name: Create zip
+      - name: Create zip (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
+          VERSION="${HOST_TAG#v}"
           cd host/publish
-          zip -r -q "../../azure-functions-v${{ inputs.host_tag }}-${{ matrix.rid }}.zip" .
+          zip -r -q "../../azure-functions-v${VERSION}-${{ matrix.rid }}.zip" .
+
+      - name: Create zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "$env:HOST_TAG" -replace '^v', ''
+          Compress-Archive -Path host/publish/* -DestinationPath "azure-functions-v${version}-${{ matrix.rid }}.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: host-${{ matrix.rid }}
-          path: azure-functions-v${{ inputs.host_tag }}-${{ matrix.rid }}.zip
+          path: azure-functions-v*.zip
 
   release:
     needs: build
