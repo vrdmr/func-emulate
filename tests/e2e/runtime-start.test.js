@@ -15,6 +15,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const NODE_APP = resolvePath(__dirname, '..', 'test-node-app');
 const PYTHON_APP = resolvePath(__dirname, '..', 'test-python-app');
 
+// CI needs longer timeouts — host binary + extension bundle downloads
+const IS_CI = !!process.env.CI;
+const READY_TIMEOUT = IS_CI ? 180_000 : 60_000;   // waitForReady pattern match
+const SUITE_TIMEOUT = IS_CI ? 240_000 : 90_000;    // node:test suite timeout
+
 // Helper: send HTTP GET and return { status, body }
 function httpGet(url, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
@@ -45,7 +50,7 @@ async function httpGetWithRetry(url, { retries = 5, delayMs = 1000, timeoutMs = 
   throw new Error(`HTTP GET failed after ${retries} retries: ${url}`);
 }
 
-describe('Node.js — full start + HTTP invocation', { timeout: 90000 }, () => {
+describe('Node.js — full start + HTTP invocation', { timeout: SUITE_TIMEOUT }, () => {
   let running = null;
 
   after(async () => {
@@ -62,7 +67,7 @@ describe('Node.js — full start + HTTP invocation', { timeout: 90000 }, () => {
       .withScriptRoot(NODE_APP)
       .withSku('flex')
       .withVerbose()
-      .withTimeout(60000)
+      .withTimeout(READY_TIMEOUT)
       .waitForReady('Now listening on:');
 
     const result = await cmd.execute();
@@ -104,7 +109,7 @@ describe('Node.js — full start + HTTP invocation', { timeout: 90000 }, () => {
   });
 });
 
-describe('Python — full start + HTTP invocation', { timeout: 90000 }, () => {
+describe('Python — full start + HTTP invocation', { timeout: SUITE_TIMEOUT }, () => {
   let running = null;
 
   after(async () => {
@@ -120,7 +125,7 @@ describe('Python — full start + HTTP invocation', { timeout: 90000 }, () => {
       .withScriptRoot(PYTHON_APP)
       .withSku('flex')
       .withVerbose()
-      .withTimeout(60000)
+      .withTimeout(READY_TIMEOUT)
       .waitForReady('Now listening on:');
 
     const result = await cmd.execute();
@@ -167,8 +172,9 @@ describe('Python — full start + HTTP invocation', { timeout: 90000 }, () => {
   });
 });
 
-describe('Node.js — cross-SKU start', { timeout: 90000 }, () => {
-  const skus = ['flex', 'linux-premium', 'windows-consumption'];
+describe('Node.js — cross-SKU start', { timeout: SUITE_TIMEOUT }, () => {
+  // Only test flex in CI (warmup only downloads flex). Locally test all SKUs.
+  const skus = IS_CI ? ['flex'] : ['flex', 'linux-premium', 'windows-consumption'];
   let running = null;
 
   after(async () => {
@@ -180,11 +186,11 @@ describe('Node.js — cross-SKU start', { timeout: 90000 }, () => {
   });
 
   for (const sku of skus) {
-    test(`start node app with --sku ${sku} shows correct banner`, async () => {
+    test(`start node app with --sku ${sku} shows correct banner`, { timeout: SUITE_TIMEOUT }, async () => {
       const cmd = FnxCommand.start()
         .withScriptRoot(NODE_APP)
         .withSku(sku)
-        .withTimeout(60000)
+        .withTimeout(READY_TIMEOUT)
         .waitForReady('Now listening on:');
 
       try {
@@ -213,7 +219,7 @@ describe('Node.js — cross-SKU start', { timeout: 90000 }, () => {
   }
 });
 
-describe('Azurite lifecycle', { timeout: 90000 }, () => {
+describe('Azurite lifecycle', { timeout: SUITE_TIMEOUT }, () => {
   let running = null;
 
   after(async () => {
@@ -228,7 +234,7 @@ describe('Azurite lifecycle', { timeout: 90000 }, () => {
     const cmd = FnxCommand.start()
       .withScriptRoot(NODE_APP)
       .withSku('flex')
-      .withTimeout(60000)
+      .withTimeout(READY_TIMEOUT)
       .waitForReady('Now listening on:');
 
     const result = await cmd.execute();

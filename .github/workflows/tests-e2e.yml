@@ -132,6 +132,9 @@ jobs:
         run: npm install
         working-directory: tests/test-node-app
 
+      - name: Install Azurite (storage emulator)
+        run: npm install -g azurite
+
       - name: Run runtime start tests
         shell: bash
         run: node --test tests/e2e/runtime-start.test.js
