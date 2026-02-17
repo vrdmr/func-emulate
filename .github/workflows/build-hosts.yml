@@ -70,12 +70,20 @@ jobs:
             -p:PublishReadyToRun=false \
             -o ./publish
 
-      - name: Create zip
+      - name: Create zip (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           VERSION="${HOST_TAG#v}"
           cd host/publish
           zip -r -q "../../azure-functions-v${VERSION}-${{ matrix.rid }}.zip" .
+
+      - name: Create zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "$env:HOST_TAG" -replace '^v', ''
+          Compress-Archive -Path host/publish/* -DestinationPath "azure-functions-v${version}-${{ matrix.rid }}.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
