@@ -62,6 +62,10 @@ PM Agent produces a validation report: checklist of PRD requirements with pass/f
 ### Test → Orchestrator
 Test Agent produces a test report: pass/fail for each test in `docs/testing.md`.
 
+## Repo Boundary Policy
+
+**`repo/` is read-only reference.** The `repo/` directory contains a clone of [Azure/azure-functions-core-tools](https://github.com/Azure/azure-functions-core-tools). It exists solely as a reference implementation. **Do not modify any files in `repo/`.** All feature work lives in `fnx/` (and supporting dirs like `cdn-server/`, `tests/`, `scripts/`). When implementing a feature that `func` already has (e.g., `.funcignore` support, pack, publish), read the `repo/` code to understand the behavior, then reimplement it in `fnx/`.
+
 ## Branch Policy
 
 **Never push directly to `main`.** All work — features, docs, fixes — must go to a feature branch (e.g., `feature/f8-homepage-improvements`) and be merged via PR. Agents must create a new branch for any commits they produce.
