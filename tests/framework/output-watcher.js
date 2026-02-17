@@ -102,6 +102,7 @@ export class OutputWatcher {
       // Poll via waiter mechanism
       const waiter = {
         matcher: () => this._exited,
+        _isExitWaiter: true,
         stream: 'any',
         resolve: () => {
           clearTimeout(timer);
@@ -179,9 +180,13 @@ export class OutputWatcher {
     const resolved = [];
     for (const waiter of this._waiters) {
       const match = this._findMatch(waiter.matcher, waiter.stream);
-      if (match || (waiter.matcher() === true)) {
+      if (match) {
         clearTimeout(waiter.timer);
-        waiter.resolve(match || true);
+        waiter.resolve(match);
+        resolved.push(waiter);
+      } else if (waiter._isExitWaiter && this._exited) {
+        clearTimeout(waiter.timer);
+        waiter.resolve(true);
         resolved.push(waiter);
       }
     }

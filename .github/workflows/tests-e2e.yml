@@ -1,6 +1,5 @@
-# E2E: Full end-to-end tests including CLI startup, cross-SKU, and
-# startup-failure scenarios. These spawn `fnx start` which may attempt
-# host/bundle downloads — too slow for every PR, run on schedule instead.
+# E2E: Full end-to-end tests including CLI startup, HTTP invocation,
+# and trigger registration. Downloads host binaries via fnx warmup.
 #
 # Triggers:
 #   - Daily at 06:00 UTC
@@ -53,6 +52,21 @@ jobs:
       - name: Make fnx executable (Unix)
         if: runner.os != 'Windows'
         run: chmod +x fnx/bin/fnx fnx/bin/fnx-template-mcp
+
+      - name: Cache fnx host binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.fnx
+          key: fnx-hosts-${{ runner.os }}-${{ hashFiles('fnx/profiles/sku-profiles.json') }}
+          restore-keys: fnx-hosts-${{ runner.os }}-
+
+      - name: Warmup — download host binaries and extension bundles
+        shell: bash
+        run: node fnx/bin/fnx warmup
+
+      - name: Install test app dependencies (Node)
+        run: npm install
+        working-directory: tests/test-node-app
 
       - name: Run all E2E tests
         shell: bash
