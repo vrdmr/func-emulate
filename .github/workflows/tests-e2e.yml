@@ -1,5 +1,9 @@
 # E2E: Full end-to-end tests including CLI startup, HTTP invocation,
-# and trigger registration. Downloads host binaries via fnx warmup.
+# and trigger registration.
+#
+# Split into two parallel jobs:
+#   - fast: CLI command tests (no host binaries needed) — ~20s
+#   - runtime: Actual host start + HTTP invocation (needs warmup) — ~60s
 #
 # Triggers:
 #   - Daily at 06:00 UTC
@@ -16,8 +20,68 @@ on:
     branches: [main]
 
 jobs:
-  e2e-tests:
-    name: E2E Tests
+  # Fast CLI tests — no host download needed, run in parallel
+  e2e-fast:
+    name: E2E Fast (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install fnx dependencies
+        run: npm ci
+        working-directory: fnx
+
+      - name: Install test dependencies
+        run: npm ci
+        working-directory: tests
+
+      - name: Install templates-mcp dependencies
+        run: npm ci
+        working-directory: fnx/templates-mcp
+
+      - name: Build templates-mcp
+        run: npx tsc -p tsconfig.json
+        working-directory: fnx/templates-mcp
+
+      - name: Make fnx executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x fnx/bin/fnx fnx/bin/fnx-template-mcp
+
+      - name: Run CLI E2E tests (parallel)
+        shell: bash
+        run: |
+          node --test --test-concurrency=4 \
+            tests/e2e/doctor.test.js \
+            tests/e2e/config-commands.test.js \
+            tests/e2e/pack-sync-warmup.test.js \
+            tests/e2e/start-logging.test.js \
+            tests/e2e/startup-failure.test.js \
+            tests/e2e/cross-sku.test.js \
+            tests/e2e/verbose-mode.test.js \
+            tests/e2e/app-path.test.js
+
+      - name: Run MCP protocol tests (parallel)
+        shell: bash
+        run: |
+          node --test --test-concurrency=3 \
+            tests/e2e/mcp-stdio.test.js \
+            tests/e2e/mcp-tools.test.js \
+            tests/tests-templates-mcp/*.test.js
+
+  # Runtime start tests — need host binaries + Azurite
+  e2e-runtime:
+    name: E2E Runtime (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -68,10 +132,6 @@ jobs:
         run: npm install
         working-directory: tests/test-node-app
 
-      - name: Run all E2E tests
+      - name: Run runtime start tests
         shell: bash
-        run: node --test tests/e2e/*.test.js
-
-      - name: Run MCP protocol tests
-        shell: bash
-        run: node --test tests/tests-templates-mcp/*.test.js
+        run: node --test tests/e2e/runtime-start.test.js
