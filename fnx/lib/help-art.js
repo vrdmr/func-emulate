@@ -1,7 +1,7 @@
-// lib/help-art.js — ASCII art banner + QR code for fnx help output
+// lib/help-art.js — ASCII art footer + QR code for fnx help output
 //
 // Azure Functions ASCII art credit: marcduiker/azure-functions-ascii-art (MIT)
-// QR encodes: https://learn.microsoft.com/azure/azure-functions/
+// QR encodes: https://aka.ms/func-docs
 
 import { dim, url as urlColor, enabled, codes } from './colors.js';
 
@@ -29,29 +29,25 @@ const ART = [
   { line: '                %',                 bright: 0, dark: 1 },
 ];
 
-// Pre-generated QR code (qrcode npm, utf8 output, leading/trailing padding stripped).
-// URL: https://learn.microsoft.com/azure/azure-functions/
+// Pre-generated QR code for https://aka.ms/func-docs
+// (qrcode npm, utf8 output, leading/trailing padding stripped)
 const QR = [
-  `█▀▀▀▀▀█ ▀▀▀    ▀██▀▄  ▄▀█ █▀▀▀▀▀█`,
-  `█ ███ █ ▄▄█▀█▀▄█▀▄▄██▀▀ █ █ ███ █`,
-  `█ ▀▀▀ █ ██ ▄█ █ ▄▄▀█▀█▄▀  █ ▀▀▀ █`,
-  `▀▀▀▀▀▀▀ █▄█ █ ▀▄█▄▀ ▀▄█ ▀ ▀▀▀▀▀▀▀`,
-  `▀▄  ▀ ▀▀▀▄▄▀▀▄ ▄▄▀ ▀▀█▀▄▀█▀▀▀█▄▄▀`,
-  `  ▀██ ▀▄▄   █ ▄▀ █▄▄▀█▀▀ █   ▀ ▄`,
-  `▀ █▀▄▄▀▄▄▄ ▄ ▀▀▀▄ ▀█▀█▀▄▀█▀▄▀█  ▀`,
-  `▄▀▀▀█▄▀ ▄ ▄▀█▄▀ ▀█▀█▄█ ▀▄███▄ ▀▀`,
-  `▄██▀▀ ▀▀ █ █ ▄▀█ ██  █▀█ ▄▀ ▀▄▄█`,
-  `   ▄█▄▀▄▄█▀ ▀ ▀█  ▀▄█▄ █▀█▀█ ▀ ▀▄`,
-  `▄ ▀▀█▀▀▀▄█  ▀ ▀▀▀▄▄▄██▀▄▀▄▀█▀▀▄█▀`,
-  `     █▀▄ ▄    ▀█▄▄▀▄██▀██▀▀ █  ▀▄`,
-  `▀▀▀▀▀ ▀ ▄██▄▄▀▄▄▄▀▄ ▀█▀ █▀▀▀█▀▄▀▀`,
-  `█▀▀▀▀▀█ ▀▄▀▄▀▄█▀ █▄▄ ▄▄ █ ▀ █▀ █`,
-  `█ ███ █ ▀█ ▄█▀ ▀▄ ▀▀█▀█▄█▀███▀  ▀`,
-  `█ ▀▀▀ █  █ ▀▄▀█ ▀▄▄▄▀▄▀ ▄▄▀▀▀▀▀`,
-  `▀▀▀▀▀▀▀ ▀▀▀▀▀▀ ▀ ▀ ▀ ▀▀▀▀▀   ▀  ▀`,
+  `█▀▀▀▀▀█   ▀█▀█▄▄█ █▀▀▀▀▀█`,
+  `█ ███ █ █▄  ▀▄▄██ █ ███ █`,
+  `█ ▀▀▀ █ █  ▀▀▄ ▄▀ █ ▀▀▀ █`,
+  `▀▀▀▀▀▀▀ █ ▀▄▀ █ █ ▀▀▀▀▀▀▀`,
+  `█▄▀█▀█▀ ▄▄█▀▀█ ▀▄ ▀█▀▀▀▄`,
+  `▀▀█▀█▄▀▄ ▀▀ ▀ █▀█▄ ▀ ▀ ▀█`,
+  `█▀ ▄▄▄▀▀▀█  ▄▀▀  ▀▀▄▀▄▀█▀`,
+  `█ ▄▀▀█▀▄ ▀█ ▄ ▀▀▀▄███▀ ▀█`,
+  `▀ ▀ ▀ ▀▀█ █ ▀█▀▀█▀▀▀█▄▀`,
+  `█▀▀▀▀▀█ ▄  █▀▀█ █ ▀ █▄▀▀█`,
+  `█ ███ █ █ █▀█▀▀▀▀▀█▀█▄█▄▄`,
+  `█ ▀▀▀ █ ▀▄█▄▄▀▄▄█▄ ▄▄█▀ █`,
+  `▀▀▀▀▀▀▀ ▀▀▀  ▀▀    ▀▀▀▀▀▀`,
 ];
 
-const DOCS_URL = 'https://learn.microsoft.com/azure/azure-functions/';
+const DOCS_URL = 'https://aka.ms/func-docs';
 const ART_WIDTH = 33;  // widest art line (line 6)
 
 function colorizeArtLine(line, bright, dark) {
@@ -66,14 +62,14 @@ function colorizeArtLine(line, bright, dark) {
 }
 
 /**
- * Render the Azure Functions banner (colorized ASCII art + QR code).
- * Adapts to terminal width: side-by-side ≥ 74 cols, art-only ≥ 40, URL-only otherwise.
+ * Render the ASCII art footer with side-by-side QR code.
+ * Shown only when --ascii is passed. Adapts to terminal width.
  */
-export function renderBanner() {
+export function renderAsciiFooter() {
   const cols = process.stdout.columns || 80;
   const isTTY = process.stdout.isTTY !== false;
 
-  if (isTTY && cols >= 74) return renderSideBySide();
+  if (isTTY && cols >= 66) return renderSideBySide();
   if (isTTY && cols >= 40) return renderArtOnly();
   return `  ${dim('Docs:')} ${urlColor(DOCS_URL)}`;
 }
@@ -88,12 +84,13 @@ function renderArtOnly() {
 }
 
 function renderSideBySide() {
-  const topPad = Math.floor((QR.length - ART.length) / 2); // 3
+  const topPad = Math.max(0, Math.floor((QR.length - ART.length) / 2)); // 1
   const blankArt = ' '.repeat(ART_WIDTH);
   const gap = '    ';
+  const totalRows = Math.max(QR.length, ART.length + topPad);
   const lines = [];
 
-  for (let i = 0; i < QR.length; i++) {
+  for (let i = 0; i < totalRows; i++) {
     const artIdx = i - topPad;
     let artCol;
     if (artIdx >= 0 && artIdx < ART.length) {
@@ -102,7 +99,7 @@ function renderSideBySide() {
     } else {
       artCol = blankArt;
     }
-    lines.push(artCol + gap + QR[i]);
+    lines.push(artCol + gap + (QR[i] || ''));
   }
 
   lines.push('');
