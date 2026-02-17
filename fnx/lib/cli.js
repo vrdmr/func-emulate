@@ -110,6 +110,14 @@ export async function main(args) {
     return;
   }
 
+  if (cmd === 'doctor') {
+    if (hasHelp(args.slice(1))) { printDoctorHelp(); return; }
+    const { runDoctor } = await import('./doctor.js');
+    const appPath = resolveAppPath(args, { requireHostJson: false });
+    const exitCode = await runDoctor(appPath);
+    process.exit(exitCode);
+  }
+
   if (cmd === 'config') {
     if (hasHelp(args.slice(1))) { printConfigHelp(); return; }
     const subCmd = args[1];
@@ -456,6 +464,7 @@ function printHelp() {
 
 ${title('Commands:')}
   ${funcName('start')}            Launch the Azure Functions host runtime for a specific SKU.
+  ${funcName('doctor')}           Validate project setup and diagnose common issues.
   ${funcName('sync')}             Sync cached host/extensions with current catalog profile.
   ${funcName('pack')}             Package a Functions app into a deployment zip.
   ${funcName('config')}           Show, validate, or migrate app configuration.
@@ -499,6 +508,7 @@ ${title('Examples:')}
   fnx start                              Start with default SKU (flex)
   fnx start --sku windows-consumption    Emulate Windows Consumption
   fnx start --sku flex --port 8080       Custom port
+  fnx doctor                             Validate project setup
   fnx pack --app-path ./my-app         Package function app as zip
   fnx sync host --force                  Force re-download host binary
   fnx warmup --all                       Pre-download all SKUs
@@ -652,4 +662,32 @@ ${title('Examples:')}
   fnx config migrate                       Create app-config.yaml from local.settings.json
   fnx config validate                      Check app-config.yaml for errors
   fnx config validate --app-path ./my-app  Validate a specific app`.trim());
+}
+
+function printDoctorHelp() {
+  console.log(`
+${bold(title('fnx doctor'))} — Validate project setup and diagnose common issues.
+
+${title('Usage:')} fnx doctor [options]
+
+${title('Checks:')}
+  • host.json             Present and valid (version 2.0)
+  • app-config.yaml       Schema valid, no secrets, runtime configured
+  • local.settings.json   Present and valid JSON
+  • Worker runtime        Detected from config files
+  • Host cache            Cached host binaries in ~/.fnx/hosts/
+  • Default ports         7071 (HTTP) and 7072 (MCP) availability
+  • Azurite               Storage emulator status
+
+${title('Options:')}
+  ${success('--app-path')} <dir>  Path to the function app directory (default: cwd).
+  ${success('-h')}, ${success('--help')}         Show this help message.
+
+${title('Exit Codes:')}
+  ${success('0')}   All checks passed (or warnings only)
+  ${errorColor('1')}   One or more checks failed
+
+${title('Examples:')}
+  fnx doctor                             Check current directory
+  fnx doctor --app-path ./my-app         Check a specific app`.trim());
 }

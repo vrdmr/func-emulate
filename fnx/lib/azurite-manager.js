@@ -11,6 +11,7 @@ const TABLE_PORT = 10002;
 const AZURITE_INSTALL_DIR = join(homedir(), '.fnx', 'tools', 'azurite');
 
 let azuriteProcess = null;
+let weStartedAzurite = false;
 
 /**
  * Determine whether Azurite is needed based on AzureWebJobsStorage value.
@@ -160,6 +161,7 @@ export async function ensureAzurite(mergedValues, opts = {}) {
   azuriteProcess = spawn(azuriteBin, azuriteArgs, {
     stdio: 'ignore',
   });
+  weStartedAzurite = true;
 
   azuriteProcess.on('error', (err) => {
     console.error(errorColor(`[fnx] Azurite failed to start: ${err.message}`));
@@ -188,11 +190,12 @@ export async function ensureAzurite(mergedValues, opts = {}) {
 }
 
 /**
- * Stop the managed Azurite process.
+ * Stop the managed Azurite process (only if fnx started it).
  */
 export function stopAzurite() {
-  if (azuriteProcess) {
+  if (azuriteProcess && weStartedAzurite) {
     try { azuriteProcess.kill(); } catch { /* already dead */ }
     azuriteProcess = null;
+    weStartedAzurite = false;
   }
 }

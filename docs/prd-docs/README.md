@@ -23,8 +23,8 @@ Individual feature specs broken out from the [PRD](../prd.md). Each FRD is self-
 | F15 | [Colored Log Output](./f15-colored-log-output.md) | ✅ Implemented | ANSI-colored logs matching `func start` theme |
 | F16 | [app-config.yaml — Configuration as Code](./f16-configuration-docs.md) | ✅ Implemented | YAML config, secret detection, auto-creation, config commands |
 | F17 | [fnx init — Project Scaffolding](./f17-fnx-init.md) | 📋 Proposed | Interactive project scaffolding with templates |
-| F18 | [fnx doctor — Project Diagnostics](./f18-fnx-doctor.md) | 📋 Proposed | Project validation and diagnostic tool |
+| F18 | [fnx doctor — Project Diagnostics](./f18-fnx-doctor.md) | ✅ Implemented | Project validation and diagnostic tool |
 
 ## Relationship to PRD
 
-The PRD (`docs/prd.md`) defines the overall vision: make `func start` SKU-aware. These FRDs break the implementation into shippable units. F1–F5 were validated in the fnx POC. F6–F16 have been implemented. F17 and F18 are proposed follow-ups.
+The PRD (`docs/prd.md`) defines the overall vision: make `func start` SKU-aware. These FRDs break the implementation into shippable units. F1–F5 were validated in the fnx POC. F6–F16 and F18 have been implemented. F17 is a proposed follow-up.
