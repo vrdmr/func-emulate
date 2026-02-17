@@ -65,7 +65,7 @@ function colorizeQRLine(line, rowIdx) {
     const isCorner = (rowIdx <= 3 && c <= 6) ||
                      (rowIdx <= 3 && c >= 18) ||
                      (rowIdx >= 9 && c <= 6);
-    const color = isCorner ? '\x1b[94m' : '\x1b[93m';
+    const color = isCorner ? '\x1b[36m' : '\x1b[93m';
     if (color !== prevColor) {
       result += color;
       prevColor = color;
