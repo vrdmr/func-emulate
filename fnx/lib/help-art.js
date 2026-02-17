@@ -12,6 +12,7 @@ import { dim, url as urlColor, enabled, codes } from './colors.js';
 const brightYellow = (s) => enabled ? `\x1b[93m${s}${codes.reset}` : s;
 const darkYellow   = (s) => enabled ? `\x1b[33m${s}${codes.reset}` : s;
 const cyan         = (s) => enabled ? `\x1b[36m${s}${codes.reset}` : s;
+const brightBlue   = (s) => enabled ? `\x1b[94m${s}${codes.reset}` : s;
 
 // Each entry: { line, bright, dark } where bright/dark are the count of
 // %-chars colored as lightning1 vs lightning2 (derived from the SVG coords).
@@ -49,6 +50,30 @@ const QR = [
 
 const DOCS_URL = 'https://aka.ms/func-docs';
 const ART_WIDTH = 33;  // widest art line (line 6)
+
+// QR finder patterns (7×7 modules) in character-row space:
+//   top-left:    rows 0-3, cols 0-6
+//   top-right:   rows 0-3, cols 18-24
+//   bottom-left: rows 9-12, cols 0-6
+function colorizeQRLine(line, rowIdx) {
+  if (!enabled) return line;
+  const chars = [...line];
+  let result = '';
+  let prevColor = null;
+
+  for (let c = 0; c < chars.length; c++) {
+    const isCorner = (rowIdx <= 3 && c <= 6) ||
+                     (rowIdx <= 3 && c >= 18) ||
+                     (rowIdx >= 9 && c <= 6);
+    const color = isCorner ? '\x1b[94m' : '\x1b[93m';
+    if (color !== prevColor) {
+      result += color;
+      prevColor = color;
+    }
+    result += chars[c];
+  }
+  return result + codes.reset;
+}
 
 function colorizeArtLine(line, bright, dark) {
   if (!enabled) return line;
@@ -99,7 +124,7 @@ function renderSideBySide() {
     } else {
       artCol = blankArt;
     }
-    lines.push(artCol + gap + (QR[i] || ''));
+    lines.push(artCol + gap + colorizeQRLine(QR[i] || '', i));
   }
 
   lines.push('');
