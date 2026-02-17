@@ -1,7 +1,8 @@
 import { basename, resolve as resolvePath, join } from 'node:path';
-import { access, constants, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, constants, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
+import { loadFuncIgnore, getFilteredFiles } from './funcignore.js';
 
 const RUNTIME_ALIASES = new Map([
   ['node', 'node'],
@@ -48,7 +49,7 @@ function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
-      stdio: options.silent ? 'pipe' : 'inherit',
+      stdio: options.stdinFile ? ['pipe', 'inherit', 'pipe'] : (options.silent ? 'pipe' : 'inherit'),
       env: process.env,
     });
 
@@ -57,6 +58,13 @@ function runCommand(command, args, options = {}) {
       child.stderr.on('data', (chunk) => {
         stderr += chunk.toString();
       });
+    }
+
+    // Pipe file content to stdin if specified
+    if (options.stdinFile) {
+      readFile(options.stdinFile, 'utf-8').then((content) => {
+        child.stdin.end(content);
+      }).catch(reject);
     }
 
     child.on('error', (err) => reject(err));
@@ -73,6 +81,20 @@ async function ensureExists(pathToCheck) {
 
 async function zipDirectory(sourceDir, outputZip) {
   await runCommand('zip', ['-r', '-q', outputZip, '.'], { cwd: sourceDir });
+}
+
+async function zipFilteredFiles(sourceDir, outputZip, files) {
+  // Write file list to a temp file for zip -@ (read names from stdin)
+  const listFile = join(tmpdir(), `fnx-pack-${Date.now()}.txt`);
+  try {
+    await writeFile(listFile, files.join('\n'), 'utf-8');
+    await runCommand('zip', ['-q', outputZip, '-@'], {
+      cwd: sourceDir,
+      stdinFile: listFile,
+    });
+  } finally {
+    await rm(listFile, { force: true });
+  }
 }
 
 async function stageJavaBuild(scriptRoot) {
@@ -143,14 +165,24 @@ export async function packFunctionApp({ scriptRoot, runtime, outputPath, noBuild
       }
     }
 
-    console.log(`Packing runtime '${resolvedRuntime}' from ${sourceDir}`);
-    await zipDirectory(sourceDir, resolvedOutput);
+    // Always read .funcignore from PROJECT ROOT, not sourceDir (build output)
+    const funcIgnore = await loadFuncIgnore(root, { runtime: resolvedRuntime });
+    const files = await getFilteredFiles(sourceDir, funcIgnore);
+
+    console.log(`Packing runtime '${resolvedRuntime}' from ${sourceDir} (${files.length} files)`);
+
+    if (files.length === 0) {
+      throw new Error('No files to pack after applying .funcignore filters.');
+    }
+
+    await zipFilteredFiles(sourceDir, resolvedOutput, files);
     console.log(`Created package: ${resolvedOutput}`);
 
     return {
       runtime: resolvedRuntime,
       sourceDir,
       outputPath: resolvedOutput,
+      filesIncluded: files.length,
     };
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
