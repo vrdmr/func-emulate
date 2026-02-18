@@ -141,7 +141,6 @@ fnx config validate         # Validate app-config.yaml (schema + secret detectio
 On first `fnx start`, if no `app-config.yaml` exists:
 - If `local.settings.json` exists → auto-creates `app-config.yaml` (extracts non-secrets)
 - If neither exists → interactive prompt to generate both files
-```
 
 ## Environment Variables
 
