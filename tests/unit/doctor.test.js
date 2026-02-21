@@ -187,4 +187,32 @@ describe('fnx doctor', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('Azurite check does not crash on any platform', async () => {
+    // This test ensures the Azurite check (which uses 'where' on Windows, 'which' on Unix)
+    // completes without throwing, regardless of whether Azurite is installed
+    const dir = mkdtempSync(join(tmpdir(), 'fnx-doctor-azurite-'));
+    writeFileSync(join(dir, 'host.json'), JSON.stringify({ version: '2.0' }));
+    writeFileSync(join(dir, 'app-config.yaml'), 'runtime:\n  name: node\n');
+
+    captureConsole();
+    try {
+      // Should not throw even if Azurite is not installed
+      await runDoctor(dir);
+      const output = getOutput();
+      // Should have attempted to check Azurite
+      assert.ok(output.includes('Azurite'), 'Should check Azurite');
+      // Should have some status (pass, warn, or fail)
+      assert.ok(
+        output.includes('Running') ||
+        output.includes('Installed') ||
+        output.includes('Not installed') ||
+        output.includes('auto-install'),
+        'Should report Azurite status'
+      );
+    } finally {
+      restoreConsole();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
