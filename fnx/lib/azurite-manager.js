@@ -60,14 +60,18 @@ async function isAzuriteRunning() {
  * Returns the path/command or null.
  */
 function findAzurite() {
-  // 1. Check the fnx tools cache first
-  const cachedBin = join(AZURITE_INSTALL_DIR, 'node_modules', '.bin', 'azurite');
+  // 1. Check the fnx tools cache first (Windows uses .cmd shims)
+  const isWin = process.platform === 'win32';
+  const cachedBin = join(AZURITE_INSTALL_DIR, 'node_modules', '.bin', isWin ? 'azurite.cmd' : 'azurite');
   if (existsSync(cachedBin)) return cachedBin;
 
-  // 2. Check global PATH
+  // 2. Check global PATH (use 'where' on Windows, 'which' on Unix)
   try {
-    const which = execSync('which azurite', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-    if (which) return which;
+    const whichCmd = isWin ? 'where azurite' : 'which azurite';
+    const result = execSync(whichCmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    // 'where' on Windows may return multiple lines; take the first
+    const firstLine = result.split(/\r?\n/)[0];
+    if (firstLine) return firstLine;
   } catch { /* not found */ }
 
   return null;
@@ -98,7 +102,9 @@ function installAzurite() {
     return null;
   }
 
-  const installed = join(AZURITE_INSTALL_DIR, 'node_modules', '.bin', 'azurite');
+  // Use .cmd on Windows (npm creates .cmd shims for bin entries)
+  const binName = process.platform === 'win32' ? 'azurite.cmd' : 'azurite';
+  const installed = join(AZURITE_INSTALL_DIR, 'node_modules', '.bin', binName);
   if (existsSync(installed)) {
     console.log(info('[fnx] Azurite installed successfully.'));
     return installed;
@@ -158,9 +164,12 @@ export async function ensureAzurite(mergedValues, opts = {}) {
   // Ensure data directory exists
   mkdirSync(join(homedir(), '.fnx', 'azurite-data'), { recursive: true });
 
-  azuriteProcess = spawn(azuriteBin, azuriteArgs, {
-    stdio: 'ignore',
-  });
+  // On Windows, use shell:true so cmd.exe can resolve .cmd shims from PATH-based paths
+  const spawnOptions = process.platform === 'win32'
+    ? { stdio: 'ignore', shell: true }
+    : { stdio: 'ignore' };
+
+  azuriteProcess = spawn(azuriteBin, azuriteArgs, spawnOptions);
   weStartedAzurite = true;
 
   azuriteProcess.on('error', (err) => {
