@@ -1,6 +1,6 @@
 import { basename, resolve as resolvePath, join } from 'node:path';
 import { access, constants, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { tmpdir, platform } from 'node:os';
 import { spawn } from 'node:child_process';
 import { loadFuncIgnore, getFilteredFiles } from './funcignore.js';
 
@@ -80,20 +80,53 @@ async function ensureExists(pathToCheck) {
 }
 
 async function zipDirectory(sourceDir, outputZip) {
-  await runCommand('zip', ['-r', '-q', outputZip, '.'], { cwd: sourceDir });
+  if (platform() === 'win32') {
+    await zipWithPowerShell(sourceDir, outputZip);
+  } else {
+    await runCommand('zip', ['-r', '-q', outputZip, '.'], { cwd: sourceDir });
+  }
 }
 
 async function zipFilteredFiles(sourceDir, outputZip, files) {
-  // Write file list to a temp file for zip -@ (read names from stdin)
-  const listFile = join(tmpdir(), `fnx-pack-${Date.now()}.txt`);
-  try {
-    await writeFile(listFile, files.join('\n'), 'utf-8');
-    await runCommand('zip', ['-q', outputZip, '-@'], {
-      cwd: sourceDir,
-      stdinFile: listFile,
-    });
-  } finally {
-    await rm(listFile, { force: true });
+  if (platform() === 'win32') {
+    await zipWithPowerShell(sourceDir, outputZip, files);
+  } else {
+    // Write file list to a temp file for zip -@ (read names from stdin)
+    const listFile = join(tmpdir(), `fnx-pack-${Date.now()}.txt`);
+    try {
+      await writeFile(listFile, files.join('\n'), 'utf-8');
+      await runCommand('zip', ['-q', outputZip, '-@'], {
+        cwd: sourceDir,
+        stdinFile: listFile,
+      });
+    } finally {
+      await rm(listFile, { force: true });
+    }
+  }
+}
+
+/**
+ * Create a zip archive using PowerShell on Windows.
+ * If `files` is provided, only those relative paths are included.
+ * Otherwise, the entire `sourceDir` is zipped.
+ */
+async function zipWithPowerShell(sourceDir, outputZip, files) {
+  const absOutput = resolvePath(outputZip);
+  if (files) {
+    // Write file list to a temp file, then use PowerShell to read + compress
+    const listFile = join(tmpdir(), `fnx-pack-${Date.now()}.txt`);
+    try {
+      // PowerShell needs absolute paths for Compress-Archive
+      const absPaths = files.map(f => join(sourceDir, f).replace(/\//g, '\\'));
+      await writeFile(listFile, absPaths.join('\n'), 'utf-8');
+      const ps = `$files = Get-Content '${listFile.replace(/'/g, "''")}'; Compress-Archive -Path $files -DestinationPath '${absOutput.replace(/'/g, "''")}' -Force`;
+      await runCommand('powershell', ['-NoProfile', '-Command', ps], { silent: true });
+    } finally {
+      await rm(listFile, { force: true });
+    }
+  } else {
+    const ps = `Compress-Archive -Path '${join(sourceDir, '*').replace(/'/g, "''")}' -DestinationPath '${absOutput.replace(/'/g, "''")}' -Force`;
+    await runCommand('powershell', ['-NoProfile', '-Command', ps], { silent: true });
   }
 }
 

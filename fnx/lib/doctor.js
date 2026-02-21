@@ -182,14 +182,16 @@ async function checkAzurite() {
     return { name: 'Azurite', status: 'pass', message: 'Running on default ports (10000–10002)' };
   }
 
-  // Check if azurite binary is available
-  const cachedBin = join(homedir(), '.fnx', 'tools', 'azurite', 'node_modules', '.bin', 'azurite');
+  // Check if azurite binary is available (Windows uses .cmd shims)
+  const isWin = process.platform === 'win32';
+  const cachedBin = join(homedir(), '.fnx', 'tools', 'azurite', 'node_modules', '.bin', isWin ? 'azurite.cmd' : 'azurite');
   if (existsSync(cachedBin)) {
     return { name: 'Azurite', status: 'warn', message: 'Installed but not running — fnx start will auto-launch it', fix: 'Azurite will start automatically when needed' };
   }
 
   try {
-    execSync('which azurite', { stdio: ['pipe', 'pipe', 'ignore'] });
+    const whichCmd = isWin ? 'where azurite' : 'which azurite';
+    execSync(whichCmd, { stdio: ['pipe', 'pipe', 'ignore'] });
     return { name: 'Azurite', status: 'warn', message: 'Installed globally but not running — fnx start will auto-launch it' };
   } catch { /* not found */ }
 
