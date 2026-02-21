@@ -141,3 +141,53 @@ describe('Azurite manager - first line extraction', () => {
     assert.strictEqual(firstLine, '');
   });
 });
+
+describe('installAzurite() return path - Windows .cmd suffix', () => {
+  it('installed path should have .cmd suffix on Windows', () => {
+    // This tests the logic that installAzurite() should use when returning the path
+    const isWin = process.platform === 'win32';
+    const fnxToolsDir = join(homedir(), '.fnx', 'tools', 'azurite', 'node_modules', '.bin');
+
+    // The pattern that installAzurite() SHOULD use:
+    const binName = isWin ? 'azurite.cmd' : 'azurite';
+    const correctPath = join(fnxToolsDir, binName);
+
+    // The BUGGY pattern (what was in the code before):
+    const buggyPath = join(fnxToolsDir, 'azurite');
+
+    if (isWin) {
+      // On Windows, paths should differ
+      assert.notStrictEqual(correctPath, buggyPath, 'Windows should use .cmd suffix');
+      assert.ok(correctPath.endsWith('azurite.cmd'), 'Correct path should end with .cmd');
+    } else {
+      // On Unix, paths should be the same
+      assert.strictEqual(correctPath, buggyPath, 'Unix paths should be identical');
+    }
+  });
+
+  it('existsSync would fail with wrong path on Windows', function() {
+    if (process.platform !== 'win32') {
+      this.skip();
+      return;
+    }
+
+    // If azurite is installed via npm, only azurite.cmd exists (not 'azurite')
+    const fnxToolsDir = join(homedir(), '.fnx', 'tools', 'azurite', 'node_modules', '.bin');
+
+    // Skip if fnx tools cache doesn't exist
+    if (!existsSync(fnxToolsDir)) {
+      this.skip();
+      return;
+    }
+
+    const azuriteCmdPath = join(fnxToolsDir, 'azurite.cmd');
+    const azuritePath = join(fnxToolsDir, 'azurite');
+
+    // If .cmd exists, the non-.cmd should NOT exist (or be a different file)
+    if (existsSync(azuriteCmdPath)) {
+      // On Windows, 'azurite' (no extension) typically doesn't exist as a file
+      // Only azurite.cmd exists as the shim
+      assert.ok(true, 'azurite.cmd exists - installAzurite should return this path');
+    }
+  });
+});

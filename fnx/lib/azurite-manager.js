@@ -102,7 +102,9 @@ function installAzurite() {
     return null;
   }
 
-  const installed = join(AZURITE_INSTALL_DIR, 'node_modules', '.bin', 'azurite');
+  // Use .cmd on Windows (npm creates .cmd shims for bin entries)
+  const binName = process.platform === 'win32' ? 'azurite.cmd' : 'azurite';
+  const installed = join(AZURITE_INSTALL_DIR, 'node_modules', '.bin', binName);
   if (existsSync(installed)) {
     console.log(info('[fnx] Azurite installed successfully.'));
     return installed;
