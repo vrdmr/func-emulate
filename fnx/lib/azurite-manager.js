@@ -164,9 +164,12 @@ export async function ensureAzurite(mergedValues, opts = {}) {
   // Ensure data directory exists
   mkdirSync(join(homedir(), '.fnx', 'azurite-data'), { recursive: true });
 
-  azuriteProcess = spawn(azuriteBin, azuriteArgs, {
-    stdio: 'ignore',
-  });
+  // On Windows, use shell:true so cmd.exe can resolve .cmd shims from PATH-based paths
+  const spawnOptions = process.platform === 'win32'
+    ? { stdio: 'ignore', shell: true }
+    : { stdio: 'ignore' };
+
+  azuriteProcess = spawn(azuriteBin, azuriteArgs, spawnOptions);
   weStartedAzurite = true;
 
   azuriteProcess.on('error', (err) => {
