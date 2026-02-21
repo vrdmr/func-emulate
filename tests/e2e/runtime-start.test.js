@@ -9,7 +9,10 @@ import { strict as assert } from 'node:assert';
 import { FnxCommand } from '../framework/command-builder.js';
 import { resolve as resolvePath, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { platform } from 'node:os';
 import http from 'node:http';
+
+const IS_WINDOWS = platform() === 'win32';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const NODE_APP = resolvePath(__dirname, '..', 'test-node-app');
@@ -109,7 +112,12 @@ describe('Node.js — full start + HTTP invocation', { timeout: SUITE_TIMEOUT },
   });
 });
 
-describe('Python — full start + HTTP invocation', { timeout: SUITE_TIMEOUT }, () => {
+// Skip Python tests on Windows: the bundled host does not include python worker.
+// See: https://github.com/vrdmr/func-emulate/issues/34
+describe('Python — full start + HTTP invocation', {
+  timeout: SUITE_TIMEOUT,
+  skip: IS_WINDOWS ? 'Python worker not bundled in Windows host package (see #34)' : false,
+}, () => {
   let running = null;
 
   after(async () => {
