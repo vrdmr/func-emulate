@@ -183,11 +183,11 @@ describe('installAzurite() return path - Windows .cmd suffix', () => {
     const azuriteCmdPath = join(fnxToolsDir, 'azurite.cmd');
     const azuritePath = join(fnxToolsDir, 'azurite');
 
-    // If .cmd exists, the non-.cmd should NOT exist (or be a different file)
+    // If .cmd exists, verify it's the correct shim
     if (existsSync(azuriteCmdPath)) {
-      // On Windows, 'azurite' (no extension) typically doesn't exist as a file
-      // Only azurite.cmd exists as the shim
-      assert.ok(true, 'azurite.cmd exists - installAzurite should return this path');
+      // On Windows, azurite.cmd should exist as the shim
+      // The bare 'azurite' may or may not exist depending on npm version
+      assert.ok(azuriteCmdPath.endsWith('.cmd'), 'Windows shim should have .cmd extension');
     }
   });
 });

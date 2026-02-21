@@ -107,7 +107,7 @@ async function zipFilteredFiles(sourceDir, outputZip, files) {
 
 /**
  * Create a zip archive using PowerShell on Windows.
- * If `files` is provided, only those relative paths are included.
+ * If `files` is provided, those paths are converted to absolute paths and included.
  * Otherwise, the entire `sourceDir` is zipped.
  */
 async function zipWithPowerShell(sourceDir, outputZip, files) {

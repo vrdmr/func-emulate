@@ -1,12 +1,12 @@
 /**
- * E2E tests for fnx pack command - Windows Compress-Archive support
+ * Unit tests for fnx pack command - Windows Compress-Archive support
  *
- * These tests verify that fnx pack works correctly on Windows by using
- * PowerShell's Compress-Archive instead of Unix zip command.
+ * These tests verify that packFunctionApp works correctly on Windows by using
+ * PowerShell's Compress-Archive instead of the Unix zip command.
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
@@ -79,8 +79,7 @@ describe('fnx pack - Windows Compress-Archive support', () => {
     // Verify contents using platform-appropriate tool
     let contents;
     if (platform() === 'win32') {
-      // Use PowerShell to list zip contents
-      const ps = `(Get-ChildItem -Path '${outputZip}' | Get-FileHash -Algorithm MD5) -or (Expand-Archive -Path '${outputZip}' -DestinationPath '${join(testAppDir, 'extracted')}' -Force); Get-ChildItem -Path '${join(testAppDir, 'extracted')}' -Recurse | Select-Object -ExpandProperty Name`;
+      // Use PowerShell to extract and list zip contents
       try {
         execSync(`powershell -NoProfile -Command "Expand-Archive -Path '${outputZip}' -DestinationPath '${join(testAppDir, 'extracted')}' -Force"`, { encoding: 'utf-8' });
         contents = execSync(`powershell -NoProfile -Command "Get-ChildItem -Path '${join(testAppDir, 'extracted')}' -Recurse | Select-Object -ExpandProperty Name"`, { encoding: 'utf-8' });
