@@ -9,11 +9,12 @@ Azure Functions Core Tools bundles a single host version, but different SKUs (Fl
 ## Solution
 
 A thin Node.js CLI (`fnx`) that:
+
 1. Fetches a **SKU profile registry** mapping each SKU to its current host version
 2. Downloads the correct **self-contained host** from CDN
 3. Launches it as a child process with clean, filtered output
 
-```
+``` bash
 $ fnx start --sku flex --scriptroot ./my-app
 
 Azure Functions Local Emulator (fnx)
@@ -27,26 +28,46 @@ Functions:
 For detailed output, run fnx with --verbose flag.
 ```
 
-## Quick Start
+## Installation
 
 ### Prerequisites
 
 - **Node.js 18+**
 
-That's it. Host binaries are downloaded automatically from [GitHub Releases](https://github.com/vrdmr/func-emulate/releases).
+### Install via npm (recommended)
+
+```bash
+npm install -g @vrdmr/fnx-test
+```
+
+After installation, the `fnx` command is available globally. On first run, host binaries are downloaded automatically from [GitHub Releases](https://github.com/vrdmr/func-emulate/releases) and cached at `~/.fnx/hosts/`.
+
+### Run without installing (npx)
+
+```bash
+npx @vrdmr/fnx-test start --sku flex --scriptroot ./my-function-app
+```
+
+### Verify installation
+
+```bash
+fnx --version
+```
+
+## Quick Start
 
 ### 1. Run with a SKU
 
 ```bash
 # Default (Flex Consumption, latest host)
-node fnx/bin/fnx start --scriptroot ./my-function-app
+fnx start --scriptroot ./my-function-app
 
 # Specific SKU
-node fnx/bin/fnx start --sku windows-consumption --scriptroot ./my-function-app --port 7072
+fnx start --sku windows-consumption --scriptroot ./my-function-app --port 7072
 
 # Side-by-side comparison (two terminals!)
-node fnx/bin/fnx start --sku flex --port 7071 --scriptroot ./my-function-app
-node fnx/bin/fnx start --sku windows-consumption --port 7072 --scriptroot ./my-function-app
+fnx start --sku flex --port 7071 --scriptroot ./my-function-app
+fnx start --sku windows-consumption --port 7072 --scriptroot ./my-function-app
 ```
 
 On first run, fnx fetches the SKU profile registry from GitHub, downloads the correct host binary (~256MB), and caches it at `~/.fnx/hosts/{version}/`. Subsequent runs start instantly.
@@ -54,10 +75,10 @@ On first run, fnx fetches the SKU profile registry from GitHub, downloads the co
 ### 2. List available SKUs
 
 ```bash
-node fnx/bin/fnx start --sku list
+fnx start --sku list
 ```
 
-```
+```text
 Available SKU profiles:
 
   SKU                     Host Version         Bundle Version    Status
@@ -73,17 +94,17 @@ Available SKU profiles:
 
 ```bash
 # Point to a different profiles JSON (URL, local file, or inline JSON)
-node fnx/bin/fnx start --profiles https://example.com/my-profiles.json --scriptroot ./my-app
-node fnx/bin/fnx start --profiles ./my-profiles.json --scriptroot ./my-app
+fnx start --profiles https://example.com/my-profiles.json --scriptroot ./my-app
+fnx start --profiles ./my-profiles.json --scriptroot ./my-app
 
 # Or via environment variable
 export FUNC_PROFILES_URL=https://example.com/my-profiles.json
-node fnx/bin/fnx start --scriptroot ./my-app
+fnx start --scriptroot ./my-app
 ```
 
 ## CLI Reference
 
-```
+```bash
 fnx <action> [options]
 
 Actions:
@@ -104,13 +125,14 @@ Options:
 fnx reads two config files from the function app directory:
 
 | File | Purpose | Git tracked? |
-|------|---------|-------------|
+| ------ | --------- | ------------- |
 | `app-config.yaml` | Non-secret behavioral settings (runtime, SKU, scale, app settings) | ✅ Yes |
 | `local.settings.json` | Secrets and connection strings | ❌ No (.gitignored) |
 
 Values from both files are merged and injected as environment variables into the host process. `local.settings.json` values take precedence over `app-config.yaml`.
 
 **Example `app-config.yaml`:**
+
 ```yaml
 # Azure Functions App Configuration
 # Commit this to source control. Do NOT put secrets here.
@@ -139,6 +161,7 @@ fnx config validate         # Validate app-config.yaml (schema + secret detectio
 ### Auto-Creation
 
 On first `fnx start`, if no `app-config.yaml` exists:
+
 - If `local.settings.json` exists → auto-creates `app-config.yaml` (extracts non-secrets)
 - If neither exists → interactive prompt to generate both files
 
@@ -150,7 +173,8 @@ On first `fnx start`, if no `app-config.yaml` exists:
 
 ## Project Structure
 
-```
+```text
+
 ├── fnx/                         # The CLI (zero npm dependencies)
 │   ├── bin/fnx                  # Entry point
 │   ├── lib/cli.js               # Argument parsing, config loading, orchestration
@@ -178,24 +202,48 @@ On first `fnx start`, if no `app-config.yaml` exists:
 │   ├── implementation.md        # Implementation Spec
 │   ├── testing.md               # Test Plan
 │   └── npm-release-plan.md      # npm publish roadmap
+
 ```
 
-## How It Works
+## Development (Running from Source)
 
-1. **Config loading**: Reads `app-config.yaml` (or auto-creates from `local.settings.json`), validates schema + secret detection, maps structured YAML to env vars
-2. **Profile resolution**: CLI reads `--sku` flag (or `app-config.yaml` → default `flex`), fetches the SKU profile from CDN (with 1hr cache + bundled fallback)
-3. **Host download**: Downloads the platform-specific host zip for the profile's `hostVersion`, extracts to `~/.fnx/hosts/{version}/`, caches for reuse
-4. **Host launch**: Spawns the self-contained .NET host executable with merged env vars from config. Filters host output for clean display (like `func start`)
+If you're contributing to `fnx` or want to run from a cloned repo instead of the npm package:
 
-## Supported Runtimes
+### Setup
 
-Node.js, Python, Java, PowerShell. Dotnet/dotnet-isolated use in-process hosting and are not supported in this POC.
+```bash
+git clone https://github.com/vrdmr/func-emulate.git
+cd func-emulate
+```
 
-## Test Results
+### Running from source
 
-**158 automated tests** (114 unit + 44 E2E) — all passing.
+```bash
+# Default (Flex Consumption, latest host)
+node fnx/bin/fnx start --scriptroot ./my-function-app
 
-### Running Tests
+# Specific SKU
+node fnx/bin/fnx start --sku windows-consumption --scriptroot ./my-function-app --port 7072
+
+# Side-by-side comparison (two terminals!)
+node fnx/bin/fnx start --sku flex --port 7071 --scriptroot ./my-function-app
+node fnx/bin/fnx start --sku windows-consumption --port 7072 --scriptroot ./my-function-app
+
+# List available SKUs
+node fnx/bin/fnx start --sku list
+```
+
+### Link locally for global `fnx` command
+
+```bash
+cd fnx
+npm install
+npm link
+```
+
+This creates a global `fnx` symlink pointing to your local source, so changes are reflected immediately.
+
+### Running tests
 
 ```bash
 # Unit tests only (fast, no network needed)
@@ -217,10 +265,25 @@ node --test tests/tests-templates-mcp/*.test.js
 node --test tests/unit/*.test.js tests/e2e/*.test.js tests/tests-templates-mcp/*.test.js
 ```
 
+## How It Works
+
+1. **Config loading**: Reads `app-config.yaml` (or auto-creates from `local.settings.json`), validates schema + secret detection, maps structured YAML to env vars
+2. **Profile resolution**: CLI reads `--sku` flag (or `app-config.yaml` → default `flex`), fetches the SKU profile from CDN (with 1hr cache + bundled fallback)
+3. **Host download**: Downloads the platform-specific host zip for the profile's `hostVersion`, extracts to `~/.fnx/hosts/{version}/`, caches for reuse
+4. **Host launch**: Spawns the self-contained .NET host executable with merged env vars from config. Filters host output for clean display (like `func start`)
+
+## Supported Runtimes
+
+Node.js, Python, Java, PowerShell. Dotnet/dotnet-isolated use in-process hosting and are not supported in this POC.
+
+## Test Results
+
+**158 automated tests** (114 unit + 44 E2E) — all passing.
+
 ### Test Suites
 
 | Suite | Tests | What it covers |
-|-------|-------|----------------|
+| ------- | ------- | ---------------- |
 | `tests/unit/log-filter.test.js` | 18 | Log filtering, host state management |
 | `tests/unit/console-output.test.js` | 10 | Clean/verbose output formatting |
 | `tests/unit/config-layering.test.js` | 19 | CLI flags, config merge, SKU precedence |
@@ -236,6 +299,7 @@ node --test tests/unit/*.test.js tests/e2e/*.test.js tests/tests-templates-mcp/*
 ### Test Fixtures
 
 Test fixtures in `tests/fixtures/` provide deterministic inputs:
+
 - `valid-node-app/` — Minimal Node.js function app
 - `invalid-project/` — Broken host.json for error-path testing
 - `inprocess-dotnet/` — In-process .NET project for F9 detection tests
@@ -245,6 +309,7 @@ Test fixtures in `tests/fixtures/` provide deterministic inputs:
 **9/11 manual tests passed** (81.8%) — see [tests/TEST_REPORT.md](tests/TEST_REPORT.md) for details.
 
 Highlights:
+
 - ✅ Side-by-side: Two different host versions (flex + win-consumption) serving the same app simultaneously
 - ✅ All 5 SKUs start successfully
 - ✅ Offline fallback works (cached profiles + hosts)
@@ -253,7 +318,7 @@ Highlights:
 ## Docs
 
 | Document | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | [docs/prd.md](docs/prd.md) | Product Requirements Document |
 | [docs/implementation.md](docs/implementation.md) | Full implementation spec |
 | [docs/testing.md](docs/testing.md) | Test plan (11 scenarios) |
