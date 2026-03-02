@@ -112,6 +112,17 @@ export async function main(args) {
     return;
   }
 
+  if (cmd === 'init') {
+    if (hasHelp(args.slice(1))) {
+      const { printInitHelp } = await import('./init.js');
+      printInitHelp();
+      return;
+    }
+    const { runInit } = await import('./init.js');
+    await runInit(args.slice(1));
+    return;
+  }
+
   if (cmd === 'doctor') {
     if (hasHelp(args.slice(1))) { printDoctorHelp(); return; }
     const { runDoctor } = await import('./doctor.js');
@@ -469,6 +480,7 @@ function printHelp() {
   console.log(`${title('Usage:')} fnx <command> [options]
 
 ${title('Commands:')}
+  ${funcName('init')}             Initialize a new Azure Functions project.
   ${funcName('start')}            Launch the Azure Functions host runtime for a specific SKU.
   ${funcName('doctor')}           Validate project setup and diagnose common issues.
   ${funcName('sync')}             Sync cached host/extensions with current catalog profile.

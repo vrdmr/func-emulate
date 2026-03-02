@@ -10,11 +10,17 @@ Azure Functions Core Tools bundles a single host version, but different SKUs (Fl
 
 A thin Node.js CLI (`fnx`) that:
 
-1. Fetches a **SKU profile registry** mapping each SKU to its current host version
-2. Downloads the correct **self-contained host** from CDN
-3. Launches it as a child process with clean, filtered output
+1. **Scaffolds** new function projects with `fnx init` (templates from CDN)
+2. Fetches a **SKU profile registry** mapping each SKU to its current host version
+3. Downloads the correct **self-contained host** from CDN
+4. Launches it as a child process with clean, filtered output
 
-``` bash
+```
+$ fnx init --runtime node --template http-trigger-typescript my-app
+
+🚀 Initialize a new Azure Functions project
+✓ Project created successfully!
+
 $ fnx start --sku flex --scriptroot ./my-app
 
 Azure Functions Local Emulator (fnx)
@@ -23,62 +29,58 @@ Host Version:      4.1047.100 (Flex Consumption)
 
 Functions:
 
-    hello: [GET,POST] http://localhost:7071/api/hello
+    httpTrigger: [GET,POST] http://localhost:7071/api/httpTrigger
 
 For detailed output, run fnx with --verbose flag.
 ```
 
-## Installation
+## Quick Start
 
 ### Prerequisites
 
 - **Node.js 18+**
 
-### Install via npm (recommended)
+That's it. Host binaries are downloaded automatically from [GitHub Releases](https://github.com/vrdmr/func-emulate/releases).
+
+### 1. Create a new project
 
 ```bash
-npm install -g @vrdmr/fnx-test
+# Interactive mode (guided setup)
+node fnx/bin/fnx init
+
+# Non-interactive with flags
+node fnx/bin/fnx init --runtime node --language typescript --name my-function-app
+
+# Python HTTP function
+node fnx/bin/fnx init --runtime python --template http-trigger --name my-python-app
+
+# Create in current directory
+node fnx/bin/fnx init --runtime node --name .
 ```
 
-After installation, the `fnx` command is available globally. On first run, host binaries are downloaded automatically from [GitHub Releases](https://github.com/vrdmr/func-emulate/releases) and cached at `~/.fnx/hosts/`.
-
-### Run without installing (npx)
-
-```bash
-npx @vrdmr/fnx-test start --sku flex --scriptroot ./my-function-app
-```
-
-### Verify installation
-
-```bash
-fnx --version
-```
-
-## Quick Start
-
-### 1. Run with a SKU
+### 2. Run with a SKU
 
 ```bash
 # Default (Flex Consumption, latest host)
-fnx start --scriptroot ./my-function-app
+node fnx/bin/fnx start --scriptroot ./my-function-app
 
 # Specific SKU
-fnx start --sku windows-consumption --scriptroot ./my-function-app --port 7072
+node fnx/bin/fnx start --sku windows-consumption --scriptroot ./my-function-app --port 7072
 
 # Side-by-side comparison (two terminals!)
-fnx start --sku flex --port 7071 --scriptroot ./my-function-app
-fnx start --sku windows-consumption --port 7072 --scriptroot ./my-function-app
+node fnx/bin/fnx start --sku flex --port 7071 --scriptroot ./my-function-app
+node fnx/bin/fnx start --sku windows-consumption --port 7072 --scriptroot ./my-function-app
 ```
 
 On first run, fnx fetches the SKU profile registry from GitHub, downloads the correct host binary (~256MB), and caches it at `~/.fnx/hosts/{version}/`. Subsequent runs start instantly.
 
-### 2. List available SKUs
+### 3. List available SKUs
 
 ```bash
-fnx start --sku list
+node fnx/bin/fnx start --sku list
 ```
 
-```text
+```
 Available SKU profiles:
 
   SKU                     Host Version         Bundle Version    Status
@@ -90,32 +92,46 @@ Available SKU profiles:
   linux-consumption       4.1044.400           [4.18.*, 5.0.0)   deprecated
 ```
 
-### 3. Use a custom profiles source
+### 4. Use a custom profiles source
 
 ```bash
 # Point to a different profiles JSON (URL, local file, or inline JSON)
-fnx start --profiles https://example.com/my-profiles.json --scriptroot ./my-app
-fnx start --profiles ./my-profiles.json --scriptroot ./my-app
+node fnx/bin/fnx start --profiles https://example.com/my-profiles.json --scriptroot ./my-app
+node fnx/bin/fnx start --profiles ./my-profiles.json --scriptroot ./my-app
 
 # Or via environment variable
 export FUNC_PROFILES_URL=https://example.com/my-profiles.json
-fnx start --scriptroot ./my-app
+node fnx/bin/fnx start --scriptroot ./my-app
 ```
 
 ## CLI Reference
 
-```bash
+```
 fnx <action> [options]
 
 Actions:
+  init             Initialize a new Azure Functions project
   start            Launch the Azure Functions host runtime for a specific SKU
 
-Options:
+Init Options:
+  --name, -n       Project name (creates subdirectory, or "." for current dir)
+  --runtime, -r    Runtime: python, node, dotnet-isolated, java, powershell
+  --version        Runtime version (e.g., 3.11 for Python, 20 for Node.js)
+  --language, -l   For Node.js: typescript (default) or javascript
+  --template, -t   Template name (e.g., http-trigger, blob-trigger)
+  --sku            Target SKU: flex (default), premium, dedicated
+  --force, -f      Initialize in non-empty directory
+  --yes, -y        Accept all defaults (non-interactive)
+  --verbose        Show detailed output
+
+Start Options:
   --sku <name>     Target SKU (flex, linux-premium, windows-consumption, etc.)
                    Resolution: CLI flag → app-config.yaml → local.settings.json → default "flex"
   --app-path       Path to function app directory (default: current directory)
   --port <port>    Host HTTP port (default: 7071)
   --verbose        Show all host output (unfiltered)
+
+Global Options:
   -v, --version    Show version
   -h, --help       Show full help with examples
 ```
@@ -125,7 +141,7 @@ Options:
 fnx reads two config files from the function app directory:
 
 | File | Purpose | Git tracked? |
-| ------ | --------- | ------------- |
+|------|---------|-------------|
 | `app-config.yaml` | Non-secret behavioral settings (runtime, SKU, scale, app settings) | ✅ Yes |
 | `local.settings.json` | Secrets and connection strings | ❌ No (.gitignored) |
 
@@ -173,8 +189,7 @@ On first `fnx start`, if no `app-config.yaml` exists:
 
 ## Project Structure
 
-```text
-
+```
 ├── fnx/                         # The CLI (zero npm dependencies)
 │   ├── bin/fnx                  # Entry point
 │   ├── lib/cli.js               # Argument parsing, config loading, orchestration
@@ -184,6 +199,12 @@ On first `fnx start`, if no `app-config.yaml` exists:
 │   ├── lib/profile-resolver.js  # Fetch/cache SKU profiles (GitHub → cache → bundled)
 │   ├── lib/host-manager.js      # Download/extract/cache host packages
 │   ├── lib/host-launcher.js     # Spawn host process, filter logs
+│   ├── lib/init.js              # fnx init command handler
+│   ├── lib/init/                # Init submodules
+│   │   ├── manifest.js          # Template manifest fetch/cache
+│   │   ├── prompts.js           # Interactive prompts (runtime, trigger, name)
+│   │   ├── scaffold.js          # Template download, file generation
+│   │   └── search.js            # Template search algorithm
 │   └── profiles/sku-profiles.json  # Bundled fallback profiles
 ├── cdn-server/                  # Local CDN mock (dev/testing only)
 │   ├── server.js
@@ -202,52 +223,34 @@ On first `fnx start`, if no `app-config.yaml` exists:
 │   ├── implementation.md        # Implementation Spec
 │   ├── testing.md               # Test Plan
 │   └── npm-release-plan.md      # npm publish roadmap
-
 ```
 
-## Development (Running from Source)
+## How It Works
 
-If you're contributing to `fnx` or want to run from a cloned repo instead of the npm package:
+1. **Config loading**: Reads `app-config.yaml` (or auto-creates from `local.settings.json`), validates schema + secret detection, maps structured YAML to env vars
+2. **Profile resolution**: CLI reads `--sku` flag (or `app-config.yaml` → default `flex`), fetches the SKU profile from CDN (with 1hr cache + bundled fallback)
+3. **Host download**: Downloads the platform-specific host zip for the profile's `hostVersion`, extracts to `~/.fnx/hosts/{version}/`, caches for reuse
+4. **Host launch**: Spawns the self-contained .NET host executable with merged env vars from config. Filters host output for clean display (like `func start`)
 
-### Setup
+## Supported Runtimes
 
-```bash
-git clone https://github.com/vrdmr/func-emulate.git
-cd func-emulate
-```
+Node.js, Python, Java, PowerShell. Dotnet/dotnet-isolated use in-process hosting and are not supported in this POC.
 
-### Running from source
+## Test Results
 
-```bash
-# Default (Flex Consumption, latest host)
-node fnx/bin/fnx start --scriptroot ./my-function-app
+**200+ automated tests** (unit + E2E) — all passing.
 
-# Specific SKU
-node fnx/bin/fnx start --sku windows-consumption --scriptroot ./my-function-app --port 7072
-
-# Side-by-side comparison (two terminals!)
-node fnx/bin/fnx start --sku flex --port 7071 --scriptroot ./my-function-app
-node fnx/bin/fnx start --sku windows-consumption --port 7072 --scriptroot ./my-function-app
-
-# List available SKUs
-node fnx/bin/fnx start --sku list
-```
-
-### Link locally for global `fnx` command
-
-```bash
-cd fnx
-npm install
-npm link
-```
-
-This creates a global `fnx` symlink pointing to your local source, so changes are reflected immediately.
-
-### Running tests
+### Running Tests
 
 ```bash
 # Unit tests only (fast, no network needed)
-node --test tests/unit/*.test.js
+node --test tests/unit/
+
+# E2E tests — fnx init (scaffolding, templates)
+node --test tests/e2e/init.test.js
+
+# E2E tests — init → build → start → invoke (requires func CLI or fnx warmup)
+node --test tests/e2e/init-start-flow.test.js
 
 # E2E tests — MCP server (spawns fnx templates-mcp over stdio)
 node --test tests/e2e/mcp-stdio.test.js tests/e2e/mcp-tools.test.js
@@ -265,25 +268,12 @@ node --test tests/tests-templates-mcp/*.test.js
 node --test tests/unit/*.test.js tests/e2e/*.test.js tests/tests-templates-mcp/*.test.js
 ```
 
-## How It Works
-
-1. **Config loading**: Reads `app-config.yaml` (or auto-creates from `local.settings.json`), validates schema + secret detection, maps structured YAML to env vars
-2. **Profile resolution**: CLI reads `--sku` flag (or `app-config.yaml` → default `flex`), fetches the SKU profile from CDN (with 1hr cache + bundled fallback)
-3. **Host download**: Downloads the platform-specific host zip for the profile's `hostVersion`, extracts to `~/.fnx/hosts/{version}/`, caches for reuse
-4. **Host launch**: Spawns the self-contained .NET host executable with merged env vars from config. Filters host output for clean display (like `func start`)
-
-## Supported Runtimes
-
-Node.js, Python, Java, PowerShell. Dotnet/dotnet-isolated use in-process hosting and are not supported in this POC.
-
-## Test Results
-
-**158 automated tests** (114 unit + 44 E2E) — all passing.
-
 ### Test Suites
 
 | Suite | Tests | What it covers |
-| ------- | ------- | ---------------- |
+|-------|-------|----------------|
+| `tests/unit/init.test.js` | 58 | fnx init command, manifest fetch, scaffold, flags |
+| `tests/unit/prompts.test.js` | 27 | Interactive prompts, validation, runtime/trigger selection |
 | `tests/unit/log-filter.test.js` | 18 | Log filtering, host state management |
 | `tests/unit/console-output.test.js` | 10 | Clean/verbose output formatting |
 | `tests/unit/config-layering.test.js` | 19 | CLI flags, config merge, SKU precedence |
@@ -291,6 +281,8 @@ Node.js, Python, Java, PowerShell. Dotnet/dotnet-isolated use in-process hosting
 | `tests/unit/profile-resolver.test.js` | 16 | SKU resolution, inline JSON, file path, errors |
 | `tests/unit/host-manager.test.js` | 12 | Platform detection, host cache, bundle capping |
 | `tests/unit/config-merge.test.js` | 15 | Env construction, secret redaction, bundle calc |
+| `tests/e2e/init.test.js` | 19 | fnx init E2E: help, errors, non-interactive, templates |
+| `tests/e2e/init-start-flow.test.js` | 3 | Full init → build → start → HTTP invoke flow |
 | `tests/e2e/mcp-stdio.test.js` | 11 | MCP stdio transport, concurrent calls, shutdown |
 | `tests/e2e/mcp-tools.test.js` | 14 | MCP tool invocation (template + SKU tools) |
 | `tests/e2e/startup-failure.test.js` | 7 | Invalid project, .NET in-process detection |
@@ -318,7 +310,7 @@ Highlights:
 ## Docs
 
 | Document | Description |
-| ---------- | ------------- |
+|----------|-------------|
 | [docs/prd.md](docs/prd.md) | Product Requirements Document |
 | [docs/implementation.md](docs/implementation.md) | Full implementation spec |
 | [docs/testing.md](docs/testing.md) | Test plan (11 scenarios) |
