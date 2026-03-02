@@ -9,11 +9,18 @@ Azure Functions Core Tools bundles a single host version, but different SKUs (Fl
 ## Solution
 
 A thin Node.js CLI (`fnx`) that:
-1. Fetches a **SKU profile registry** mapping each SKU to its current host version
-2. Downloads the correct **self-contained host** from CDN
-3. Launches it as a child process with clean, filtered output
+
+1. **Scaffolds** new function projects with `fnx init` (templates from CDN)
+2. Fetches a **SKU profile registry** mapping each SKU to its current host version
+3. Downloads the correct **self-contained host** from CDN
+4. Launches it as a child process with clean, filtered output
 
 ```
+$ fnx init --runtime node --template http-trigger-typescript my-app
+
+🚀 Initialize a new Azure Functions project
+✓ Project created successfully!
+
 $ fnx start --sku flex --scriptroot ./my-app
 
 Azure Functions Local Emulator (fnx)
@@ -22,7 +29,7 @@ Host Version:      4.1047.100 (Flex Consumption)
 
 Functions:
 
-    hello: [GET,POST] http://localhost:7071/api/hello
+    httpTrigger: [GET,POST] http://localhost:7071/api/httpTrigger
 
 For detailed output, run fnx with --verbose flag.
 ```
@@ -35,7 +42,23 @@ For detailed output, run fnx with --verbose flag.
 
 That's it. Host binaries are downloaded automatically from [GitHub Releases](https://github.com/vrdmr/func-emulate/releases).
 
-### 1. Run with a SKU
+### 1. Create a new project
+
+```bash
+# Interactive mode (guided setup)
+node fnx/bin/fnx init
+
+# Non-interactive with flags
+node fnx/bin/fnx init --runtime node --language typescript --name my-function-app
+
+# Python HTTP function
+node fnx/bin/fnx init --runtime python --template http-trigger --name my-python-app
+
+# Create in current directory
+node fnx/bin/fnx init --runtime node --name .
+```
+
+### 2. Run with a SKU
 
 ```bash
 # Default (Flex Consumption, latest host)
@@ -51,7 +74,7 @@ node fnx/bin/fnx start --sku windows-consumption --port 7072 --scriptroot ./my-f
 
 On first run, fnx fetches the SKU profile registry from GitHub, downloads the correct host binary (~256MB), and caches it at `~/.fnx/hosts/{version}/`. Subsequent runs start instantly.
 
-### 2. List available SKUs
+### 3. List available SKUs
 
 ```bash
 node fnx/bin/fnx start --sku list
@@ -69,7 +92,7 @@ Available SKU profiles:
   linux-consumption       4.1044.400           [4.18.*, 5.0.0)   deprecated
 ```
 
-### 3. Use a custom profiles source
+### 4. Use a custom profiles source
 
 ```bash
 # Point to a different profiles JSON (URL, local file, or inline JSON)
@@ -87,14 +110,28 @@ node fnx/bin/fnx start --scriptroot ./my-app
 fnx <action> [options]
 
 Actions:
+  init             Initialize a new Azure Functions project
   start            Launch the Azure Functions host runtime for a specific SKU
 
-Options:
+Init Options:
+  --name, -n       Project name (creates subdirectory, or "." for current dir)
+  --runtime, -r    Runtime: python, node, dotnet-isolated, java, powershell
+  --version        Runtime version (e.g., 3.11 for Python, 20 for Node.js)
+  --language, -l   For Node.js: typescript (default) or javascript
+  --template, -t   Template name (e.g., http-trigger, blob-trigger)
+  --sku            Target SKU: flex (default), premium, dedicated
+  --force, -f      Initialize in non-empty directory
+  --yes, -y        Accept all defaults (non-interactive)
+  --verbose        Show detailed output
+
+Start Options:
   --sku <name>     Target SKU (flex, linux-premium, windows-consumption, etc.)
                    Resolution: CLI flag → app-config.yaml → local.settings.json → default "flex"
   --app-path       Path to function app directory (default: current directory)
   --port <port>    Host HTTP port (default: 7071)
   --verbose        Show all host output (unfiltered)
+
+Global Options:
   -v, --version    Show version
   -h, --help       Show full help with examples
 ```
@@ -111,6 +148,7 @@ fnx reads two config files from the function app directory:
 Values from both files are merged and injected as environment variables into the host process. `local.settings.json` values take precedence over `app-config.yaml`.
 
 **Example `app-config.yaml`:**
+
 ```yaml
 # Azure Functions App Configuration
 # Commit this to source control. Do NOT put secrets here.
@@ -139,6 +177,7 @@ fnx config validate         # Validate app-config.yaml (schema + secret detectio
 ### Auto-Creation
 
 On first `fnx start`, if no `app-config.yaml` exists:
+
 - If `local.settings.json` exists → auto-creates `app-config.yaml` (extracts non-secrets)
 - If neither exists → interactive prompt to generate both files
 
@@ -160,6 +199,12 @@ On first `fnx start`, if no `app-config.yaml` exists:
 │   ├── lib/profile-resolver.js  # Fetch/cache SKU profiles (GitHub → cache → bundled)
 │   ├── lib/host-manager.js      # Download/extract/cache host packages
 │   ├── lib/host-launcher.js     # Spawn host process, filter logs
+│   ├── lib/init.js              # fnx init command handler
+│   ├── lib/init/                # Init submodules
+│   │   ├── manifest.js          # Template manifest fetch/cache
+│   │   ├── prompts.js           # Interactive prompts (runtime, trigger, name)
+│   │   ├── scaffold.js          # Template download, file generation
+│   │   └── search.js            # Template search algorithm
 │   └── profiles/sku-profiles.json  # Bundled fallback profiles
 ├── cdn-server/                  # Local CDN mock (dev/testing only)
 │   ├── server.js
@@ -193,13 +238,19 @@ Node.js, Python, Java, PowerShell. Dotnet/dotnet-isolated use in-process hosting
 
 ## Test Results
 
-**158 automated tests** (114 unit + 44 E2E) — all passing.
+**200+ automated tests** (unit + E2E) — all passing.
 
 ### Running Tests
 
 ```bash
 # Unit tests only (fast, no network needed)
-node --test tests/unit/*.test.js
+node --test tests/unit/
+
+# E2E tests — fnx init (scaffolding, templates)
+node --test tests/e2e/init.test.js
+
+# E2E tests — init → build → start → invoke (requires func CLI or fnx warmup)
+node --test tests/e2e/init-start-flow.test.js
 
 # E2E tests — MCP server (spawns fnx templates-mcp over stdio)
 node --test tests/e2e/mcp-stdio.test.js tests/e2e/mcp-tools.test.js
@@ -221,6 +272,8 @@ node --test tests/unit/*.test.js tests/e2e/*.test.js tests/tests-templates-mcp/*
 
 | Suite | Tests | What it covers |
 |-------|-------|----------------|
+| `tests/unit/init.test.js` | 58 | fnx init command, manifest fetch, scaffold, flags |
+| `tests/unit/prompts.test.js` | 27 | Interactive prompts, validation, runtime/trigger selection |
 | `tests/unit/log-filter.test.js` | 18 | Log filtering, host state management |
 | `tests/unit/console-output.test.js` | 10 | Clean/verbose output formatting |
 | `tests/unit/config-layering.test.js` | 19 | CLI flags, config merge, SKU precedence |
@@ -228,6 +281,8 @@ node --test tests/unit/*.test.js tests/e2e/*.test.js tests/tests-templates-mcp/*
 | `tests/unit/profile-resolver.test.js` | 16 | SKU resolution, inline JSON, file path, errors |
 | `tests/unit/host-manager.test.js` | 12 | Platform detection, host cache, bundle capping |
 | `tests/unit/config-merge.test.js` | 15 | Env construction, secret redaction, bundle calc |
+| `tests/e2e/init.test.js` | 19 | fnx init E2E: help, errors, non-interactive, templates |
+| `tests/e2e/init-start-flow.test.js` | 3 | Full init → build → start → HTTP invoke flow |
 | `tests/e2e/mcp-stdio.test.js` | 11 | MCP stdio transport, concurrent calls, shutdown |
 | `tests/e2e/mcp-tools.test.js` | 14 | MCP tool invocation (template + SKU tools) |
 | `tests/e2e/startup-failure.test.js` | 7 | Invalid project, .NET in-process detection |
@@ -236,6 +291,7 @@ node --test tests/unit/*.test.js tests/e2e/*.test.js tests/tests-templates-mcp/*
 ### Test Fixtures
 
 Test fixtures in `tests/fixtures/` provide deterministic inputs:
+
 - `valid-node-app/` — Minimal Node.js function app
 - `invalid-project/` — Broken host.json for error-path testing
 - `inprocess-dotnet/` — In-process .NET project for F9 detection tests
@@ -245,6 +301,7 @@ Test fixtures in `tests/fixtures/` provide deterministic inputs:
 **9/11 manual tests passed** (81.8%) — see [tests/TEST_REPORT.md](tests/TEST_REPORT.md) for details.
 
 Highlights:
+
 - ✅ Side-by-side: Two different host versions (flex + win-consumption) serving the same app simultaneously
 - ✅ All 5 SKUs start successfully
 - ✅ Offline fallback works (cached profiles + hosts)

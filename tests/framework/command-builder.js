@@ -90,6 +90,25 @@ export class FnxCommand {
     return this;
   }
 
+  /**
+   * Enable stdin for interactive prompts.
+   * When enabled, execute() returns a child process with writable stdin.
+   */
+  withInteractive() {
+    this._interactive = true;
+    return this;
+  }
+
+  /**
+   * Set stdin input to send after spawning (for scripted interactive tests).
+   * Input is written after a short delay to allow prompts to display.
+   * @param {string} input - The input to send (e.g., "1\n" for selection)
+   */
+  withStdinInput(input) {
+    this._stdinInput = input;
+    return this;
+  }
+
   withEnv(key, value) {
     this._env[key] = value;
     return this;
@@ -140,11 +159,22 @@ export class FnxCommand {
 
     const env = { ...process.env, ...this._env };
 
+    // Use pipe for stdin if interactive mode is enabled
+    const stdinMode = this._interactive || this._stdinInput ? 'pipe' : 'ignore';
+
     const child = spawn('node', [FNX_BIN, ...args], {
       env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: [stdinMode, 'pipe', 'pipe'],
       cwd: this._scriptRoot,
     });
+
+    // If stdin input was provided, write it after a short delay
+    if (this._stdinInput && child.stdin) {
+      setTimeout(() => {
+        child.stdin.write(this._stdinInput);
+        child.stdin.end();
+      }, 500); // Allow prompts to display first
+    }
 
     const watcher = new OutputWatcher(child);
 
