@@ -259,9 +259,10 @@ describe('fnx init - Interactive prompts (readline)', () => {
 
   describe('promptProjectName - default name logic', () => {
     it('should use directory basename as default', async () => {
-      const { basename } = await import('node:path');
-      assert.strictEqual(basename('/home/user/my-project'), 'my-project');
-      assert.strictEqual(basename('C:\\Users\\dev\\func-app'), 'func-app');
+      // Use path.posix for consistent behavior across platforms
+      const { posix, win32 } = await import('node:path');
+      assert.strictEqual(posix.basename('/home/user/my-project'), 'my-project');
+      assert.strictEqual(win32.basename('C:\\Users\\dev\\func-app'), 'func-app');
     });
 
     it('should fallback to my-function-app for root or empty basename', async () => {

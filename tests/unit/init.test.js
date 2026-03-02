@@ -359,6 +359,7 @@ describe('fnx init - manifest fetching (mocked)', () => {
 
   it('returns manifest from successful fetch', async () => {
     const mockManifest = {
+      repositoryUrl: 'https://github.com/Azure/azure-functions-templates',
       templates: [
         { id: 'test-1', runtime: 'python', trigger: 'http' },
         { id: 'test-2', runtime: 'node', trigger: 'timer' },
