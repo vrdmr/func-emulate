@@ -40,3 +40,4 @@ __pycache__/
 # Test reports (local only)
 test-report.md
 Azfunc-config.pdf
+fnx/templates/manifest.json

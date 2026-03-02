@@ -3,8 +3,8 @@
 // Reads app-config.yaml (primary) or auto-creates it from local.settings.json.
 // Validates against config-schema.js, checks for secrets, manages .gitignore protection.
 
-import { readFile, writeFile, access, readdir } from 'node:fs/promises';
-import { join, resolve as resolvePath } from 'node:path';
+import { readFile, writeFile, access } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
@@ -132,6 +132,51 @@ export async function migrateConfig(appPath) {
   }
 
   return autoCreateFromLocalSettings(appPath, localSettingsPath);
+}
+
+/**
+ * Create app-config.yaml from local.settings.json (if exists) with CLI overrides.
+ * Used by fnx init to generate config after template download.
+ * @param {string} appPath - Directory containing local.settings.json
+ * @param {Object} overrides - { runtime, version, sku } from CLI flags
+ * @param {Object} options - { silent: boolean } suppress output
+ * @returns {Promise<boolean>} true if file was created, false if already exists
+ */
+export async function createAppConfig(appPath, overrides = {}, options = {}) {
+  const appConfigPath = join(appPath, APP_CONFIG_FILE);
+  
+  // Skip if already exists
+  if (await fileExists(appConfigPath)) {
+    return false;
+  }
+
+  const localSettingsPath = join(appPath, LOCAL_SETTINGS_FILE);
+  let localSettings = {};
+  
+  if (await fileExists(localSettingsPath)) {
+    try {
+      localSettings = await readJsonFile(localSettingsPath);
+    } catch {
+      // Ignore parse errors, proceed with overrides only
+    }
+  }
+
+  // Build config using shared function (overrides take precedence)
+  const config = buildConfigFromLocalSettings(localSettings, overrides);
+
+  // Ensure EnableWorkerIndexing is set
+  config.configurations = config.configurations || {};
+  config.configurations.AzureWebJobsFeatureFlags = 
+    config.configurations.AzureWebJobsFeatureFlags || 'EnableWorkerIndexing';
+
+  // Write app-config.yaml
+  await writeFile(appConfigPath, generateYaml(config), 'utf-8');
+
+  if (!options.silent) {
+    console.log(successColor(`  ✓ Created app-config.yaml`));
+  }
+
+  return true;
 }
 
 /**
@@ -263,6 +308,52 @@ async function readJsonFile(filePath) {
   }
 }
 
+/**
+ * Build config object from local.settings.json values.
+ * Extracts runtime, version, sku, and allowed configurations (excluding secrets).
+ * @param {Object} localSettings - Parsed local.settings.json object
+ * @param {Object} overrides - Optional overrides { runtime, version, sku }
+ * @returns {Object} Config object ready for generateYaml()
+ */
+export function buildConfigFromLocalSettings(localSettings, overrides = {}) {
+  const values = localSettings?.Values || {};
+  const secrets = detectSecretsInFlatValues(values);
+
+  // Build structured config
+  const config = {};
+
+  // Extract runtime (CLI override takes precedence)
+  const runtime = overrides.runtime || values.FUNCTIONS_WORKER_RUNTIME;
+  if (runtime) {
+    config.runtime = { name: runtime };
+    // Check for runtime version (CLI override takes precedence)
+    const version = overrides.version || values.FUNCTIONS_WORKER_RUNTIME_VERSION;
+    if (version) config.runtime.version = version;
+  }
+
+  // Extract targetSku (CLI override takes precedence)
+  const sku = overrides.sku || localSettings.TargetSku;
+  if (sku) {
+    config.local = { targetSku: sku };
+  }
+
+  // Remaining non-secret, non-structured values → configurations
+  const structuredEnvVars = new Set(Object.values(STRUCTURED_FIELDS).map(s => s.envVar));
+  const configEntries = {};
+  for (const [key, val] of Object.entries(values)) {
+    if (structuredEnvVars.has(key)) continue; // Already mapped structurally
+    if (secrets.has(key)) continue; // Skip secrets
+    if (ALLOWED_CONFIGURATIONS.has(key)) {
+      configEntries[key] = val;
+    }
+  }
+  if (Object.keys(configEntries).length > 0) {
+    config.configurations = configEntries;
+  }
+
+  return config;
+}
+
 async function autoCreateFromLocalSettings(appPath, localSettingsPath) {
   const localSettings = await readJsonFile(localSettingsPath);
   if (!localSettings?.Values) {
@@ -270,39 +361,8 @@ async function autoCreateFromLocalSettings(appPath, localSettingsPath) {
     process.exit(1);
   }
 
-  const values = localSettings.Values;
-  const secrets = detectSecretsInFlatValues(values);
-  const nonSecretKeys = Object.keys(values).filter(k => !secrets.has(k));
-
-  // Build structured config
-  const config = {};
-
-  // Extract runtime
-  const runtime = values.FUNCTIONS_WORKER_RUNTIME;
-  if (runtime) {
-    config.runtime = { name: runtime };
-    // Check for runtime version in env or values
-    const version = values.FUNCTIONS_WORKER_RUNTIME_VERSION;
-    if (version) config.runtime.version = version;
-  }
-
-  // Extract targetSku from local settings (non-standard but some users set it)
-  if (localSettings.TargetSku) {
-    config.local = { targetSku: localSettings.TargetSku };
-  }
-
-  // Remaining non-secret, non-structured values → configurations
-  const structuredEnvVars = new Set(Object.values(STRUCTURED_FIELDS).map(s => s.envVar));
-  const configEntries = {};
-  for (const key of nonSecretKeys) {
-    if (structuredEnvVars.has(key)) continue; // Already mapped structurally
-    if (ALLOWED_CONFIGURATIONS.has(key)) {
-      configEntries[key] = values[key];
-    }
-  }
-  if (Object.keys(configEntries).length > 0) {
-    config.configurations = configEntries;
-  }
+  const config = buildConfigFromLocalSettings(localSettings);
+  const secrets = detectSecretsInFlatValues(localSettings.Values);
 
   // Write app-config.yaml
   const yaml = generateYaml(config);
@@ -372,7 +432,7 @@ async function interactiveCreate(appPath) {
   return config;
 }
 
-function generateYaml(config) {
+export function generateYaml(config) {
   const lines = [
     '# Azure Functions App Configuration',
     '# Commit this to source control. Do NOT put secrets here.',
@@ -413,7 +473,7 @@ function generateYaml(config) {
  * Detect which keys in a flat values map are secrets (for migration).
  * Returns a Set of secret key names.
  */
-function detectSecretsInFlatValues(values) {
+export function detectSecretsInFlatValues(values) {
   const secretKeys = new Set();
   const secretKeyPatterns = [
     /ConnectionString$/i,
