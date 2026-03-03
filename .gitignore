@@ -41,3 +41,4 @@ __pycache__/
 test-report.md
 Azfunc-config.pdf
 fnx/templates/manifest.json
+fnx/templates-mcp/

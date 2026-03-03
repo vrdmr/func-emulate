@@ -59,6 +59,22 @@ jobs:
             rm -f global.json.bak
           fi
 
+      - name: Patch to include Python worker on Windows
+        if: matrix.rid == 'win-x64'
+        shell: bash
+        working-directory: host
+        run: |
+          # Remove the Windows exclusion condition so Python worker is bundled on Windows
+          # Original: Condition="!$(RuntimeIdentifier.StartsWith('win'))"
+          if [ -f eng/build/Workers.Python.props ]; then
+            sed -i.bak 's/Condition="!\$(RuntimeIdentifier.StartsWith('\''win'\''))"//' eng/build/Workers.Python.props
+            rm -f eng/build/Workers.Python.props.bak
+            echo "✓ Patched Workers.Python.props to include Python worker on Windows"
+            cat eng/build/Workers.Python.props
+          else
+            echo "⚠ Workers.Python.props not found (may be older host version)"
+          fi
+
       - name: Build self-contained host
         shell: bash
         working-directory: host

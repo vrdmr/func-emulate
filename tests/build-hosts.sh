@@ -75,6 +75,15 @@ for tag in "${TAGS[@]}"; do
     rm -f global.json.bak
   fi
 
+  # Patch Python worker to include on Windows builds (removes exclusion condition)
+  # By default, azure-functions-host excludes Python worker from Windows builds.
+  # We patch this so fnx can run Python functions on Windows.
+  if [[ "$RID" == win-* ]] && [ -f eng/build/Workers.Python.props ]; then
+    sed -i.bak 's/Condition="!\$(RuntimeIdentifier.StartsWith('\''win'\''))"//' eng/build/Workers.Python.props
+    rm -f eng/build/Workers.Python.props.bak
+    echo "✓ Patched Workers.Python.props to include Python worker on Windows"
+  fi
+
   # Build self-contained (disable ReadyToRun for cross-platform compat)
   dotnet publish src/WebJobs.Script.WebHost/WebJobs.Script.WebHost.csproj \
     -c Release \
