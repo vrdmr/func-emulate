@@ -6,7 +6,6 @@ import { existsSync } from 'node:fs';
 import { getHostExeName } from './host-manager.js';
 import { ensureAzurite, stopAzurite } from './azurite-manager.js';
 import { title, info, funcName, url as urlColor, success, error as errorColor, warning, dim, highlightUrls } from './colors.js';
-import { SUPPORTED_RUNTIMES } from './runtimes.js';
 
 // ─── Shared host state (consumed by live MCP server) ─────────────────────
 // This object is populated by the log filter and exposed for the MCP server.
@@ -53,26 +52,15 @@ export function createHostState() {
 }
 
 // ─── Python executable detection ────────────────────────────────────────
-// The .NET host needs a compatible Python version. We use versions from
-// runtimes.js (supported + preview). We check:
+// The .NET host needs a compatible Python version. The host's bundled worker
+// supports up to 3.13 (3.14 is unsupported). We check:
 //   1. Explicit config (app-config.yaml PythonPath or env var)
 //   2. .venv in the script root
-//   3. System python3.13 → python3.12 → python3.11 → python3.10 → python3 → python
+//   3. System python3.13 → python3.12 → python3.11 → python3 → python
 // This mirrors Core Tools behavior which also searches versioned binaries.
 
-// Build version list from runtimes.js: supported + preview, sorted descending
-const SUPPORTED_PYTHON_VERSIONS = [
-  ...SUPPORTED_RUNTIMES.python.supported,
-  ...SUPPORTED_RUNTIMES.python.preview,
-].sort((a, b) => parseFloat(b) - parseFloat(a));
-
+const SUPPORTED_PYTHON_VERSIONS = ['3.13', '3.12', '3.11', '3.10', '3.9'];
 const IS_WINDOWS = platform() === 'win32';
-
-// Helper to check if a Python minor version is acceptable
-function isPythonVersionAcceptable(minor) {
-  const version = `3.${minor}`;
-  return SUPPORTED_PYTHON_VERSIONS.includes(version);
-}
 
 function findPythonExecutable(scriptRoot, explicitPath) {
   // 0. Explicit path from config (app-config.yaml PythonPath or env var)
@@ -93,49 +81,34 @@ function findPythonExecutable(scriptRoot, explicitPath) {
     try {
       const ver = execSync(`${venvPython} --version`, { encoding: 'utf-8' }).trim();
       const minor = ver.match(/Python 3\.(\d+)/)?.[1];
-      if (minor && isPythonVersionAcceptable(minor)) return venvPython;
-      // venv python version unsupported, fall through to versioned search
+      if (minor && parseInt(minor) <= 13) return venvPython;
+      // venv python is too new, fall through to versioned search
     } catch { /* fall through */ }
   }
   if (existsSync(venvPythonWin)) {
-    // Verify Windows venv python version is supported
+    // Windows: verify venv python version is supported
     try {
       const ver = execSync(`"${venvPythonWin}" --version`, { encoding: 'utf-8' }).trim();
       const minor = ver.match(/Python 3\.(\d+)/)?.[1];
-      if (minor && isPythonVersionAcceptable(minor)) return venvPythonWin;
+      if (minor && parseInt(minor) <= 13) return venvPythonWin;
     } catch { /* fall through */ }
   }
 
   // 2. Check for a venv/ directory
   const venvAlt = join(scriptRoot, 'venv', 'bin', 'python');
   const venvAltWin = join(scriptRoot, 'venv', 'Scripts', 'python.exe');
-  if (existsSync(venvAlt)) {
-    try {
-      const ver = execSync(`${venvAlt} --version`, { encoding: 'utf-8' }).trim();
-      const minor = ver.match(/Python 3\.(\d+)/)?.[1];
-      if (minor && isPythonVersionAcceptable(minor)) return venvAlt;
-    } catch { /* fall through */ }
-  }
-  if (existsSync(venvAltWin)) {
-    try {
-      const ver = execSync(`"${venvAltWin}" --version`, { encoding: 'utf-8' }).trim();
-      const minor = ver.match(/Python 3\.(\d+)/)?.[1];
-      if (minor && isPythonVersionAcceptable(minor)) return venvAltWin;
-    } catch { /* fall through */ }
-  }
+  if (existsSync(venvAlt)) return venvAlt;
+  if (existsSync(venvAltWin)) return venvAltWin;
 
   // 3. Search for versioned python binaries (most compatible first)
-  // On Windows, use 'py -3.XX' launcher to resolve actual executable path; on Unix, use 'python3.XX'
   for (const ver of SUPPORTED_PYTHON_VERSIONS) {
     if (IS_WINDOWS) {
-      // Windows: try 'py -3.XX' launcher and resolve to actual executable path
-      // The host expects a file path, not a command with arguments
+      // Windows: use 'py -3.XX' launcher to resolve actual executable path
       try {
         const pyPath = execSync(`py -${ver} -c "import sys; print(sys.executable)"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
         if (pyPath && existsSync(pyPath)) return pyPath;
       } catch { /* not found */ }
     } else {
-      // Unix: try 'python3.XX'
       const cmd = `python${ver}`;
       try {
         execSync(`${cmd} --version`, { stdio: 'ignore' });
@@ -144,12 +117,16 @@ function findPythonExecutable(scriptRoot, explicitPath) {
     }
   }
 
-  // 4. Fall back to python / python3 (may be unsupported version)
-  // On Windows, 'python' is the standard command; on Unix, try 'python3' first
+  // 4. Fall back to python3 / python (may be unsupported version)
   const fallbacks = IS_WINDOWS ? ['python', 'python3'] : ['python3', 'python'];
   for (const cmd of fallbacks) {
     try {
       execSync(`${cmd} --version`, { stdio: 'ignore' });
+      if (IS_WINDOWS) {
+        // Windows: resolve to absolute path
+        const pyPath = execSync(`${cmd} -c "import sys; print(sys.executable)"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+        if (pyPath && existsSync(pyPath)) return pyPath;
+      }
       return cmd;
     } catch { /* not found */ }
   }
