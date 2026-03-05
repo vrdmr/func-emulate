@@ -238,6 +238,9 @@ describe('fnx init → build → start → invoke', { timeout: SUITE_TIMEOUT }, 
       running = startResult.child;
       const testPort = startResult.port;
 
+      // Give Python worker extra time to initialize after host starts listening
+      await new Promise(r => setTimeout(r, 5000));
+
       // Step 4: Invoke HTTP function (using anonymous auth)
       const url = `http://localhost:${testPort}/api/http_trigger?name=PyTest`;
 
