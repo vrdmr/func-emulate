@@ -242,7 +242,12 @@ describe('fnx init → build → start → invoke', { timeout: SUITE_TIMEOUT }, 
       const url = `http://localhost:${testPort}/api/http_trigger?name=PyTest`;
 
       const response = await httpGetWithRetry(url);
-      assert.strictEqual(response.statusCode, 200, 'HTTP response should be 200');
+      if (response.statusCode !== 200) {
+        console.error(`HTTP ${response.statusCode}: ${response.body}`);
+        console.error(`Python project dir: ${pyProjectDir}`);
+        console.error(`Platform: ${process.platform}`);
+      }
+      assert.strictEqual(response.statusCode, 200, `HTTP response should be 200, got ${response.statusCode}: ${response.body.slice(0, 500)}`);
       assert.ok(response.body.includes('PyTest') || response.body.includes('Hello'), 'Response should include greeting');
 
       running.kill('SIGTERM');
