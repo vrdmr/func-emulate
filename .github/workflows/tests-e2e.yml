@@ -147,3 +147,8 @@ jobs:
       - name: Run runtime start tests
         shell: bash
         run: node --test tests/e2e/runtime-start.test.js
+
+      - name: Run init-start-flow tests (Windows only)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: node --test tests/e2e/init-start-flow.test.js

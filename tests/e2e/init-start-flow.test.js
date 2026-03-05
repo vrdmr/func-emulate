@@ -1,33 +1,29 @@
 /**
  * E2E tests for fnx init → build → start → invoke flow
  *
- * Scaffolds a real project with `fnx init`, builds it, starts the host, and invokes HTTP.
- *
- * Host Selection:
- *   - If `func` CLI is available (Azure Functions Core Tools), uses `func host start`
- *     for full HTTP invocation testing (includes language workers).
- *   - Otherwise, falls back to `fnx start` with Flex host (no HTTP invocation).
+ * Scaffolds a real project with `fnx init`, builds it, starts the host with
+ * `fnx start`, and invokes HTTP endpoints.
  *
  * Prerequisites:
  *   - Network access (downloads templates from CDN)
  *   - Node.js/npm installed (for TypeScript tests)
- *   - Optional: `func` CLI for full HTTP testing, OR `fnx warmup --sku flex` for fnx start
+ *   - Host cache available (`fnx warmup --sku flex`)
  */
 
 import { describe, test, after, before } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { FnxCommand } from '../framework/command-builder.js';
-import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
-import { execSync, spawn } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import http from 'node:http';
 
 // Timeouts
 const INIT_TIMEOUT = 60_000;
-const BUILD_TIMEOUT = 120_000;
+const BUILD_TIMEOUT = 300_000;  // 5 minutes for npm install (network-dependent)
 const READY_TIMEOUT = 60_000;
-const SUITE_TIMEOUT = 300_000;
+const SUITE_TIMEOUT = 600_000;  // 10 minutes per suite
 
 // Default tsconfig.json for Azure Functions TypeScript projects
 const DEFAULT_TSCONFIG = {
@@ -45,20 +41,10 @@ const DEFAULT_TSCONFIG = {
   exclude: ['node_modules'],
 };
 
-// Check if host binaries are cached (for fnx start fallback)
+// Check if host binaries are cached (required for fnx start)
 function isHostCached() {
   const cacheDir = join(homedir(), '.fnx', 'hosts');
   return existsSync(cacheDir);
-}
-
-// Check if func CLI is available (preferred for full HTTP testing)
-function isFuncCliAvailable() {
-  try {
-    execSync('func --version', { encoding: 'utf-8', stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 // HTTP GET helper with promise
@@ -74,67 +60,25 @@ function httpGet(url, timeoutMs = 5000) {
   });
 }
 
-// HTTP GET with retries
-async function httpGetWithRetry(url, retries = 5, delayMs = 1000) {
+// HTTP GET with retries (retries on connection errors and 5xx status codes)
+async function httpGetWithRetry(url, retries = 10, delayMs = 2000) {
+  let lastResponse = null;
   for (let i = 0; i < retries; i++) {
     try {
-      return await httpGet(url);
+      const response = await httpGet(url);
+      // Retry on 5xx errors (service unavailable, worker not ready)
+      if (response.statusCode >= 500) {
+        lastResponse = response;
+        if (i < retries - 1) await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+      return response;
     } catch {
       if (i < retries - 1) await new Promise(r => setTimeout(r, delayMs));
     }
   }
+  if (lastResponse) return lastResponse;
   throw new Error(`Failed to reach ${url} after ${retries} retries`);
-}
-
-// Start func host and wait for ready
-function startFuncHost(projectDir, port) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('func', ['host', 'start', '--port', String(port)], {
-      cwd: projectDir,
-      shell: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let resolved = false;
-
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        reject(new Error('func host start timed out'));
-      }
-    }, READY_TIMEOUT);
-
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-      if (!resolved && stdout.includes('http://localhost:')) {
-        resolved = true;
-        clearTimeout(timeout);
-        resolve({ child, stdout, stderr });
-      }
-    });
-
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    child.on('error', (err) => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeout);
-        reject(err);
-      }
-    });
-
-    child.on('exit', (code) => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeout);
-        reject(new Error(`func exited with code ${code}: ${stderr}`));
-      }
-    });
-  });
 }
 
 // Ensure tsconfig.json exists (some templates are missing it)
@@ -180,17 +124,12 @@ describe('fnx init → build → start → invoke', { timeout: SUITE_TIMEOUT }, 
   let tmpDir = null;
   let projectDir = null;
   let running = null;
-  let useFuncCli = false;
   let skipTests = false;
 
   before(() => {
-    useFuncCli = isFuncCliAvailable();
-    if (!useFuncCli && !isHostCached()) {
-      console.log('Skipping: Neither func CLI nor fnx host cache available.');
+    if (!isHostCached()) {
+      console.log('Skipping: fnx host cache not available. Run `fnx warmup --sku flex` first.');
       skipTests = true;
-    }
-    if (useFuncCli) {
-      console.log('Using func CLI for full HTTP invocation testing.');
     }
   });
 
@@ -198,10 +137,128 @@ describe('fnx init → build → start → invoke', { timeout: SUITE_TIMEOUT }, 
     await safeCleanup(running, tmpDir);
   });
 
-  test('Python HTTP trigger: init → venv → pip install → start → invoke', { skip: true }, async (t) => {
-    // SKIP: Flex Consumption host lacks Python worker (workers/python/).
-    // When a host with Python support is available, enable this test.
-    t.skip('Flex host lacks Python worker');
+  test('Python HTTP trigger: init → venv → pip install → start → invoke', async (t) => {
+    if (skipTests) {
+      t.skip('No host available');
+      return;
+    }
+
+    // Check if Python is available
+    let pythonCmd = null;
+    for (const cmd of ['python', 'python3', 'py -3']) {
+      try {
+        execSync(`${cmd} --version`, { stdio: 'pipe' });
+        pythonCmd = cmd;
+        break;
+      } catch { /* try next */ }
+    }
+    if (!pythonCmd) {
+      t.skip('Python not available');
+      return;
+    }
+
+    const pyTmpDir = mkdtempSync(join(tmpdir(), 'fnx-flow-py-'));
+    const pyProjectDir = join(pyTmpDir, 'my-py-func');
+
+    try {
+      // Step 1: fnx init
+      const initResult = await FnxCommand.command('init')
+        .withArg('--runtime', 'python')
+        .withArg('--template', 'http-trigger-python')
+        .withArg('--name', 'my-py-func')
+        .withArg('--sku', 'flex')
+        .withArg('--yes')
+        .withScriptRoot(pyTmpDir)
+        .withTimeout(INIT_TIMEOUT)
+        .execute();
+
+      const initOutput = [...initResult.stdout, ...initResult.stderr].join('\n');
+      if (initResult.exitCode !== 0) {
+        if (initOutput.includes('network') || initOutput.includes('Cannot download')) {
+          t.skip('Network unavailable');
+          return;
+        }
+        assert.fail(`fnx init failed: ${initOutput}`);
+      }
+
+      assert.ok(existsSync(pyProjectDir), 'Project directory should exist');
+      assert.ok(existsSync(join(pyProjectDir, 'requirements.txt')), 'requirements.txt should exist');
+
+      // Step 2: Create venv and install dependencies
+      try {
+        runCmd(`${pythonCmd} -m venv .venv`, pyProjectDir, BUILD_TIMEOUT);
+      } catch (err) {
+        assert.fail(`venv creation failed: ${err.message}`);
+      }
+
+      // Determine pip path based on OS
+      const isWindows = process.platform === 'win32';
+      const pipPath = isWindows
+        ? join(pyProjectDir, '.venv', 'Scripts', 'pip')
+        : join(pyProjectDir, '.venv', 'bin', 'pip');
+
+      try {
+        runCmd(`"${pipPath}" install -r requirements.txt`, pyProjectDir, BUILD_TIMEOUT);
+      } catch (err) {
+        assert.fail(`pip install failed: ${err.message}`);
+      }
+
+      // Step 2.5: Patch function to use anonymous auth for testing
+      // NOTE: Unlike `func start`, fnx directly launches the host binary which doesn't
+      // bypass function-level auth in development mode. We patch to anonymous for testing.
+      // Production users can use function keys via the ?code= parameter.
+      const funcAppPath = join(pyProjectDir, 'function_app.py');
+      if (existsSync(funcAppPath)) {
+        let content = readFileSync(funcAppPath, 'utf-8');
+        content = content.replace(
+          /auth_level\s*=\s*func\.AuthLevel\.FUNCTION/g,
+          'auth_level=func.AuthLevel.ANONYMOUS'
+        );
+        writeFileSync(funcAppPath, content);
+      }
+
+      // Step 3: Start fnx host
+      const startCmd = FnxCommand.start()
+        .withScriptRoot(pyProjectDir)
+        .withSku('flex')
+        .withTimeout(READY_TIMEOUT)
+        .waitForReady('Now listening on:');
+
+      let startResult;
+      try {
+        startResult = await startCmd.execute();
+      } catch (err) {
+        if (err.message.includes('timeout')) {
+          t.skip('Host startup timed out');
+          return;
+        }
+        throw err;
+      }
+
+      running = startResult.child;
+      const testPort = startResult.port;
+
+      // Give Python worker extra time to initialize after host starts listening
+      await new Promise(r => setTimeout(r, 5000));
+
+      // Step 4: Invoke HTTP function (using anonymous auth)
+      const url = `http://localhost:${testPort}/api/http_trigger?name=PyTest`;
+
+      const response = await httpGetWithRetry(url);
+      if (response.statusCode !== 200) {
+        console.error(`HTTP ${response.statusCode}: ${response.body}`);
+        console.error(`Python project dir: ${pyProjectDir}`);
+        console.error(`Platform: ${process.platform}`);
+      }
+      assert.strictEqual(response.statusCode, 200, `HTTP response should be 200, got ${response.statusCode}: ${response.body.slice(0, 500)}`);
+      assert.ok(response.body.includes('PyTest') || response.body.includes('Hello'), 'Response should include greeting');
+
+      running.kill('SIGTERM');
+      running = null;
+    } finally {
+      // Cleanup Python temp dir
+      await safeCleanup(null, pyTmpDir);
+    }
   });
 
   test('Node.js TypeScript: init → npm install → npm build → start → invoke', async (t) => {
@@ -256,69 +313,46 @@ describe('fnx init → build → start → invoke', { timeout: SUITE_TIMEOUT }, 
     }
     assert.ok(existsSync(join(projectDir, 'dist')), 'dist folder should exist after build');
 
-    // Step 4: Start host
-    const testPort = 7098 + Math.floor(Math.random() * 100);
+    // Step 4: Start fnx host
+    const startCmd = FnxCommand.start()
+      .withScriptRoot(projectDir)
+      .withSku('flex')
+      .withTimeout(READY_TIMEOUT)
+      .waitForReady('Now listening on:');
 
-    if (useFuncCli) {
-      // Use func CLI for full HTTP invocation testing
-      let startResult;
-      try {
-        startResult = await startFuncHost(projectDir, testPort);
-      } catch (err) {
-        if (err.message.includes('timed out')) {
-          t.skip('func host start timed out');
-          return;
-        }
-        throw err;
+    let startResult;
+    try {
+      startResult = await startCmd.execute();
+    } catch (err) {
+      if (err.message.includes('timeout')) {
+        t.skip('Host startup timed out');
+        return;
       }
-      running = startResult.child;
-
-      // Step 5: Invoke HTTP function
-      const url = `http://localhost:${testPort}/api/httpTrigger?name=E2ETest`;
-      const response = await httpGetWithRetry(url, 5, 1000);
-      assert.strictEqual(response.statusCode, 200, 'HTTP response should be 200');
-      assert.ok(response.body.includes('E2ETest'), 'Response should include name');
-
-      running.kill('SIGTERM');
-      running = null;
-    } else {
-      // Fallback: fnx start (no HTTP invocation due to worker indexing issues)
-      const startCmd = FnxCommand.start()
-        .withScriptRoot(projectDir)
-        .withSku('flex')
-        .withTimeout(READY_TIMEOUT)
-        .waitForReady('Now listening on:');
-
-      let startResult;
-      try {
-        startResult = await startCmd.execute();
-      } catch (err) {
-        if (err.message.includes('timeout')) {
-          t.skip('Host startup timed out');
-          return;
-        }
-        throw err;
-      }
-
-      running = startResult.child;
-      const startOutput = startResult.stdout.join('\n') + startResult.stderr.join('\n');
-      assert.ok(startOutput.includes('Now listening on:'), 'Host should be listening');
-
-      running.kill('SIGTERM');
-      running = null;
+      throw err;
     }
+
+    running = startResult.child;
+    const testPort = startResult.port;
+
+    // Step 5: Invoke HTTP function (template uses anonymous auth)
+    const url = `http://localhost:${testPort}/api/httpTrigger?name=E2ETest`;
+
+    const response = await httpGetWithRetry(url);
+    assert.strictEqual(response.statusCode, 200, 'HTTP response should be 200');
+    assert.ok(response.body.includes('E2ETest'), 'Response should include name');
+
+    running.kill('SIGTERM');
+    running = null;
   });
 });
 
 describe('fnx init --name . → build → start → invoke', { timeout: SUITE_TIMEOUT }, () => {
   let tmpDir = null;
   let running = null;
-  let useFuncCli = false;
   let skipTests = false;
 
   before(() => {
-    useFuncCli = isFuncCliAvailable();
-    if (!useFuncCli && !isHostCached()) {
+    if (!isHostCached()) {
       skipTests = true;
     }
   });
@@ -375,56 +409,35 @@ describe('fnx init --name . → build → start → invoke', { timeout: SUITE_TI
       assert.fail(`npm run build failed: ${err.message}`);
     }
 
-    // Step 4: Start host
-    const testPort = 7198 + Math.floor(Math.random() * 100);
+    // Step 4: Start fnx host
+    const startCmd = FnxCommand.start()
+      .withScriptRoot(tmpDir)
+      .withSku('flex')
+      .withTimeout(READY_TIMEOUT)
+      .waitForReady('Now listening on:');
 
-    if (useFuncCli) {
-      // Use func CLI for full HTTP invocation testing
-      let startResult;
-      try {
-        startResult = await startFuncHost(tmpDir, testPort);
-      } catch (err) {
-        if (err.message.includes('timed out')) {
-          t.skip('func host start timed out');
-          return;
-        }
-        throw err;
-      }
-      running = startResult.child;
-
-      // Step 5: Invoke HTTP function
-      const url = `http://localhost:${testPort}/api/httpTrigger?name=CwdTest`;
-      const response = await httpGetWithRetry(url, 5, 1000);
-      assert.strictEqual(response.statusCode, 200, 'HTTP response should be 200');
-      assert.ok(response.body.includes('CwdTest'), 'Response should include name');
-
-      running.kill('SIGTERM');
-      running = null;
-    } else {
-      // Fallback: fnx start (no HTTP invocation)
-      const startCmd = FnxCommand.start()
-        .withScriptRoot(tmpDir)
-        .withSku('flex')
-        .withTimeout(READY_TIMEOUT)
-        .waitForReady('Now listening on:');
-
-      let startResult;
-      try {
-        startResult = await startCmd.execute();
-      } catch (err) {
-        if (err.message.includes('timeout')) {
-          t.skip('Host startup timed out');
-          return;
-        }
-        throw err;
-      }
-
-      running = startResult.child;
-      const startOutput = startResult.stdout.join('\n') + startResult.stderr.join('\n');
-      assert.ok(startOutput.includes('Now listening on:'), 'Host should be listening');
-
-      running.kill('SIGTERM');
-      running = null;
+    let startResult;
+    try {
+      startResult = await startCmd.execute();
+    } catch (err) {
+      if (err.message.includes('timeout')) {
+        t.skip('Host startup timed out');
+        return;
     }
+      throw err;
+    }
+
+    running = startResult.child;
+    const testPort = startResult.port;
+
+    // Step 5: Invoke HTTP function (template uses anonymous auth)
+    const url = `http://localhost:${testPort}/api/httpTrigger?name=CwdTest`;
+
+    const response = await httpGetWithRetry(url);
+    assert.strictEqual(response.statusCode, 200, 'HTTP response should be 200');
+    assert.ok(response.body.includes('CwdTest'), 'Response should include name');
+
+    running.kill('SIGTERM');
+    running = null;
   });
 });

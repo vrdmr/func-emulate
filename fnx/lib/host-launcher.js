@@ -60,6 +60,7 @@ export function createHostState() {
 // This mirrors Core Tools behavior which also searches versioned binaries.
 
 const SUPPORTED_PYTHON_VERSIONS = ['3.13', '3.12', '3.11', '3.10', '3.9'];
+const IS_WINDOWS = platform() === 'win32';
 
 function findPythonExecutable(scriptRoot, explicitPath) {
   // 0. Explicit path from config (app-config.yaml PythonPath or env var)
@@ -84,25 +85,48 @@ function findPythonExecutable(scriptRoot, explicitPath) {
       // venv python is too new, fall through to versioned search
     } catch { /* fall through */ }
   }
-  if (existsSync(venvPythonWin)) return venvPythonWin;
+  if (existsSync(venvPythonWin)) {
+    // Windows: verify venv python version is supported
+    try {
+      const ver = execSync(`"${venvPythonWin}" --version`, { encoding: 'utf-8' }).trim();
+      const minor = ver.match(/Python 3\.(\d+)/)?.[1];
+      if (minor && parseInt(minor) <= 13) return venvPythonWin;
+    } catch { /* fall through */ }
+  }
 
   // 2. Check for a venv/ directory
   const venvAlt = join(scriptRoot, 'venv', 'bin', 'python');
+  const venvAltWin = join(scriptRoot, 'venv', 'Scripts', 'python.exe');
   if (existsSync(venvAlt)) return venvAlt;
+  if (existsSync(venvAltWin)) return venvAltWin;
 
   // 3. Search for versioned python binaries (most compatible first)
   for (const ver of SUPPORTED_PYTHON_VERSIONS) {
-    const cmd = `python${ver}`;
-    try {
-      execSync(`${cmd} --version`, { stdio: 'ignore' });
-      return cmd;
-    } catch { /* not found */ }
+    if (IS_WINDOWS) {
+      // Windows: use 'py -3.XX' launcher to resolve actual executable path
+      try {
+        const pyPath = execSync(`py -${ver} -c "import sys; print(sys.executable)"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+        if (pyPath && existsSync(pyPath)) return pyPath;
+      } catch { /* not found */ }
+    } else {
+      const cmd = `python${ver}`;
+      try {
+        execSync(`${cmd} --version`, { stdio: 'ignore' });
+        return cmd;
+      } catch { /* not found */ }
+    }
   }
 
   // 4. Fall back to python3 / python (may be unsupported version)
-  for (const cmd of ['python3', 'python']) {
+  const fallbacks = IS_WINDOWS ? ['python', 'python3'] : ['python3', 'python'];
+  for (const cmd of fallbacks) {
     try {
       execSync(`${cmd} --version`, { stdio: 'ignore' });
+      if (IS_WINDOWS) {
+        // Windows: resolve to absolute path
+        const pyPath = execSync(`${cmd} -c "import sys; print(sys.executable)"`, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+        if (pyPath && existsSync(pyPath)) return pyPath;
+      }
       return cmd;
     } catch { /* not found */ }
   }
@@ -374,6 +398,11 @@ export async function launchHost(hostDir, opts) {
   console.log(`${dim('Host Version:')}      ${info(`${opts.profile.hostVersion} (${opts.profile.displayName})`)}`);
   if (opts.workerRuntime === 'python' && env['languageWorkers__python__defaultExecutablePath']) {
     console.log(`${dim('Python:')}            ${info(`${env['languageWorkers__python__defaultExecutablePath']} (${env['FUNCTIONS_WORKER_RUNTIME_VERSION'] || 'unknown'})`)}`);
+    if (IS_WINDOWS) {
+      console.log();
+      console.log(warning('⚠️  Python on Windows is for local development only.'));
+      console.log(dim('   Azure Functions does not support Python on Windows hosting plans.'));
+    }
   }
   console.log();
 
