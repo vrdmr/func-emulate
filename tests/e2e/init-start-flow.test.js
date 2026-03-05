@@ -60,15 +60,24 @@ function httpGet(url, timeoutMs = 5000) {
   });
 }
 
-// HTTP GET with retries
-async function httpGetWithRetry(url, retries = 5, delayMs = 1000) {
+// HTTP GET with retries (retries on connection errors and 5xx status codes)
+async function httpGetWithRetry(url, retries = 10, delayMs = 2000) {
+  let lastResponse = null;
   for (let i = 0; i < retries; i++) {
     try {
-      return await httpGet(url);
+      const response = await httpGet(url);
+      // Retry on 5xx errors (service unavailable, worker not ready)
+      if (response.statusCode >= 500) {
+        lastResponse = response;
+        if (i < retries - 1) await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+      return response;
     } catch {
       if (i < retries - 1) await new Promise(r => setTimeout(r, delayMs));
     }
   }
+  if (lastResponse) return lastResponse;
   throw new Error(`Failed to reach ${url} after ${retries} retries`);
 }
 
