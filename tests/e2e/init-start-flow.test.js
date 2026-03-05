@@ -241,7 +241,7 @@ describe('fnx init → build → start → invoke', { timeout: SUITE_TIMEOUT }, 
       // Step 4: Invoke HTTP function (using anonymous auth)
       const url = `http://localhost:${testPort}/api/http_trigger?name=PyTest`;
 
-      const response = await httpGetWithRetry(url, 5, 1000);
+      const response = await httpGetWithRetry(url);
       assert.strictEqual(response.statusCode, 200, 'HTTP response should be 200');
       assert.ok(response.body.includes('PyTest') || response.body.includes('Hello'), 'Response should include greeting');
 
@@ -329,7 +329,7 @@ describe('fnx init → build → start → invoke', { timeout: SUITE_TIMEOUT }, 
     // Step 5: Invoke HTTP function (template uses anonymous auth)
     const url = `http://localhost:${testPort}/api/httpTrigger?name=E2ETest`;
 
-    const response = await httpGetWithRetry(url, 5, 1000);
+    const response = await httpGetWithRetry(url);
     assert.strictEqual(response.statusCode, 200, 'HTTP response should be 200');
     assert.ok(response.body.includes('E2ETest'), 'Response should include name');
 
@@ -425,7 +425,7 @@ describe('fnx init --name . → build → start → invoke', { timeout: SUITE_TI
     // Step 5: Invoke HTTP function (template uses anonymous auth)
     const url = `http://localhost:${testPort}/api/httpTrigger?name=CwdTest`;
 
-    const response = await httpGetWithRetry(url, 5, 1000);
+    const response = await httpGetWithRetry(url);
     assert.strictEqual(response.statusCode, 200, 'HTTP response should be 200');
     assert.ok(response.body.includes('CwdTest'), 'Response should include name');
 
