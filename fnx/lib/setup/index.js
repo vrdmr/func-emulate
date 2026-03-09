@@ -1,0 +1,330 @@
+/**
+ * fnx setup — main entry point.
+ * Analyzes an existing Azure Functions project and adds AI agent
+ * skills, MCP configuration, instructions, and agent definitions.
+ */
+
+import { existsSync } from 'node:fs';
+import { readFile, writeFile, mkdir, copyFile, readdir } from 'node:fs/promises';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline';
+import { detectProject } from './detect.js';
+import { detectAgents, formatAgentList } from './agent-detect.js';
+import { title, info, funcName, success, error as errorColor, warning, dim, bold } from '../colors.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MANIFESTS_DIR = resolve(__dirname, '..', '..', 'manifests');
+
+/**
+ * Run fnx setup.
+ * @param {string[]} args - CLI arguments
+ */
+export async function runSetup(args) {
+  const appPath = resolveSetupAppPath(args);
+  const module = getFlag(args, '--module');
+  const forceFlag = args.includes('--force');
+  const dryRun = args.includes('--dry-run');
+  const agentFilter = getFlag(args, '--agent');
+  const nonInteractive = args.includes('--non-interactive') || args.includes('--all');
+
+  console.log();
+  console.log(title('fnx setup') + dim(' — Configure your project for AI-assisted development'));
+  console.log();
+
+  // Step 1: Detect project
+  console.log(bold('🔍 Detecting project...'));
+  const project = await detectProject(appPath);
+  if (!project) {
+    console.error(errorColor('  ✗ No Azure Functions project found.'));
+    console.error(dim('    Ensure host.json exists in the current directory or use --app-path.'));
+    process.exit(1);
+  }
+  console.log(success(`  ✓ ${formatRuntime(project)} project detected`));
+  console.log(dim(`    SKU: ${project.sku} | Functions: ${project.functions.length} found`));
+  if (project.functions.length > 0) {
+    for (const fn of project.functions) {
+      console.log(dim(`      • ${fn.name} (${fn.type})`));
+    }
+  }
+  console.log();
+
+  // Step 2: Detect agents
+  console.log(bold('🤖 Detecting coding agents...'));
+  let agents = await detectAgents(appPath);
+
+  if (agentFilter) {
+    const filterIds = agentFilter.split(',').map(s => s.trim());
+    agents = agents.filter(a => filterIds.includes(a.id));
+  }
+
+  if (agents.length === 0) {
+    // Default to copilot if nothing detected
+    agents = [{ id: 'github-copilot', name: 'GitHub Copilot (default)', type: 'default' }];
+    console.log(warning('  ⚠ No agents detected, defaulting to GitHub Copilot'));
+  } else {
+    console.log(formatAgentList(agents));
+  }
+  console.log();
+
+  // Step 3: Apply modules
+  const results = [];
+
+  if (!module || module === 'agent') {
+    console.log(bold('📦 Applying agent workspace files...'));
+    const r = await applyAgentModule(appPath, project, agents, { force: forceFlag, dryRun });
+    results.push(...r);
+    console.log();
+  }
+
+  if (!module || module === 'mcp') {
+    console.log(bold('🔌 Configuring MCP servers...'));
+    const r = await applyMcpModule(appPath, agents, { force: forceFlag, dryRun });
+    results.push(...r);
+    console.log();
+  }
+
+  // Summary
+  console.log(bold('─'.repeat(50)));
+  const created = results.filter(r => r.action === 'created');
+  const skipped = results.filter(r => r.action === 'skipped');
+  const merged = results.filter(r => r.action === 'merged');
+  console.log(success(`  ✓ ${created.length} files created`));
+  if (merged.length) console.log(success(`  ✓ ${merged.length} files updated (merged)`));
+  if (skipped.length) console.log(dim(`  ○ ${skipped.length} files skipped (already exist, use --force to overwrite)`));
+  console.log();
+  console.log(dim('  Run ') + funcName('fnx chat') + dim(' to start an AI-assisted development session.'));
+}
+
+// ─── Agent Module ───
+
+async function applyAgentModule(appPath, project, agents, opts) {
+  const results = [];
+
+  // 1. Copy skills to .agents/skills/
+  const skillsDir = join(MANIFESTS_DIR, 'skills');
+  const targetSkillsBase = join(appPath, '.agents', 'skills');
+  await mkdir(targetSkillsBase, { recursive: true });
+
+  const skillDirs = await readdir(skillsDir);
+  for (const skillName of skillDirs) {
+    const src = join(skillsDir, skillName, 'SKILL.md');
+    const dst = join(targetSkillsBase, skillName, 'SKILL.md');
+    if (!existsSync(src)) continue;
+
+    if (existsSync(dst) && !opts.force) {
+      console.log(dim(`    ○ .agents/skills/${skillName}/SKILL.md (exists)`));
+      results.push({ file: dst, action: 'skipped' });
+    } else {
+      await mkdir(dirname(dst), { recursive: true });
+      if (!opts.dryRun) await copyFile(src, dst);
+      console.log(success(`    ✓ .agents/skills/${skillName}/SKILL.md`));
+      results.push({ file: dst, action: 'created' });
+    }
+  }
+
+  // 2. Also copy to agent-specific skill dirs for agents with custom paths
+  for (const agent of agents) {
+    if (agent.id === 'claude-code') {
+      const claudeSkills = join(appPath, '.claude', 'skills');
+      await mkdir(claudeSkills, { recursive: true });
+      for (const skillName of skillDirs) {
+        const src = join(skillsDir, skillName, 'SKILL.md');
+        const dst = join(claudeSkills, skillName, 'SKILL.md');
+        if (!existsSync(src)) continue;
+        if (existsSync(dst) && !opts.force) continue;
+        await mkdir(dirname(dst), { recursive: true });
+        if (!opts.dryRun) await copyFile(src, dst);
+      }
+      console.log(success(`    ✓ .claude/skills/ (${skillDirs.length} skills copied)`));
+      results.push({ file: claudeSkills, action: 'created' });
+    }
+  }
+
+  // 3. Generate AGENTS.md (universal instructions)
+  const agentsMd = generateAgentsMd(project);
+  const agentsMdPath = join(appPath, 'AGENTS.md');
+  results.push(await writeIfNew(agentsMdPath, agentsMd, 'AGENTS.md', opts));
+
+  // 4. Generate agent-specific instructions
+  for (const agent of agents) {
+    if (agent.id === 'github-copilot') {
+      const instrPath = join(appPath, '.github', 'copilot-instructions.md');
+      const content = generateCopilotInstructions(project);
+      await mkdir(dirname(instrPath), { recursive: true });
+      results.push(await writeIfNew(instrPath, content, '.github/copilot-instructions.md', opts));
+    }
+  }
+
+  return results;
+}
+
+// ─── MCP Module ───
+
+async function applyMcpModule(appPath, agents, opts) {
+  const results = [];
+
+  const mcpServer = {
+    "fnx-templates": {
+      command: "npx",
+      args: ["manvir-templates-mcp-server"],
+      env: {},
+    }
+  };
+
+  for (const agent of agents) {
+    if (agent.id === 'github-copilot') {
+      const mcpPath = join(appPath, '.vscode', 'mcp.json');
+      results.push(await mergeMcpConfig(mcpPath, 'servers', mcpServer, '.vscode/mcp.json', opts));
+    }
+    if (agent.id === 'claude-code') {
+      const settingsPath = join(appPath, '.claude', 'settings.json');
+      results.push(await mergeMcpConfig(settingsPath, 'mcpServers', mcpServer, '.claude/settings.json', opts));
+    }
+    if (agent.id === 'cursor') {
+      const mcpPath = join(appPath, '.cursor', 'mcp.json');
+      results.push(await mergeMcpConfig(mcpPath, 'mcpServers', mcpServer, '.cursor/mcp.json', opts));
+    }
+  }
+
+  return results;
+}
+
+async function mergeMcpConfig(filePath, key, servers, displayName, opts) {
+  await mkdir(dirname(filePath), { recursive: true });
+  let existing = {};
+  if (existsSync(filePath)) {
+    try { existing = JSON.parse(await readFile(filePath, 'utf8')); } catch { /* corrupt file */ }
+  }
+
+  if (!existing[key]) existing[key] = {};
+
+  let changed = false;
+  for (const [name, config] of Object.entries(servers)) {
+    if (!existing[key][name]) {
+      existing[key][name] = config;
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    console.log(dim(`    ○ ${displayName} (fnx-templates already configured)`));
+    return { file: filePath, action: 'skipped' };
+  }
+
+  if (!opts.dryRun) {
+    await writeFile(filePath, JSON.stringify(existing, null, 2) + '\n');
+  }
+  console.log(success(`    ✓ ${displayName} (fnx-templates MCP added)`));
+  return { file: filePath, action: 'merged' };
+}
+
+// ─── Content Generators ───
+
+function generateAgentsMd(project) {
+  return `# Azure Functions Development Agent
+
+You are assisting a developer building Azure Functions applications with fnx.
+
+## Project Context
+- **Runtime:** ${formatRuntime(project)}
+- **Programming Model:** ${project.programmingModel || 'v4'}
+- **SKU:** ${project.sku}
+- **Functions:** ${project.functions.map(f => `${f.name} (${f.type})`).join(', ') || 'none detected'}
+- **Emulator:** fnx (SKU-aware local emulator)
+
+## Guidelines
+- Use ${project.programmingModel === 'v4' ? 'v4 programming model' : project.programmingModel + ' programming model'} patterns
+- Check SKU compatibility before suggesting triggers/bindings
+- Use \`fnx start\` for local testing (not \`func start\`)
+- Use \`app-config.yaml\` for non-secret settings (commit to source control)
+- Do NOT put secrets in workspace files — use Key Vault or Managed Identity
+- Refer to installed skills in \`.agents/skills/\` for detailed guidance
+
+## Available fnx Skills
+- **fnx-diagnostics** — Troubleshoot fnx start issues
+- **fnx-best-practices** — SKU-specific best practices
+- **fnx-create-function** — Create new functions from templates
+- **fnx-intro** — Overview of fnx capabilities
+- **fnx-feedback** — Report issues as GitHub Issues
+`;
+}
+
+function generateCopilotInstructions(project) {
+  return `# Azure Functions Development with fnx
+
+This project is an Azure Functions application using **${formatRuntime(project)}** targeting **${project.sku}** SKU.
+
+## Key Rules
+- Always use the ${project.programmingModel || 'v4'} programming model
+- Test locally with \`fnx start\` (not \`func start\`)
+- Non-secret config goes in \`app-config.yaml\` (committed to git)
+- Secrets in \`local.settings.json\` only (gitignored)
+- Check SKU constraints before adding triggers/bindings
+- See \`.agents/skills/\` for detailed Azure Functions guidance
+`;
+}
+
+// ─── Utilities ───
+
+async function writeIfNew(filePath, content, displayName, opts) {
+  await mkdir(dirname(filePath), { recursive: true });
+  if (existsSync(filePath) && !opts.force) {
+    console.log(dim(`    ○ ${displayName} (exists)`));
+    return { file: filePath, action: 'skipped' };
+  }
+  if (!opts.dryRun) await writeFile(filePath, content);
+  console.log(success(`    ✓ ${displayName}`));
+  return { file: filePath, action: 'created' };
+}
+
+function formatRuntime(project) {
+  const lang = project.language === 'typescript' ? 'TypeScript' :
+               project.language === 'javascript' ? 'JavaScript' :
+               project.runtime || 'unknown';
+  return `${project.runtime === 'node' ? 'Node.js' : project.runtime} (${lang})`;
+}
+
+function resolveSetupAppPath(args) {
+  const explicit = getFlag(args, '--app-path');
+  return explicit ? resolve(explicit) : process.cwd();
+}
+
+function getFlag(args, name) {
+  const idx = args.indexOf(name);
+  return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : null;
+}
+
+export function printSetupHelp() {
+  console.log(`${title('Usage:')} fnx setup [options]
+
+${title('Description:')}
+  Analyze an existing Azure Functions project and add AI agent skills,
+  MCP configuration, and instructions for your coding agents.
+
+${title('Options:')}
+  ${success('--module')} <name>     Apply specific module only: ${funcName('agent')}, ${funcName('mcp')}
+  ${success('--agent')} <agents>    Target specific agents: copilot, claude, cursor, codex
+  ${success('--app-path')} <dir>    Path to function app (default: current directory)
+  ${success('--all')}               Apply all modules without prompts
+  ${success('--force')}             Overwrite existing files
+  ${success('--dry-run')}           Show what would be done without making changes
+  ${success('-h')}, ${success('--help')}        Show this help
+
+${title('Examples:')}
+  ${dim('# Auto-detect project and agents, apply all')}
+  fnx setup
+
+  ${dim('# Agent skills only')}
+  fnx setup --module agent
+
+  ${dim('# MCP configuration only')}
+  fnx setup --module mcp
+
+  ${dim('# Target specific agents')}
+  fnx setup --agent copilot,claude
+
+  ${dim('# Preview changes')}
+  fnx setup --dry-run
+`);
+}
