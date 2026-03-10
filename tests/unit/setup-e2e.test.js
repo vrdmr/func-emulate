@@ -194,11 +194,10 @@ describe('fnx chat auto-setup', { timeout: 60000 }, () => {
     // Verify no skills before chat
     assert.ok(!existsSync(join(tmp, '.agents')), 'No .agents/ before chat');
 
-    // Run chat with a nonexistent agent to trigger setup but fail at launch
-    // (we just want to verify setup runs, not actually launch an agent)
-    const result = await run(['chat', '--agent', 'nonexistent-agent', '--app-path', tmp]);
+    // Run chat with --setup-only to verify setup runs without launching agent
+    const result = await run(['chat', '--agent', 'github-copilot', '--setup-only', '--app-path', tmp]);
 
-    // Skills should be auto-installed even though agent launch fails
+    // Skills should be auto-installed after agent selection
     assert.ok(existsSync(join(tmp, '.agents', 'skills', 'fnx-diagnostics', 'SKILL.md')),
       'Skills should be auto-installed by fnx chat');
     assert.ok(existsSync(join(tmp, 'AGENTS.md')),
@@ -214,7 +213,7 @@ describe('fnx chat auto-setup', { timeout: 60000 }, () => {
     assert.ok(existsSync(join(tmp, '.agents', 'skills', 'fnx-diagnostics', 'SKILL.md')));
 
     // Run chat — should NOT re-run setup
-    const result = await run(['chat', '--agent', 'nonexistent-agent', '--app-path', tmp]);
+    const result = await run(['chat', '--agent', 'github-copilot', '--setup-only', '--app-path', tmp]);
 
     // Should not mention "auto-setup" or "Running fnx setup"
     assert.ok(!result.stdout.includes('Running fnx setup'),
@@ -225,7 +224,7 @@ describe('fnx chat auto-setup', { timeout: 60000 }, () => {
     tmp = makeTmpDir();
     // Empty dir — no host.json, no package.json
 
-    const result = await run(['chat', '--agent', 'nonexistent-agent', '--app-path', tmp]);
+    const result = await run(['chat', '--agent', 'github-copilot', '--setup-only', '--app-path', tmp]);
 
     // Skills should still be installed even without a project
     assert.ok(existsSync(join(tmp, '.agents', 'skills', 'fnx-diagnostics', 'SKILL.md')),

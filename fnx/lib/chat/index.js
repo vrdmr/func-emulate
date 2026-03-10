@@ -42,6 +42,7 @@ export async function runChat(args) {
   const appPath = resolveAppPath(args);
   const agentFlag = getFlag(args, '--agent');
   const promptFlag = getFlag(args, '--prompt');
+  const setupOnly = args.includes('--setup-only');
 
   console.log();
   console.log(title('fnx chat') + dim(' — AI-assisted Azure Functions development'));
@@ -123,7 +124,12 @@ export async function runChat(args) {
   const agentMdPath = join(appPath, '.fnx', 'agent.md');
   await generateAgentMd(appPath, project, agentMdPath);
 
-  // Step 5: Launch agent
+  // Step 5: Launch agent (skip if --setup-only)
+  if (setupOnly) {
+    console.log();
+    console.log(success('  ✓ Setup complete. Skipping agent launch (--setup-only).'));
+    return;
+  }
   const launcher = LAUNCHERS[selectedId];
   await launchAgent(selectedId, launcher, appPath, project, promptFlag);
 }
