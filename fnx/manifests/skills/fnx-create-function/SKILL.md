@@ -1,66 +1,69 @@
 ---
 name: fnx-create-function
-description: "Create new Azure Functions using fnx templates and MCP tools. Guides template discovery, selection, and scaffolding. USE FOR: create function, add trigger, new function, add endpoint, scaffold, template, queue trigger, timer trigger, blob trigger."
-tags: [fnx, create, template, scaffold, trigger]
-category: Development
+description: "Guide users through creating Azure Functions projects and adding functions. Runs fnx init interactively, helps choose runtime/language/trigger, and scaffolds code. USE FOR: create function, new function, add trigger, add endpoint, fnx init, scaffold project, new project, http trigger, queue trigger, timer trigger, blob trigger, template."
 ---
 
 # Create Azure Function
 
-Create new Azure Functions using fnx templates. Works with the fnx Templates MCP server for template discovery and code generation.
+Guide the user through creating a new Azure Functions project or adding a function to an existing project.
 
-## Quick Start
-
-### Using fnx init (New Project)
+## Prerequisites Check
 
 ```bash
-# Interactive mode
-fnx init
-
-# Non-interactive
-fnx init --runtime node --template http-trigger-typescript --name my-app
+fnx --version   # Require 0.4.x+
+node --version  # Require >=18
 ```
 
-### Using MCP Tools (Add to Existing Project)
+If fnx is outdated or missing, suggest: `npm install -g @vrdmr/fnx-test`
 
-If the fnx Templates MCP server is configured, use these tools:
+## Decision Tree
 
-1. **`functions_language_list`** — Get supported languages and runtime versions
-2. **`functions_template_get`** — Generate function template code
-3. **`functions_project_get`** — Scaffold project files
+### New Project (no host.json)
+
+Use `fnx init` interactive wizard. Before running, gather from the user:
+
+1. **Runtime** — `node`, `python`, `dotnet-isolated`, `java`, `powershell`
+2. **Language variant** — For Node.js: `typescript` (default) or `javascript`
+3. **Trigger type** — HTTP, Queue, Timer, Blob, CosmosDB, ServiceBus, EventHub, EventGrid, Durable
+4. **Project name** — Directory name for the project
+5. **Target SKU** — `flex` (default), `premium`, `dedicated`
+
+If user has specified all options, run non-interactively:
+```bash
+fnx init <name> --runtime <rt> --language <lang> --template <tpl> --sku <sku> --yes
+```
+
+If information is missing, **ask the user** — do not guess. Then run `fnx init` with the gathered options.
+
+### Existing Project (host.json exists)
+
+Two approaches:
+
+**A. MCP Tools (if fnx templates-mcp is configured)**:
+- `functions_language_list` — List supported runtimes
+- `functions_template_get` — Generate function code from template
+- `functions_project_get` — Scaffold project files
+
+**B. Manual creation**: Create the function file following the runtime's programming model. For Node.js v4, see the pattern below.
 
 ## Available Templates
 
-### HTTP Triggers
-- `http-trigger` / `http-trigger-typescript` — Basic HTTP endpoint
-- Best for: REST APIs, webhooks, health checks
+For the full template catalog (107 templates across 9 languages), see [references/templates.md](references/templates.md).
 
-### Queue Triggers
-- `queue-trigger` / `queue-trigger-typescript` — Azure Storage Queue processor
-- Requires: Storage connection string in settings
-- Note: Use Azurite for local development
+Common triggers by runtime:
 
-### Timer Triggers
-- `timer-trigger` — CRON-based scheduled function
-- Format: `"0 */5 * * * *"` (every 5 minutes)
+| Trigger | Node.js | Python | .NET Isolated | Java |
+|---------|---------|--------|---------------|------|
+| HTTP | ✅ | ✅ | ✅ | ✅ |
+| Queue | ✅ | ✅ | ✅ | ✅ |
+| Timer | ✅ | ✅ | ✅ | ✅ |
+| Blob | ✅ | ✅ | ✅ | ✅ |
+| CosmosDB | ✅ | ✅ | ✅ | ✅ |
+| ServiceBus | ✅ | ✅ | ✅ | ✅ |
+| EventHub | ✅ | ✅ | ✅ | ✅ |
+| Durable | ✅ | ✅ | ✅ | ✅ |
 
-### Blob Triggers
-- `blob-trigger` — Fires on blob storage changes
-- Requires: Storage connection string
-
-### Cosmos DB Triggers
-- `cosmosdb-trigger` — Change feed processor
-- Requires: Cosmos DB connection string + lease container
-
-## Workflow for Adding a Function
-
-1. **Check SKU compatibility**: Verify the trigger type works with your SKU
-2. **Choose template**: Select from available templates for your runtime
-3. **Scaffold**: Use MCP tool or manual creation
-4. **Configure bindings**: Update connection strings in `app-config.yaml`
-5. **Test locally**: `fnx start` and invoke the function
-
-## Node.js v4 Pattern
+## Node.js v4 Pattern (Most Common)
 
 ```javascript
 import { app } from '@azure/functions';
@@ -75,3 +78,10 @@ app.http('myFunction', {
     }
 });
 ```
+
+## After Scaffolding
+
+1. Run `fnx doctor` to validate the setup
+2. Configure connection strings in `local.settings.json` (for non-HTTP triggers)
+3. Run `fnx start` to test locally
+4. For Queue/Blob/Table triggers, ensure Azurite is available (fnx auto-starts it)

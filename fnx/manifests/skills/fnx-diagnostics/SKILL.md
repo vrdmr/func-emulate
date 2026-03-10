@@ -1,68 +1,76 @@
 ---
 name: fnx-diagnostics
-description: "Diagnose and resolve fnx start issues. Analyzes error messages, interprets logs, and provides solutions for common problems. USE FOR: fnx start failed, error occurred, function not working, host crashed, 503 error, port conflict, Azurite error, binding error."
-tags: [fnx, diagnostics, troubleshooting, azure-functions]
-category: Development
+description: "Diagnose and resolve Azure Functions issues using fnx tools, logs, and source code analysis. Provides precise diagnostics by reading fnx JS source code alongside error messages. USE FOR: fnx start failed, error occurred, function not working, host crashed, 503 error, port conflict, Azurite error, binding error, debug, troubleshoot, diagnose, why is my function not working."
 ---
 
 # fnx Diagnostics
 
-Diagnose and resolve issues when running Azure Functions locally with fnx.
+Diagnose Azure Functions issues by combining fnx built-in tools, host logs, and fnx source code analysis for precise root-cause identification.
 
-## When to Use
-
-Use this skill when:
-- `fnx start` fails or crashes
-- Functions return unexpected errors (503, 500, etc.)
-- Host doesn't start or hangs
-- Triggers don't fire (Queue, Timer, etc.)
-- Azurite-related errors occur
-
-## Diagnostic Flow
-
-### Step 1: Identify the Error Category
-
-| Symptom | Category | Go to |
-|---------|----------|-------|
-| `fnx start` exits immediately | Startup failure | Section A |
-| Host starts but function returns 503 | Worker issue | Section B |
-| Queue/Timer trigger never fires | Non-HTTP trigger | Section C |
-| Port already in use | Port conflict | Section D |
-| Azurite connection refused / 403 | Storage emulator | Section E |
-
-### Section A: Startup Failures
-
-1. Check `host.json` exists and is valid JSON
-2. Check runtime is detected: `fnx config`
-3. Check if port is free: `netstat -an | findstr 7071`
-4. Run with verbose: `fnx start --verbose` to see full host output
-5. Check SKU profile: `fnx start --sku list`
-
-### Section B: Worker / 503 Errors
-
-- **Node.js**: Ensure `@azure/functions` v4 is installed: `npm ls @azure/functions`
-- **Python**: Check `requirements.txt` includes `azure-functions`
-- Check `FUNCTIONS_WORKER_RUNTIME` in `app-config.yaml` or `local.settings.json`
-
-### Section C: Non-HTTP Triggers
-
-- Queue triggers require Azurite or real Azure Storage
-- Use `fnx start --verbose` to check if QueueListener activates
-- Known issue: `UseDevelopmentStorage=true` may not work with some Azurite versions
-- Try explicit connection string: `DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8...;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;`
-
-### Section D: Port Conflicts
+## Prerequisites Check
 
 ```bash
-# Find what's using port 7071
-netstat -an | findstr 7071
-
-# Use a different port
-fnx start --port 7072
+fnx --version   # Check version; suggest update if outdated
 ```
 
-### Section E: Azurite Issues
+## Diagnostic Workflow
 
-- Ensure Azurite is running: `azurite --silent`
-- fnx auto-starts Azurite by default; use `--no-azurite` to disable
-- 403 errors may indicate auth mismatch between Azurite version and host
+### Step 1: Run fnx doctor
+
+```bash
+fnx doctor
+```
+
+Checks 7 categories: host.json, app-config.yaml, local.settings.json, runtime, host cache, ports, Azurite. Fix any ✗ (fail) items before proceeding.
+
+### Step 2: Reproduce with Verbose Output
+
+```bash
+fnx start --verbose 2>&1 | tee fnx-output.log
+```
+
+Read the full output. Key indicators:
+- `[error]` / `[crit]` — Host-level errors
+- `Fail` / `Exception` — Runtime failures
+- `Port ... in use` — Port conflicts
+- `Azurite not available` — Storage emulator missing
+
+### Step 3: Read fnx Source Code
+
+fnx is JavaScript — read the source for precise diagnosis. Key files:
+
+| File | What it handles |
+|------|----------------|
+| `fnx/lib/host-launcher.js` | Host process lifecycle, error capture, Python detection |
+| `fnx/lib/host-manager.js` | Host download, cache, extension bundles |
+| `fnx/lib/azurite-manager.js` | Azurite install, startup, health check |
+| `fnx/lib/config.js` | Config loading, secret detection, validation |
+| `fnx/lib/doctor.js` | All 7 diagnostic checks |
+| `fnx/lib/secret-patterns.js` | Secret detection patterns |
+| `fnx/lib/cli.js` | Command routing, startup orchestration |
+
+Read the relevant source file to understand exactly what the error means and what conditions trigger it.
+
+### Step 4: Diagnose by Category
+
+| Symptom | Category | First Action |
+|---------|----------|-------------|
+| `fnx start` exits immediately | Startup | Check host.json, runtime config |
+| Host starts, function returns 503 | Worker | Check runtime package (`@azure/functions`) |
+| Triggers don't fire | Non-HTTP | Check Azurite, connection strings |
+| Port already in use | Port | `fnx start --port 7072` |
+| Azurite errors (connection refused, 403) | Storage | Check Azurite status, connection string |
+| "No host package for platform" | Platform | OS/arch not in SKU profile |
+| Secrets detected in app-config.yaml | Security | Run `fnx config migrate` |
+
+For detailed error patterns from source code analysis, see [references/fnx-error-patterns.md](references/fnx-error-patterns.md).
+
+For the full diagnostic checklist (security, best-practice, failure), see [references/diagnostic-checklist.md](references/diagnostic-checklist.md).
+
+### Step 5: Read Customer Code
+
+After understanding the fnx-side error, read the customer's function code to identify:
+- Missing dependencies (`package.json`, `requirements.txt`)
+- Incorrect binding configurations
+- Runtime-specific issues (e.g., async/await errors in Node.js)
+- Security concerns (secrets in source, anonymous auth on mutation endpoints)

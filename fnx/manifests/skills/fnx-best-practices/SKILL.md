@@ -1,74 +1,64 @@
 ---
 name: fnx-best-practices
-description: "Azure Functions SKU-specific best practices for performance, security, and cost optimization. USE FOR: best practices, performance tuning, security hardening, cost optimization, SKU constraints, Flex Consumption limits."
-tags: [azure-functions, best-practices, performance, security, cost]
-category: Development
+description: "Azure Functions best practices for performance, security, and cost optimization. Provides curated documentation links and fnx-specific guidance. USE FOR: best practices, performance tuning, security hardening, cost optimization, SKU constraints, configuration advice, secret management, app-config.yaml guidance."
 ---
 
 # Azure Functions Best Practices
 
-SKU-aware best practices for Azure Functions development.
+Provide best-practice guidance by directing the agent to authoritative documentation and fnx-specific patterns. Do not repeat general knowledge — link to official docs instead.
 
-## Security
+## Prerequisites Check
 
-### Do NOT Store Secrets in Workspace Files
+```bash
+fnx --version   # Check version; suggest update if outdated
+```
 
-**Critical**: With AI coding agents reading your workspace files, `local.settings.json` and `.env` files containing secrets are a security risk. Coding agents can read and potentially expose these values.
+## Workflow
 
-**Recommendations**:
-- Use Azure Key Vault references for connection strings
-- Use Managed Identity instead of connection strings where possible
-- Use `app-config.yaml` (fnx) for non-secret settings — it's designed to be committed to source control
-- Keep `local.settings.json` minimal and in `.gitignore`
-- Never put production secrets in any workspace file
+1. Identify the user's concern (security, performance, cost, configuration)
+2. Detect project runtime and SKU from `app-config.yaml` or `fnx config`
+3. Point to relevant official documentation (see references)
+4. Apply fnx-specific practices where applicable
+
+## Security (Critical)
+
+### Secrets in Workspace Files
+
+With AI coding agents reading workspace files, **never store secrets in committed files**.
+
+- Use `app-config.yaml` for non-secret settings only (committed to git)
+- Keep secrets in `local.settings.json` (git-ignored)
+- Run `fnx config validate` to detect accidentally committed secrets
+- fnx detects patterns: `ConnectionString`, `Password`, `ApiKey`, `Token`, `AccountKey`
 
 ### Auth Levels
 
 - Default to `authLevel: 'function'` for HTTP triggers
-- Use `authLevel: 'anonymous'` only for public endpoints (webhooks, health checks)
-- Never use `anonymous` for endpoints that modify data
+- Use `anonymous` only for public endpoints (webhooks, health checks)
 
-## SKU-Specific Constraints
+## fnx-Specific Practices
 
-### Flex Consumption
+For detailed fnx-specific guidance, see [references/fnx-specific.md](references/fnx-specific.md).
 
-| Constraint | Limit |
-|-----------|-------|
-| Max execution time | 10 minutes (default), configurable up to 30 min |
-| Max instances | 1000 (default) |
-| Always-ready instances | Configurable (costs extra) |
-| VNet integration | Supported |
-| Durable Functions timer scale | Not supported |
+Key points:
+- Use `app-config.yaml` (not `local.settings.json`) for behavioral settings
+- Run `fnx doctor` before `fnx start` to catch issues early
+- Use `fnx config migrate` to separate secrets from settings
+- Cache host binaries with `fnx warmup` in CI/Docker
 
-**Best Practices**:
-- Set `functionTimeout` in host.json explicitly
-- Use always-ready instances for latency-sensitive functions
-- Monitor cold start times via Application Insights
+## Official Documentation
 
-### Premium (EP1/EP2/EP3)
+For curated links to Microsoft documentation by topic, see [references/azure-functions-docs.md](references/azure-functions-docs.md).
 
-- Pre-warmed instances available
-- VNet integration with private endpoints
-- No execution time limit
-- Higher memory/CPU than Consumption
-
-### Dedicated (App Service Plan)
-
-- Predictable pricing, no cold starts
-- Can run alongside web apps
-- Scale manually or with autoscale rules
-
-## Performance
-
-### Node.js v4
-
-- Use async/await consistently — avoid callbacks
-- Reuse SDK clients across invocations (module-level initialization)
-- Use `context.log` instead of `console.log` for structured logging
-- Set `maxConcurrentRequests` in host.json for HTTP triggers
-
-### General
-
-- Keep functions focused — one trigger, one responsibility
-- Use output bindings instead of SDK calls for simple data writes
-- Configure `host.json` batch sizes for Queue/Event Hub triggers
+**Tip**: If a `microsoft-docs` MCP server is available, use it to search for the latest Azure Functions documentation directly. Consider adding it to `.vscode/mcp.json`:
+```json
+{
+  "servers": {
+    "microsoft-docs": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic/microsoft-docs-mcp"]
+    }
+  }
+}
+```
