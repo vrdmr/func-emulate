@@ -51,6 +51,10 @@ These assumptions will be validated in future work (see Priority List below).
 | Priority | Feature | Description |
 |----------|---------|-------------|
 | ~~P1~~ | ~~**Version selection**~~ | ✅ Done: `--version` flag for non-interactive version selection |
+| ~~P1.1~~ | ~~**Arrow key navigation**~~ | ✅ Done: Up/down arrows, vim keys (j/k), number keys for selection |
+| ~~P1.2~~ | ~~**Template search**~~ | ✅ Done: Type 3+ chars to filter templates in selection prompt |
+| ~~P1.3~~ | ~~**Template pagination**~~ | ✅ Done: Top 9 templates shown, "More..." option for full list |
+| ~~P1.4~~ | ~~**Dev environment setup**~~ | ✅ Done: `--env` flag for venv/npm install/dotnet restore |
 | P2 | **Runtime detection** | Detect installed runtimes and versions before prompting |
 | P3 | **Version validation** | Check if local version is supported by Azure Functions |
 | P4 | **Prerequisites validation** | Check required tools are installed (Python, Node, Maven, .NET SDK, etc.) |
@@ -183,6 +187,7 @@ fnx init --list-templates --runtime python
 | `--template`       | `-t`  | Template ID from manifest                                | (prompt)       |
 | `--name`           | `-n`  | Project directory name                                   | (prompt or cwd)|
 | `--sku`            |       | Target SKU: flex, premium, dedicated                     | flex           |
+| `--env`            | `-e`  | Setup dev environment (venv for Python, npm install for Node) | false |
 | `--yes`            | `-y`  | Skip confirmation prompt                                 | false          |
 | `--force`          | `-f`  | Initialize in non-empty directory (see below)           | false          |
 | `--verbose`        | `-v`  | Show detailed output (manifest URL, cache status, files) | false          |

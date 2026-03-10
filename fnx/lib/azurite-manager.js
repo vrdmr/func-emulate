@@ -14,14 +14,63 @@ let azuriteProcess = null;
 let weStartedAzurite = false;
 
 /**
- * Determine whether Azurite is needed based on AzureWebJobsStorage value.
- * Returns true for "UseDevelopmentStorage=true", empty string, or missing key.
+ * Check if a connection string value indicates development/emulator storage.
+ * Matches:
+ * - "UseDevelopmentStorage=true"
+ * - "UseDevelopmentStorage=true;DevelopmentStorageProxyUri=..."
+ * - Connection strings pointing to devstoreaccount1 (Azurite default)
+ * - Connection strings pointing to 127.0.0.1:10000 (Azurite default ports)
+ */
+function isDevStorageConnectionString(value) {
+  if (!value || typeof value !== 'string') return false;
+  
+  const normalized = value.toLowerCase();
+  
+  // Check for UseDevelopmentStorage=true (with or without additional params)
+  if (normalized.startsWith('usedevelopmentstorage=true')) {
+    return true;
+  }
+  
+  // Check for Azurite default account name
+  if (normalized.includes('devstoreaccount1')) {
+    return true;
+  }
+  
+  // Check for localhost Azurite ports (10000, 10001, 10002)
+  if (normalized.includes('127.0.0.1:10000') || 
+      normalized.includes('127.0.0.1:10001') || 
+      normalized.includes('127.0.0.1:10002') ||
+      normalized.includes('localhost:10000') ||
+      normalized.includes('localhost:10001') ||
+      normalized.includes('localhost:10002')) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Determine whether Azurite is needed based on any setting using development storage.
+ * Returns { needed: boolean, keys: string[] } where keys are the ones using dev storage.
  */
 function needsAzurite(mergedValues) {
-  const connStr = mergedValues?.AzureWebJobsStorage;
-  if (!connStr || connStr === '') return true;
-  if (connStr === 'UseDevelopmentStorage=true') return true;
-  return false;
+  if (!mergedValues) return { needed: false, keys: [] };
+  
+  const devStorageKeys = [];
+  
+  for (const [key, value] of Object.entries(mergedValues)) {
+    if (isDevStorageConnectionString(value)) {
+      devStorageKeys.push(key);
+    }
+  }
+  
+  // Also check AzureWebJobsStorage specially - empty/missing means dev storage
+  const webJobsStorage = mergedValues.AzureWebJobsStorage;
+  if ((!webJobsStorage || webJobsStorage === '') && !devStorageKeys.includes('AzureWebJobsStorage')) {
+    devStorageKeys.push('AzureWebJobsStorage');
+  }
+  
+  return { needed: devStorageKeys.length > 0, keys: devStorageKeys };
 }
 
 /**
@@ -130,12 +179,21 @@ export async function ensureAzurite(mergedValues, opts = {}) {
     return null;
   }
 
-  if (!needsAzurite(mergedValues)) {
+  const { needed, keys } = needsAzurite(mergedValues);
+  if (!needed) {
     return null;
   }
 
-  const storageVal = mergedValues?.AzureWebJobsStorage || '(empty)';
-  console.log(info(`[fnx] Detected AzureWebJobsStorage=${storageVal}`));
+  // Log which connection strings are using dev storage
+  if (keys.length === 1) {
+    const val = mergedValues?.[keys[0]] || '(empty)';
+    console.log(info(`[fnx] Detected ${keys[0]}=${val}`));
+  } else {
+    console.log(info(`[fnx] Detected ${keys.length} connection strings using UseDevelopmentStorage=true:`));
+    for (const key of keys) {
+      console.log(info(`[fnx]   • ${key}`));
+    }
+  }
 
   // Check if Azurite is already running
   if (await isAzuriteRunning()) {

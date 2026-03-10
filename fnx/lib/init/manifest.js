@@ -48,14 +48,15 @@ function filterTrustedTemplates(templates, defaultRepoUrl, verbose) {
 }
 
 /**
- * Fetch manifest from URL with caching and bundled fallback
- * @param {string} url - Manifest URL
+ * Fetch manifest from URL with caching, backup URL, and bundled fallback
+ * @param {string} url - Primary manifest URL (CDN)
  * @param {Object} options - Options
  * @param {boolean} options.verbose - Show detailed logging
+ * @param {string} options.backupUrl - Backup URL to try if CDN fails
  * @returns {Promise<{templates: Array}>} Parsed manifest
  */
 export async function fetchManifest(url, options = {}) {
-  const { verbose } = options;
+  const { verbose, backupUrl } = options;
 
   // Check if cached manifest is still valid
   const cached = await loadCachedManifest();
@@ -113,19 +114,37 @@ export async function fetchManifest(url, options = {}) {
 
     return manifest;
   } catch (err) {
-    // Network error — fall back to cache if available
+    // CDN failed — fall back to cache first if available
     if (cached) {
-      if (verbose) console.log(`  Network error, using stale cache: ${err.message}`);
-      // Filter cached manifest too
+      if (verbose) console.log(`  CDN failed (${err.message}), using stale cache`);
       cached.manifest.templates = filterTrustedTemplates(cached.manifest.templates, cached.manifest.repositoryUrl, verbose);
       return cached.manifest;
     }
 
-    // Fall back to bundled manifest
+    // No cache — try backup URL (GitHub) if provided
+    if (backupUrl) {
+      if (verbose) console.log(`  CDN failed (${err.message}), trying GitHub backup...`);
+      try {
+        const backupResponse = await fetch(backupUrl);
+        if (backupResponse.ok) {
+          const manifest = await backupResponse.json();
+          if (manifest && Array.isArray(manifest.templates)) {
+            manifest.templates = filterTrustedTemplates(manifest.templates, manifest.repositoryUrl, verbose);
+            if (verbose) console.log(`  Fetched manifest from GitHub backup`);
+            // Cache the backup result too
+            await cacheManifest(manifest, { fetchedAt: Date.now(), url: backupUrl });
+            return manifest;
+          }
+        }
+      } catch (backupErr) {
+        if (verbose) console.log(`  GitHub backup also failed: ${backupErr.message}`);
+      }
+    }
+
+    // Last resort — fall back to bundled manifest
     const bundled = await loadBundledManifest();
     if (bundled) {
-      if (verbose) console.log(`  CDN unavailable, using bundled manifest`);
-      // Filter bundled manifest too
+      if (verbose) console.log(`  All sources unavailable, using bundled manifest`);
       bundled.templates = filterTrustedTemplates(bundled.templates, bundled.repositoryUrl, verbose);
       return bundled;
     }

@@ -31,12 +31,15 @@ Make Azurite a managed dependency of fnx, installed and started automatically wh
 ```
 fnx start
   ├── Read local.settings.json
-  ├── Check AzureWebJobsStorage value
-  │   ├── "UseDevelopmentStorage=true"  → Start Azurite ✅
-  │   ├── "" (empty) or missing         → Start Azurite ✅ (assume local dev)
-  │   └── Real connection string         → Skip Azurite ❌ (user has real storage)
+  ├── Check ALL setting values (not just AzureWebJobsStorage)
+  │   ├── Any value = "UseDevelopmentStorage=true"  → Start Azurite ✅
+  │   ├── Any value contains "devstoreaccount1"     → Start Azurite ✅
+  │   ├── Any value contains "localhost:10000/1/2"  → Start Azurite ✅
+  │   └── No dev storage patterns found             → Skip Azurite ❌
   └── Launch host (after Azurite is ready)
 ```
+
+**Note:** Any connection string setting (e.g., `MyStorageConnection`, `BlobStorageConnection`) that uses dev storage will trigger Azurite, not just `AzureWebJobsStorage`.
 
 ### Lazy Installation
 

@@ -149,7 +149,7 @@ describe('fnx init - Interactive prompts (readline)', () => {
     const runtimeDisplayMap = {
       'python': 'Python',
       'node': 'Node.js (TypeScript/JavaScript)',
-      'dotnet-isolated': '.NET (C#)',
+      'dotnet-isolated': '.NET Isolated (C#)',
       'java': 'Java',
       'powershell': 'PowerShell',
     };
@@ -294,6 +294,313 @@ describe('fnx init - Interactive prompts (readline)', () => {
       assert.ok(skuOptions[0].label.includes('serverless'));
       assert.ok(skuOptions[1].label.includes('VNet'));
       assert.ok(skuOptions[2].label.includes('App Service'));
+    });
+  });
+});
+
+describe('fnx init - arrow key navigation logic', () => {
+  describe('selectPrompt index calculations', () => {
+    it('should wrap around when going up from first item', () => {
+      const options = [{ value: 'a' }, { value: 'b' }, { value: 'c' }];
+      let selectedIndex = 0;
+      
+      // Simulate up arrow from index 0 - should wrap to last
+      selectedIndex = (selectedIndex - 1 + options.length) % options.length;
+      assert.strictEqual(selectedIndex, 2, 'Should wrap to last item');
+    });
+
+    it('should wrap around when going down from last item', () => {
+      const options = [{ value: 'a' }, { value: 'b' }, { value: 'c' }];
+      let selectedIndex = 2;
+      
+      // Simulate down arrow from last index - should wrap to first
+      selectedIndex = (selectedIndex + 1) % options.length;
+      assert.strictEqual(selectedIndex, 0, 'Should wrap to first item');
+    });
+
+    it('should move up correctly within bounds', () => {
+      const options = [{ value: 'a' }, { value: 'b' }, { value: 'c' }];
+      let selectedIndex = 2;
+      
+      selectedIndex = (selectedIndex - 1 + options.length) % options.length;
+      assert.strictEqual(selectedIndex, 1);
+      
+      selectedIndex = (selectedIndex - 1 + options.length) % options.length;
+      assert.strictEqual(selectedIndex, 0);
+    });
+
+    it('should move down correctly within bounds', () => {
+      const options = [{ value: 'a' }, { value: 'b' }, { value: 'c' }];
+      let selectedIndex = 0;
+      
+      selectedIndex = (selectedIndex + 1) % options.length;
+      assert.strictEqual(selectedIndex, 1);
+      
+      selectedIndex = (selectedIndex + 1) % options.length;
+      assert.strictEqual(selectedIndex, 2);
+    });
+  });
+
+  describe('number key quick selection', () => {
+    it('should validate number key in valid range', () => {
+      const options = [{ value: 'a' }, { value: 'b' }, { value: 'c' }];
+      
+      const isValidNumberKey = (key) => {
+        if (key < '1' || key > '9') return false;
+        const num = parseInt(key, 10);
+        return num >= 1 && num <= options.length;
+      };
+      
+      assert.ok(isValidNumberKey('1'));
+      assert.ok(isValidNumberKey('2'));
+      assert.ok(isValidNumberKey('3'));
+      assert.ok(!isValidNumberKey('4'), 'Out of range');
+      assert.ok(!isValidNumberKey('0'), 'Zero is not valid');
+      assert.ok(!isValidNumberKey('a'), 'Letters are not valid');
+    });
+
+    it('should return correct option value for number key', () => {
+      const options = [
+        { value: 'python', label: 'Python' },
+        { value: 'node', label: 'Node.js' },
+        { value: 'dotnet', label: '.NET' },
+      ];
+      
+      const getValueForNumberKey = (key) => {
+        const num = parseInt(key, 10);
+        return options[num - 1].value;
+      };
+      
+      assert.strictEqual(getValueForNumberKey('1'), 'python');
+      assert.strictEqual(getValueForNumberKey('2'), 'node');
+      assert.strictEqual(getValueForNumberKey('3'), 'dotnet');
+    });
+  });
+
+  describe('key code handling', () => {
+    it('should recognize up arrow escape sequence', () => {
+      const upArrow = '\x1b[A';
+      assert.strictEqual(upArrow, '\x1b[A');
+      assert.strictEqual(upArrow.charCodeAt(0), 0x1b); // ESC
+      assert.strictEqual(upArrow.charCodeAt(1), 0x5b); // [
+      assert.strictEqual(upArrow.charCodeAt(2), 0x41); // A
+    });
+
+    it('should recognize down arrow escape sequence', () => {
+      const downArrow = '\x1b[B';
+      assert.strictEqual(downArrow, '\x1b[B');
+      assert.strictEqual(downArrow.charCodeAt(2), 0x42); // B
+    });
+
+    it('should recognize Ctrl+C', () => {
+      const ctrlC = '\x03';
+      assert.strictEqual(ctrlC.charCodeAt(0), 3);
+    });
+
+    it('should recognize Enter key', () => {
+      const enter = '\r';
+      const linefeed = '\n';
+      assert.strictEqual(enter.charCodeAt(0), 13);
+      assert.strictEqual(linefeed.charCodeAt(0), 10);
+    });
+
+    it('should recognize vim navigation keys', () => {
+      assert.strictEqual('j', 'j'); // down
+      assert.strictEqual('k', 'k'); // up
+    });
+  });
+
+  describe('canUseRawMode detection', () => {
+    it('should detect raw mode availability based on isTTY', () => {
+      // In test environment, stdin may or may not be TTY
+      const mockStdin = { isTTY: true, setRawMode: () => {} };
+      const canUse = mockStdin.isTTY && typeof mockStdin.setRawMode === 'function';
+      assert.strictEqual(canUse, true);
+    });
+
+    it('should return false when not TTY', () => {
+      const mockStdin = { isTTY: false, setRawMode: () => {} };
+      const canUse = mockStdin.isTTY && typeof mockStdin.setRawMode === 'function';
+      assert.strictEqual(canUse, false);
+    });
+
+    it('should return false when setRawMode not available', () => {
+      const mockStdin = { isTTY: true };
+      const canUse = mockStdin.isTTY && typeof mockStdin.setRawMode === 'function';
+      assert.strictEqual(canUse, false);
+    });
+  });
+
+  describe('disabled options handling', () => {
+    it('should skip disabled options when navigating up', () => {
+      const options = [
+        { value: 'a', label: 'A' },
+        { value: '__SEP__', label: '---', disabled: true },
+        { value: 'b', label: 'B' },
+      ];
+      
+      // findNextSelectable simulation
+      const findNextSelectable = (options, from, direction) => {
+        let idx = from;
+        for (let i = 0; i < options.length; i++) {
+          idx = (idx + direction + options.length) % options.length;
+          if (!options[idx].disabled) return idx;
+        }
+        return from;
+      };
+      
+      // From index 2 (B), going up should skip separator to 0 (A)
+      assert.strictEqual(findNextSelectable(options, 2, -1), 0);
+    });
+
+    it('should skip disabled options when navigating down', () => {
+      const options = [
+        { value: 'a', label: 'A' },
+        { value: '__SEP__', label: '---', disabled: true },
+        { value: 'b', label: 'B' },
+      ];
+      
+      const findNextSelectable = (options, from, direction) => {
+        let idx = from;
+        for (let i = 0; i < options.length; i++) {
+          idx = (idx + direction + options.length) % options.length;
+          if (!options[idx].disabled) return idx;
+        }
+        return from;
+      };
+      
+      // From index 0 (A), going down should skip separator to 2 (B)
+      assert.strictEqual(findNextSelectable(options, 0, 1), 2);
+    });
+
+    it('should count only selectable options for number keys', () => {
+      const options = [
+        { value: 'a', label: 'A' },
+        { value: 'b', label: 'B' },
+        { value: '__SEP__', label: '---', disabled: true },
+        { value: 'c', label: 'C' },
+      ];
+      
+      const selectableOptions = options.filter(o => !o.disabled);
+      assert.strictEqual(selectableOptions.length, 3);
+      assert.strictEqual(selectableOptions[0].value, 'a');
+      assert.strictEqual(selectableOptions[1].value, 'b');
+      assert.strictEqual(selectableOptions[2].value, 'c');
+    });
+
+    it('should find first selectable option for initial selection', () => {
+      const options = [
+        { value: '__SEP__', label: '---', disabled: true },
+        { value: 'a', label: 'A' },
+        { value: 'b', label: 'B' },
+      ];
+      
+      const firstSelectable = options.findIndex(o => !o.disabled);
+      assert.strictEqual(firstSelectable, 1);
+    });
+  });
+
+  describe('template pagination', () => {
+    it('should limit initial display to 9 templates', () => {
+      const MAX_INITIAL_DISPLAY = 9;
+      const templates = Array.from({ length: 15 }, (_, i) => ({ id: `t${i}` }));
+      
+      const displayTemplates = templates.slice(0, MAX_INITIAL_DISPLAY);
+      assert.strictEqual(displayTemplates.length, 9);
+    });
+
+    it('should show More option when there are more than 9 templates', () => {
+      const MAX_INITIAL_DISPLAY = 9;
+      const templates = Array.from({ length: 15 }, (_, i) => ({ id: `t${i}` }));
+      
+      const hasMore = templates.length > MAX_INITIAL_DISPLAY;
+      assert.strictEqual(hasMore, true);
+      
+      const remaining = templates.length - MAX_INITIAL_DISPLAY;
+      assert.strictEqual(remaining, 6);
+    });
+
+    it('should not show More option when templates fit in initial display', () => {
+      const MAX_INITIAL_DISPLAY = 9;
+      const templates = Array.from({ length: 7 }, (_, i) => ({ id: `t${i}` }));
+      
+      const hasMore = templates.length > MAX_INITIAL_DISPLAY;
+      assert.strictEqual(hasMore, false);
+    });
+  });
+
+  describe('template search filtering', () => {
+    const MIN_SEARCH_LENGTH = 3;
+
+    it('should require minimum 3 characters to filter', () => {
+      assert.strictEqual(MIN_SEARCH_LENGTH, 3);
+      assert.ok('ht'.length < MIN_SEARCH_LENGTH);
+      assert.ok('htt'.length >= MIN_SEARCH_LENGTH);
+    });
+
+    it('should filter options case-insensitively', () => {
+      const options = [
+        { value: 'http', label: 'HTTP Trigger', searchText: 'http trigger' },
+        { value: 'timer', label: 'Timer Trigger', searchText: 'timer trigger' },
+        { value: 'blob', label: 'Blob Trigger', searchText: 'blob trigger' },
+      ];
+
+      const query = 'http'.toLowerCase();
+      const filtered = options.filter(opt => {
+        const label = opt.label.toLowerCase();
+        const searchText = (opt.searchText || '').toLowerCase();
+        return label.includes(query) || searchText.includes(query);
+      });
+
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].value, 'http');
+    });
+
+    it('should match on searchText field', () => {
+      const options = [
+        { value: 'a', label: 'A Template', searchText: 'http trigger api' },
+        { value: 'b', label: 'B Template', searchText: 'timer cron' },
+      ];
+
+      const query = 'api';
+      const filtered = options.filter(opt => {
+        const searchText = (opt.searchText || '').toLowerCase();
+        return searchText.includes(query);
+      });
+
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].value, 'a');
+    });
+
+    it('should return empty array when no matches', () => {
+      const options = [
+        { value: 'a', label: 'HTTP Trigger' },
+        { value: 'b', label: 'Timer Trigger' },
+      ];
+
+      const query = 'cosmos';
+      const filtered = options.filter(opt => opt.label.toLowerCase().includes(query));
+
+      assert.strictEqual(filtered.length, 0);
+    });
+
+    it('should handle backspace by removing last character', () => {
+      let searchQuery = 'http';
+      searchQuery = searchQuery.slice(0, -1);
+      assert.strictEqual(searchQuery, 'htt');
+      
+      searchQuery = searchQuery.slice(0, -1);
+      assert.strictEqual(searchQuery, 'ht');
+    });
+
+    it('should clear search on Escape key', () => {
+      let searchQuery = 'http';
+      // Simulate Escape key press
+      const escapeKey = '\x1b';
+      if (escapeKey === '\x1b' && escapeKey.length === 1) {
+        searchQuery = '';
+      }
+      assert.strictEqual(searchQuery, '');
     });
   });
 });

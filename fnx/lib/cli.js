@@ -192,6 +192,7 @@ export async function main(args) {
   const verbose = args.includes('--verbose');
   const noMcp = args.includes('--no-mcp');
   const noAzurite = args.includes('--no-azurite');
+  const enforceAuth = args.includes('--enforce-auth');
   const profilesSource = getFlag(args, '--profiles');
 
   // Set profiles source before any profile resolution
@@ -315,6 +316,7 @@ export async function main(args) {
     verbose,
     hostState,
     noAzurite,
+    enforceAuth,
   });
 }
 
@@ -505,6 +507,7 @@ ${title('Start Options:')}      ${dim('(fnx start)')}
   ${success('--mcp-port')} <port>   Port for the live MCP server (default: host port + 1).
   ${success('--no-mcp')}            Disable the live MCP server.
   ${success('--no-azurite')}        Skip automatic Azurite start.
+  ${success('--enforce-auth')}      Require authentication locally (default: auth bypassed).
 
 ${title('Sync Options:')}       ${dim('(fnx sync [host|extensions])')}
   ${success('--keep')} <n>          Keep latest N versions in cache (default: 2).
@@ -553,6 +556,7 @@ ${title('Options:')}
   ${success('--verbose')}          Show all host output (unfiltered).
   ${success('--no-mcp')}           Disable the live MCP server.
   ${success('--no-azurite')}       Skip automatic Azurite start.
+  ${success('--enforce-auth')}     Require authentication locally (default: auth bypassed).
   ${success('-h')}, ${success('--help')}         Show this help message.
 
 ${title('Examples:')}

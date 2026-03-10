@@ -350,6 +350,11 @@ export async function launchHost(hostDir, opts) {
       'Microsoft.Azure.Functions.ExtensionBundle'),
   };
 
+  // Bypass auth for local development (unless --enforce-auth is set)
+  if (!opts.enforceAuth) {
+    env['AzureFunctionsJobHost__AuthBypassForLocalDevelopment'] = 'true';
+  }
+
   // Merge all app config values into env
   if (opts.mergedValues) {
     for (const [key, value] of Object.entries(opts.mergedValues)) {
