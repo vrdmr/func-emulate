@@ -9,6 +9,8 @@ import { readFile, writeFile, mkdir, copyFile, readdir, stat } from 'node:fs/pro
 import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { detectProject } from './detect.js';
 import { detectAgents, formatAgentList } from './agent-detect.js';
 import { title, info, funcName, success, error as errorColor, warning, dim, bold } from '../colors.js';
@@ -86,13 +88,22 @@ export async function runSetup(args) {
     console.log();
   }
 
+  if (!module || module === 'plugin') {
+    console.log(bold('🧩 Installing azure-skills plugin...'));
+    const r = await applyPluginModule(agents, { force: forceFlag, dryRun });
+    results.push(...r);
+    console.log();
+  }
+
   // Summary
   console.log(bold('─'.repeat(50)));
   const created = results.filter(r => r.action === 'created');
   const skipped = results.filter(r => r.action === 'skipped');
   const merged = results.filter(r => r.action === 'merged');
+  const installed = results.filter(r => r.action === 'installed');
   console.log(success(`  ✓ ${created.length} files created`));
   if (merged.length) console.log(success(`  ✓ ${merged.length} files updated (merged)`));
+  if (installed.length) console.log(success(`  ✓ ${installed.length} plugins installed`));
   if (skipped.length) console.log(dim(`  ○ ${skipped.length} files skipped (already exist, use --force to overwrite)`));
   console.log();
   console.log(dim('  Run ') + funcName('fnx chat') + dim(' to start an AI-assisted development session.'));
@@ -221,6 +232,113 @@ async function mergeMcpConfig(filePath, key, servers, displayName, opts) {
   }
   console.log(success(`    ✓ ${displayName} (fnx-templates MCP added)`));
   return { file: filePath, action: 'merged' };
+}
+
+// ─── Plugin Module ───
+
+const AZURE_SKILLS_PLUGIN = {
+  marketplace: { owner: 'microsoft', repo: 'azure-skills', name: 'azure-skills' },
+  pluginId: 'azure',
+};
+
+const PLUGIN_AGENTS = {
+  'github-copilot': {
+    command: 'copilot',
+    marketplaceAddArgs: ['plugin', 'marketplace', 'add', 'microsoft/azure-skills'],
+    installArgs: ['plugin', 'install', 'azure@azure-skills'],
+    listArgs: ['plugin', 'list'],
+    marketplaceListArgs: ['plugin', 'marketplace', 'list'],
+  },
+  'claude-code': {
+    command: 'claude',
+    marketplaceAddArgs: ['plugin', 'marketplace', 'add', 'microsoft/azure-skills'],
+    installArgs: ['plugin', 'install', 'azure@azure-skills'],
+    listArgs: ['plugin', 'list'],
+    marketplaceListArgs: ['plugin', 'marketplace', 'list'],
+  },
+};
+
+const execFileAsync = promisify(execFile);
+
+async function applyPluginModule(agents, opts) {
+  const results = [];
+
+  for (const agent of agents) {
+    const pluginDef = PLUGIN_AGENTS[agent.id];
+    if (!pluginDef) continue;
+
+    const agentLabel = agent.name || agent.id;
+
+    if (opts.dryRun) {
+      console.log(dim(`    ○ ${agentLabel}: azure-skills plugin (dry-run, skipped)`));
+      results.push({ file: `plugin:${agent.id}:azure-skills`, action: 'skipped' });
+      continue;
+    }
+
+    try {
+      // Check if plugin is already installed
+      const alreadyInstalled = await isPluginInstalled(pluginDef);
+      if (alreadyInstalled && !opts.force) {
+        console.log(dim(`    ○ ${agentLabel}: azure-skills plugin (already installed)`));
+        results.push({ file: `plugin:${agent.id}:azure-skills`, action: 'skipped' });
+        continue;
+      }
+
+      // Ensure marketplace is registered
+      const marketplaceReady = await ensureMarketplace(pluginDef, agentLabel);
+      if (!marketplaceReady) {
+        console.log(warning(`    ⚠ ${agentLabel}: could not register marketplace, skipping plugin`));
+        results.push({ file: `plugin:${agent.id}:azure-skills`, action: 'skipped' });
+        continue;
+      }
+
+      // Install the plugin
+      console.log(dim(`    ⏳ ${agentLabel}: installing azure-skills plugin...`));
+      await execFileAsync(pluginDef.command, pluginDef.installArgs, { timeout: 60000 });
+      console.log(success(`    ✓ ${agentLabel}: azure-skills plugin installed`));
+      results.push({ file: `plugin:${agent.id}:azure-skills`, action: 'installed' });
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        console.log(warning(`    ⚠ ${agentLabel}: '${pluginDef.command}' not found, skipping plugin`));
+      } else {
+        // Show stderr if available (contains the actual error), otherwise fall back to message
+        const detail = err.stderr?.trim().split('\n').pop() || err.message?.split('\n')[0] || 'unknown error';
+        console.log(warning(`    ⚠ ${agentLabel}: plugin install failed (${detail})`));
+        console.log(dim(`      Try manually: ${pluginDef.command} ${pluginDef.installArgs.join(' ')}`));
+      }
+      results.push({ file: `plugin:${agent.id}:azure-skills`, action: 'skipped' });
+    }
+  }
+
+  if (results.length === 0) {
+    console.log(dim('    ○ No agents with plugin support detected'));
+  }
+
+  return results;
+}
+
+async function isPluginInstalled(pluginDef) {
+  try {
+    const { stdout } = await execFileAsync(pluginDef.command, pluginDef.listArgs, { timeout: 10000 });
+    return stdout.includes('azure');
+  } catch {
+    return false;
+  }
+}
+
+async function ensureMarketplace(pluginDef, agentLabel) {
+  try {
+    // Check if marketplace is already registered
+    const { stdout } = await execFileAsync(pluginDef.command, pluginDef.marketplaceListArgs, { timeout: 10000 });
+    if (stdout.includes('azure-skills')) return true;
+
+    // Register marketplace
+    console.log(dim(`    ⏳ ${agentLabel}: registering azure-skills marketplace...`));
+    await execFileAsync(pluginDef.command, pluginDef.marketplaceAddArgs, { timeout: 30000 });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ─── Content Generators ───
