@@ -36,15 +36,16 @@ export async function runSetup(args) {
   console.log(bold('🔍 Detecting project...'));
   const project = await detectProject(appPath);
   if (!project) {
-    console.error(errorColor('  ✗ No Azure Functions project found.'));
-    console.error(dim('    Ensure host.json exists in the current directory or use --app-path.'));
-    process.exit(1);
-  }
-  console.log(success(`  ✓ ${formatRuntime(project)} project detected`));
-  console.log(dim(`    SKU: ${project.sku} | Functions: ${project.functions.length} found`));
-  if (project.functions.length > 0) {
-    for (const fn of project.functions) {
-      console.log(dim(`      • ${fn.name} (${fn.type})`));
+    console.log(warning('  ⚠ No Azure Functions project detected (no host.json).'));
+    console.log(dim('    Skills and MCP config will still be installed.'));
+    console.log(dim('    Run `fnx init` to create a new project, or `fnx chat` to start with an agent.'));
+  } else {
+    console.log(success(`  ✓ ${formatRuntime(project)} project detected`));
+    console.log(dim(`    SKU: ${project.sku} | Functions: ${project.functions.length} found`));
+    if (project.functions.length > 0) {
+      for (const fn of project.functions) {
+        console.log(dim(`      • ${fn.name} (${fn.type})`));
+      }
     }
   }
   console.log();
@@ -222,6 +223,35 @@ async function mergeMcpConfig(filePath, key, servers, displayName, opts) {
 // ─── Content Generators ───
 
 function generateAgentsMd(project) {
+  if (!project) {
+    return `# Azure Functions Development Agent
+
+You are assisting a developer who wants to build Azure Functions applications with fnx.
+
+## Getting Started
+No Azure Functions project has been detected yet. Help the developer create one:
+
+1. Run \`fnx init\` to create a new Azure Functions project
+2. Choose a runtime (Node.js, Python, .NET, Java) and trigger type
+3. After project creation, run \`fnx setup\` to install additional agent configuration
+4. Use \`fnx start\` to launch the local emulator
+
+## Available fnx Skills
+- **fnx-diagnostics** — Troubleshoot fnx start issues
+- **fnx-best-practices** — SKU-specific best practices
+- **fnx-create-function** — Create new functions from templates
+- **fnx-intro** — Overview of fnx capabilities
+- **fnx-feedback** — Report issues as GitHub Issues
+
+## Guidelines
+- Use \`fnx init\` to scaffold a new project (not \`func init\`)
+- Use \`fnx start\` for local testing (not \`func start\`)
+- Use \`app-config.yaml\` for non-secret settings (commit to source control)
+- Do NOT put secrets in workspace files — use Key Vault or Managed Identity
+- Refer to installed skills in \`.agents/skills/\` for detailed guidance
+`;
+  }
+
   return `# Azure Functions Development Agent
 
 You are assisting a developer building Azure Functions applications with fnx.
@@ -251,6 +281,20 @@ You are assisting a developer building Azure Functions applications with fnx.
 }
 
 function generateCopilotInstructions(project) {
+  if (!project) {
+    return `# Azure Functions Development with fnx
+
+No Azure Functions project detected yet. Run \`fnx init\` to create one.
+
+## Key Rules
+- Use \`fnx init\` to create a new project
+- Test locally with \`fnx start\` (not \`func start\`)
+- Non-secret config goes in \`app-config.yaml\` (committed to git)
+- Secrets in \`local.settings.json\` only (gitignored)
+- See \`.agents/skills/\` for detailed Azure Functions guidance
+`;
+  }
+
   return `# Azure Functions Development with fnx
 
 This project is an Azure Functions application using **${formatRuntime(project)}** targeting **${project.sku}** SKU.
@@ -279,6 +323,7 @@ async function writeIfNew(filePath, content, displayName, opts) {
 }
 
 function formatRuntime(project) {
+  if (!project) return 'unknown';
   const lang = project.language === 'typescript' ? 'TypeScript' :
                project.language === 'javascript' ? 'JavaScript' :
                project.runtime || 'unknown';

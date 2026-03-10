@@ -66,10 +66,13 @@ describe('fnx setup --all', { timeout: 60000 }, () => {
     if (tmp && existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('fails when no host.json is present', async () => {
+  it('succeeds even when no host.json is present (empty dir)', async () => {
     tmp = makeTmpDir();
+    mkdirSync(join(tmp, '.vscode'), { recursive: true });
     const result = await run(['setup', '--all', '--app-path', tmp]);
-    assert.notEqual(result.exitCode, 0);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes('No Azure Functions project detected'),
+      'Should warn about missing project');
   });
 
   it('creates agent files for a Node.js project', async () => {
@@ -216,5 +219,49 @@ describe('fnx chat auto-setup', { timeout: 60000 }, () => {
     // Should not mention "auto-setup" or "Running fnx setup"
     assert.ok(!result.stdout.includes('Running fnx setup'),
       'Should not re-run setup when skills already exist');
+  });
+
+  it('auto-runs setup from empty directory (no host.json)', async () => {
+    tmp = makeTmpDir();
+    // Empty dir — no host.json, no package.json
+
+    const result = await run(['chat', '--agent', 'nonexistent-agent', '--app-path', tmp]);
+
+    // Skills should still be installed even without a project
+    assert.ok(existsSync(join(tmp, '.agents', 'skills', 'fnx-diagnostics', 'SKILL.md')),
+      'Skills should be installed even in empty directory');
+    assert.ok(existsSync(join(tmp, 'AGENTS.md')),
+      'AGENTS.md should be created with getting-started guidance');
+
+    // AGENTS.md should mention fnx init (guide user to create project)
+    const agentsMd = readFileSync(join(tmp, 'AGENTS.md'), 'utf8');
+    assert.ok(agentsMd.includes('fnx init'),
+      'AGENTS.md should mention fnx init for new project creation');
+  });
+});
+
+describe('fnx setup on empty directory', { timeout: 60000 }, () => {
+  let tmp;
+
+  afterEach(() => {
+    if (tmp && existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('installs skills and MCP even without a project', async () => {
+    tmp = makeTmpDir();
+    mkdirSync(join(tmp, '.vscode'), { recursive: true });
+
+    const result = await run(['setup', '--all', '--app-path', tmp]);
+    assert.equal(result.exitCode, 0);
+
+    // Skills should be installed
+    assert.ok(existsSync(join(tmp, '.agents', 'skills', 'fnx-diagnostics', 'SKILL.md')),
+      'Skills should be installed in empty directory');
+
+    // AGENTS.md should exist with getting-started content
+    assert.ok(existsSync(join(tmp, 'AGENTS.md')));
+    const agentsMd = readFileSync(join(tmp, 'AGENTS.md'), 'utf8');
+    assert.ok(agentsMd.includes('fnx init'),
+      'AGENTS.md should guide user to create a project');
   });
 });

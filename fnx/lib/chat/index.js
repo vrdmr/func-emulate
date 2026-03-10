@@ -55,24 +55,23 @@ export async function runChat(args) {
     if (project.functions.length > 0) {
       console.log(dim(`    Functions: ${project.functions.map(f => `${f.name} (${f.type})`).join(', ')}`));
     }
-
-    // Check if skills are installed
-    const skillsDir = join(appPath, '.agents', 'skills');
-    if (existsSync(skillsDir)) {
-      try {
-        const { readdir } = await import('node:fs/promises');
-        const skills = (await readdir(skillsDir)).filter(d => !d.startsWith('.'));
-        console.log(dim(`    Skills: ${skills.length} installed in .agents/skills/`));
-      } catch { /* ignore */ }
-    } else {
-      // Auto-run setup before launching the agent
-      console.log(warning('    ⚠ No skills installed. Running fnx setup automatically...'));
-      console.log();
-      const { runSetup } = await import('../setup/index.js');
-      await runSetup(['--all', '--app-path', appPath]);
-    }
   } else {
-    console.log(warning('  ⚠ No Azure Functions project detected. Continuing with generic context.'));
+    console.log(warning('  ⚠ No Azure Functions project detected. The agent can help you create one.'));
+  }
+
+  // Auto-run setup if skills not installed (works with or without project)
+  const skillsDir = join(appPath, '.agents', 'skills');
+  if (existsSync(skillsDir)) {
+    try {
+      const { readdir } = await import('node:fs/promises');
+      const skills = (await readdir(skillsDir)).filter(d => !d.startsWith('.'));
+      console.log(dim(`    Skills: ${skills.length} installed in .agents/skills/`));
+    } catch { /* ignore */ }
+  } else {
+    console.log(warning('    ⚠ No skills installed. Running fnx setup automatically...'));
+    console.log();
+    const { runSetup } = await import('../setup/index.js');
+    await runSetup(['--all', '--app-path', appPath]);
   }
   console.log();
 
