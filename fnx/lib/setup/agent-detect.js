@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 const execFileAsync = promisify(execFile);
 
 const CLI_AGENTS = [
+  { id: 'github-copilot', name: 'GitHub Copilot CLI', command: 'copilot', type: 'cli' },
   { id: 'claude-code', name: 'Claude Code', command: 'claude', type: 'cli' },
   { id: 'codex', name: 'Codex CLI', command: 'codex', type: 'cli' },
   { id: 'amp', name: 'Amp', command: 'amp', type: 'cli' },
@@ -34,18 +35,18 @@ export async function detectAgents(appPath) {
     agents.push({ id: 'cursor', name: 'Cursor', type: 'ide' });
   }
 
-  // 2. CLI binary detection
+  // 2. CLI binary detection (skip if already detected via IDE)
   for (const agent of CLI_AGENTS) {
-    if (await commandExists(agent.command)) {
+    if (!agents.find(a => a.id === agent.id) && await commandExists(agent.command)) {
       agents.push({ id: agent.id, name: agent.name, type: agent.type });
     }
   }
 
-  // 3. Always include github-copilot if not already detected (common default)
+  // 3. Fallback: include github-copilot if not detected via CLI or IDE
   if (!agents.find(a => a.id === 'github-copilot')) {
-    // Check if gh copilot extension is installed
+    // Check legacy ghcs or gh extension
     if (await commandExists('ghcs') || await commandExists('gh')) {
-      agents.push({ id: 'github-copilot', name: 'GitHub Copilot (CLI)', type: 'cli' });
+      agents.push({ id: 'github-copilot', name: 'GitHub Copilot (gh)', type: 'cli' });
     }
   }
 

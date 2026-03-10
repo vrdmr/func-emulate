@@ -23,7 +23,7 @@ const LAUNCHERS = {
     description: 'Claude Code reads .claude/skills/ and CLAUDE.md automatically',
   },
   'github-copilot': {
-    command: 'ghcs',
+    command: 'copilot',
     buildArgs: (ctx) => [],  // Copilot reads .github/copilot-instructions.md automatically
     description: 'GitHub Copilot reads .github/copilot-instructions.md automatically',
   },

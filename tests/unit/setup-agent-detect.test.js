@@ -49,6 +49,18 @@ describe('detectAgents', () => {
     }
   });
 
+  it('detects GitHub Copilot CLI via copilot command on this machine', async () => {
+    tmp = makeTmpDir();
+    // No .vscode/ dir — so IDE detection won't fire
+    // On this machine, `copilot` binary exists
+    const agents = await detectAgents(tmp);
+    const copilot = agents.find(a => a.id === 'github-copilot');
+    assert.ok(copilot, 'Should detect GitHub Copilot via copilot CLI binary');
+    // Should be detected as 'cli' type (not just gh fallback)
+    assert.equal(copilot.type, 'cli');
+    assert.ok(copilot.name.includes('Copilot'), 'Name should mention Copilot');
+  });
+
   it('does not duplicate github-copilot when .vscode/ exists and gh CLI is installed', async () => {
     tmp = makeTmpDir();
     mkdirSync(join(tmp, '.vscode'));
@@ -78,6 +90,16 @@ describe('formatAgentList', () => {
     // claude-code, codex, amp, gemini-cli, aider should show as not detected
     assert.ok(output.includes('✗ Claude Code (not detected)'));
     assert.ok(output.includes('✗ Codex CLI (not detected)'));
+  });
+
+  it('shows GitHub Copilot CLI in formatAgentList when detected', () => {
+    const agents = [
+      { id: 'github-copilot', name: 'GitHub Copilot (CLI)', type: 'cli' },
+    ];
+    const output = formatAgentList(agents);
+    assert.ok(output.includes('✓ GitHub Copilot (CLI)'));
+    // github-copilot should NOT also show as "not detected"
+    assert.ok(!output.includes('GitHub Copilot (CLI) (not detected)'));
   });
 
   it('returns string output', () => {
