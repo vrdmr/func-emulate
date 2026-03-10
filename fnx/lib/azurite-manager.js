@@ -189,7 +189,7 @@ export async function ensureAzurite(mergedValues, opts = {}) {
     const val = mergedValues?.[keys[0]] || '(empty)';
     console.log(info(`[fnx] Detected ${keys[0]}=${val}`));
   } else {
-    console.log(info(`[fnx] Detected ${keys.length} connection strings using UseDevelopmentStorage=true:`));
+    console.log(info(`[fnx] Detected ${keys.length} connection strings requiring Azurite:`));
     for (const key of keys) {
       console.log(info(`[fnx]   • ${key}`));
     }

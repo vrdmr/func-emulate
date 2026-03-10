@@ -264,15 +264,15 @@ async function selectPromptWithSearch(question, allOptions) {
         return;
       }
 
-      // Up arrow
-      if (key === '\x1b[A' || key === 'k') {
+      // Up arrow (j/k only when not searching - they're valid search chars)
+      if (key === '\x1b[A' || (searchQuery.length === 0 && key === 'k')) {
         selectedIndex = findNextSelectable(selectedIndex, -1);
         render();
         return;
       }
 
-      // Down arrow
-      if (key === '\x1b[B' || key === 'j') {
+      // Down arrow (j/k only when not searching - they're valid search chars)
+      if (key === '\x1b[B' || (searchQuery.length === 0 && key === 'j')) {
         selectedIndex = findNextSelectable(selectedIndex, 1);
         render();
         return;

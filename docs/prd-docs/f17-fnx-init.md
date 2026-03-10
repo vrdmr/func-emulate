@@ -127,8 +127,9 @@ https://cdn-test.functions.azure.com/public/templates/manifest.json
 1. **Cache valid (< 24h):** Use cached manifest
 2. **Cache stale:** Fetch from CDN with ETag (304 Not Modified → refresh TTL)
 3. **CDN unavailable + cache exists:** Use stale cache
-4. **CDN unavailable + no cache:** Use bundled manifest (`fnx/templates/manifest.json`)
-5. **All fail:** Error with message
+4. **CDN unavailable + no cache:** Try GitHub backup URL
+5. **GitHub unavailable:** Use bundled manifest (`fnx/templates/manifest.json`)
+6. **All fail:** Error with message
 
 **Network requirements:**
 

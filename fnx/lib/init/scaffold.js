@@ -12,7 +12,7 @@
  * Exports:
  * - downloadTemplate(template, targetDir, manifest, options) — Download template files
  * - generateConfigFiles(targetDir, options) — Generate app-config.yaml
- * - printSuccessBanner(targetDir, projectName, sku, runtime) — Print success message
+ * - printSuccessBanner(targetDir, projectName, sku, runtime, envSetupDone) — Print success message
  */
 
 import { mkdir, writeFile, rm, rename, readdir, readFile } from 'node:fs/promises';
@@ -612,40 +612,46 @@ async function replaceTemplatePlaceholders(targetDir, runtime, userVersion, verb
  * @param {string} sku - Target SKU
  * @param {string} runtime - Runtime name (python, node, dotnet-isolated, java, powershell)
  */
-export function printSuccessBanner(targetDir, projectName, sku, runtime) {
+export function printSuccessBanner(targetDir, projectName, sku, runtime, envSetupDone = false) {
   const cwd = process.cwd();
   const relativePath = targetDir === cwd ? '.' : targetDir.replace(cwd, '.').replace(/\\/g, '/');
 
-  // Runtime-specific install steps
+  // Runtime-specific install steps (skip if --env already did setup)
   let installStep;
   let extraSteps = 0;
-  switch (runtime) {
-    case 'python':
-      installStep = `${dim('2.')} ${bold('python -m venv .venv && .venv\\Scripts\\activate')} ${dim('(Windows)')}
-     ${dim('or')} ${bold('python -m venv .venv && source .venv/bin/activate')} ${dim('(Linux/macOS)')}
-  ${dim('3.')} ${bold('pip install -r requirements.txt')}`;
-      extraSteps = 1;
-      break;
-    case 'typescript':
-      installStep = `${dim('2.')} ${bold('npm install')}
-  ${dim('3.')} ${bold('npm run build')}`;
-      extraSteps = 1;
-      break;
-    case 'node':
-    case 'javascript':
-      installStep = `${dim('2.')} ${bold('npm install')}`;
-      break;
-    case 'dotnet-isolated':
-      installStep = `${dim('2.')} ${bold('dotnet restore')}`;
-      break;
-    case 'java':
-      installStep = `${dim('2.')} ${bold('mvn clean package')}`;
-      break;
-    case 'powershell':
-      installStep = `${dim('2.')} ${dim('(No dependencies to install)')}`;
-      break;
-    default:
-      installStep = `${dim('2.')} ${bold('Install dependencies')}`;
+  
+  if (envSetupDone) {
+    // Environment already set up via --env flag
+    installStep = `${dim('2.')} ${dim('(Dependencies already installed via --env)')}`;
+  } else {
+    switch (runtime) {
+      case 'python':
+        installStep = `${dim('2.')} ${bold('python -m venv .venv && .venv\\Scripts\\activate')} ${dim('(Windows)')}
+       ${dim('or')} ${bold('python -m venv .venv && source .venv/bin/activate')} ${dim('(Linux/macOS)')}
+    ${dim('3.')} ${bold('pip install -r requirements.txt')}`;
+        extraSteps = 1;
+        break;
+      case 'typescript':
+        installStep = `${dim('2.')} ${bold('npm install')}
+    ${dim('3.')} ${bold('npm run build')}`;
+        extraSteps = 1;
+        break;
+      case 'node':
+      case 'javascript':
+        installStep = `${dim('2.')} ${bold('npm install')}`;
+        break;
+      case 'dotnet-isolated':
+        installStep = `${dim('2.')} ${bold('dotnet restore')}`;
+        break;
+      case 'java':
+        installStep = `${dim('2.')} ${bold('mvn clean package')}`;
+        break;
+      case 'powershell':
+        installStep = `${dim('2.')} ${dim('(No dependencies to install)')}`;
+        break;
+      default:
+        installStep = `${dim('2.')} ${bold('Install dependencies')}`;
+    }
   }
 
   // Adjust fnx start step number based on extra steps

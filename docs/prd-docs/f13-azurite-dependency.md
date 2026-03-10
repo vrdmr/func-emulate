@@ -35,11 +35,12 @@ fnx start
   │   ├── Any value = "UseDevelopmentStorage=true"  → Start Azurite ✅
   │   ├── Any value contains "devstoreaccount1"     → Start Azurite ✅
   │   ├── Any value contains "localhost:10000/1/2"  → Start Azurite ✅
+  │   ├── AzureWebJobsStorage empty or missing      → Start Azurite ✅
   │   └── No dev storage patterns found             → Skip Azurite ❌
   └── Launch host (after Azurite is ready)
 ```
 
-**Note:** Any connection string setting (e.g., `MyStorageConnection`, `BlobStorageConnection`) that uses dev storage will trigger Azurite, not just `AzureWebJobsStorage`.
+**Note:** Any connection string setting (e.g., `MyStorageConnection`, `BlobStorageConnection`) that uses dev storage will trigger Azurite, not just `AzureWebJobsStorage`. Empty or missing `AzureWebJobsStorage` also triggers Azurite since many function types (timers, durable functions) require storage for internal operations.
 
 ### Lazy Installation
 
