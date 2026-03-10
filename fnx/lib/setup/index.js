@@ -5,8 +5,8 @@
  */
 
 import { existsSync } from 'node:fs';
-import { readFile, writeFile, mkdir, copyFile, readdir } from 'node:fs/promises';
-import { join, dirname, resolve } from 'node:path';
+import { readFile, writeFile, mkdir, copyFile, readdir, stat } from 'node:fs/promises';
+import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { detectProject } from './detect.js';
@@ -97,30 +97,49 @@ export async function runSetup(args) {
   console.log(dim('  Run ') + funcName('fnx chat') + dim(' to start an AI-assisted development session.'));
 }
 
+// ─── Helpers ───
+
+/** Recursively copy a directory, preserving structure. */
+async function copyDirRecursive(srcDir, dstDir, opts = {}) {
+  await mkdir(dstDir, { recursive: true });
+  const entries = await readdir(srcDir);
+  for (const entry of entries) {
+    const srcPath = join(srcDir, entry);
+    const dstPath = join(dstDir, entry);
+    const s = await stat(srcPath);
+    if (s.isDirectory()) {
+      await copyDirRecursive(srcPath, dstPath, opts);
+    } else {
+      if (!opts.dryRun) await copyFile(srcPath, dstPath);
+    }
+  }
+}
+
 // ─── Agent Module ───
 
 async function applyAgentModule(appPath, project, agents, opts) {
   const results = [];
 
-  // 1. Copy skills to .agents/skills/
+  // 1. Copy skills to .agents/skills/ (full directory including references/)
   const skillsDir = join(MANIFESTS_DIR, 'skills');
   const targetSkillsBase = join(appPath, '.agents', 'skills');
   await mkdir(targetSkillsBase, { recursive: true });
 
   const skillDirs = await readdir(skillsDir);
   for (const skillName of skillDirs) {
-    const src = join(skillsDir, skillName, 'SKILL.md');
-    const dst = join(targetSkillsBase, skillName, 'SKILL.md');
-    if (!existsSync(src)) continue;
+    const srcSkillDir = join(skillsDir, skillName);
+    const srcSkillMd = join(srcSkillDir, 'SKILL.md');
+    const dstSkillDir = join(targetSkillsBase, skillName);
+    const dstSkillMd = join(dstSkillDir, 'SKILL.md');
+    if (!existsSync(srcSkillMd)) continue;
 
-    if (existsSync(dst) && !opts.force) {
-      console.log(dim(`    ○ .agents/skills/${skillName}/SKILL.md (exists)`));
-      results.push({ file: dst, action: 'skipped' });
+    if (existsSync(dstSkillMd) && !opts.force) {
+      console.log(dim(`    ○ .agents/skills/${skillName}/ (exists)`));
+      results.push({ file: dstSkillMd, action: 'skipped' });
     } else {
-      await mkdir(dirname(dst), { recursive: true });
-      if (!opts.dryRun) await copyFile(src, dst);
-      console.log(success(`    ✓ .agents/skills/${skillName}/SKILL.md`));
-      results.push({ file: dst, action: 'created' });
+      await copyDirRecursive(srcSkillDir, dstSkillDir, opts);
+      console.log(success(`    ✓ .agents/skills/${skillName}/`));
+      results.push({ file: dstSkillMd, action: 'created' });
     }
   }
 
@@ -130,12 +149,13 @@ async function applyAgentModule(appPath, project, agents, opts) {
       const claudeSkills = join(appPath, '.claude', 'skills');
       await mkdir(claudeSkills, { recursive: true });
       for (const skillName of skillDirs) {
-        const src = join(skillsDir, skillName, 'SKILL.md');
-        const dst = join(claudeSkills, skillName, 'SKILL.md');
-        if (!existsSync(src)) continue;
-        if (existsSync(dst) && !opts.force) continue;
-        await mkdir(dirname(dst), { recursive: true });
-        if (!opts.dryRun) await copyFile(src, dst);
+        const srcSkillDir = join(skillsDir, skillName);
+        const srcSkillMd = join(srcSkillDir, 'SKILL.md');
+        const dstSkillDir = join(claudeSkills, skillName);
+        const dstSkillMd = join(dstSkillDir, 'SKILL.md');
+        if (!existsSync(srcSkillMd)) continue;
+        if (existsSync(dstSkillMd) && !opts.force) continue;
+        await copyDirRecursive(srcSkillDir, dstSkillDir, opts);
       }
       console.log(success(`    ✓ .claude/skills/ (${skillDirs.length} skills copied)`));
       results.push({ file: claudeSkills, action: 'created' });
