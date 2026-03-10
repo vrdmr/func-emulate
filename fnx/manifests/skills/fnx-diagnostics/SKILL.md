@@ -67,6 +67,14 @@ For detailed error patterns from source code analysis, see [references/fnx-error
 
 For the full diagnostic checklist (security, best-practice, failure), see [references/diagnostic-checklist.md](references/diagnostic-checklist.md).
 
+### Official Azure Functions Diagnostics Resources
+
+- [Troubleshoot Azure Functions](https://learn.microsoft.com/azure/azure-functions/functions-diagnostics)
+- [Monitor Azure Functions](https://learn.microsoft.com/azure/azure-functions/functions-monitoring)
+- [Application Insights for Functions](https://learn.microsoft.com/azure/azure-functions/configure-monitoring)
+- [Diagnose and solve problems (Portal)](https://learn.microsoft.com/azure/azure-functions/functions-diagnostics#diagnose-and-solve-problems)
+- [Azure Functions error handling](https://learn.microsoft.com/azure/azure-functions/functions-bindings-error-pages)
+
 ### Step 5: Read Customer Code
 
 After understanding the fnx-side error, read the customer's function code to identify:

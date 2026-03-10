@@ -95,6 +95,24 @@ Wait for explicit approval. Do NOT post without confirmation.
 
 ### 5. Post the Issue
 
+First, verify `gh` can access the target repo:
+
+```bash
+gh api repos/vrdmr/func-emulate --jq .full_name
+```
+
+If this fails with a 404 or permission error, the user may be on an EMU (Enterprise Managed Users) account that cannot access public repositories. Instruct:
+
+> Your current GitHub account appears to be an EMU account without access to `vrdmr/func-emulate`.
+> Switch to your personal/public account:
+> ```bash
+> gh auth login   # Select github.com, authenticate with your personal account
+> gh auth status  # Verify the active account
+> ```
+> After posting the issue, you can switch back with `gh auth login` using your EMU credentials.
+
+Then post:
+
 ```bash
 gh issue create \
   --repo vrdmr/func-emulate \
@@ -119,5 +137,6 @@ Show the issue URL, summarize what was reported, and thank the user.
 |-------|----------|
 | No conversation context | Ask user to describe the problem manually |
 | `gh` not authenticated | `gh auth login` |
+| EMU account can't access public repo | Switch to personal account: `gh auth login` |
 | Label doesn't exist | Create it or omit the label |
 | User rejects draft | Revise and re-present |
