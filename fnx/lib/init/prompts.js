@@ -160,7 +160,6 @@ async function selectPromptWithSearch(question, allOptions) {
 
   return new Promise((resolve) => {
     let searchQuery = '';
-    let filteredOptions = allOptions.filter(o => !o.disabled);
     let displayOptions = allOptions;
     let selectedIndex = displayOptions.findIndex(o => !o.disabled);
     if (selectedIndex === -1) selectedIndex = 0;
@@ -171,16 +170,13 @@ async function selectPromptWithSearch(question, allOptions) {
     const filterOptions = () => {
       if (searchQuery.length >= MIN_SEARCH_LENGTH) {
         const query = searchQuery.toLowerCase();
-        filteredOptions = allOptions.filter(opt => {
+        displayOptions = allOptions.filter(opt => {
           if (opt.disabled) return false;
-          // Search in label and optional searchText (e.g., resource type, binding type)
           const label = (opt.label || '').toLowerCase();
           const searchText = (opt.searchText || '').toLowerCase();
           return label.includes(query) || searchText.includes(query);
         });
-        displayOptions = filteredOptions;
       } else {
-        filteredOptions = allOptions.filter(o => !o.disabled);
         displayOptions = allOptions;
       }
       // Reset selection to first visible item

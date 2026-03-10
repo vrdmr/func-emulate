@@ -197,7 +197,7 @@ ${bold('✗ Invalid manifest format')}
 
   // Step 10: Setup development environment (if --env flag)
   if (flags.env) {
-    await setupDevEnvironment(targetDir, runtime, language, flags.verbose);
+    await setupDevEnvironment(targetDir, runtime, flags.verbose);
   }
 
   // Step 11: Print success banner
@@ -244,7 +244,7 @@ function runCommand(cmd, args, options = {}) {
  * - .NET: dotnet restore
  * - Java: mvn dependency:resolve
  */
-async function setupDevEnvironment(targetDir, runtime, language, verbose) {
+async function setupDevEnvironment(targetDir, runtime, verbose) {
   console.log(info('\n📦 Setting up development environment...\n'));
 
   try {
