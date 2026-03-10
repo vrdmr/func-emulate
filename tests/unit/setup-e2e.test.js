@@ -176,3 +176,45 @@ describe('fnx setup --all', { timeout: 60000 }, () => {
       '.agents/ should NOT exist with --module mcp');
   });
 });
+
+describe('fnx chat auto-setup', { timeout: 60000 }, () => {
+  let tmp;
+
+  afterEach(() => {
+    if (tmp && existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('auto-runs setup when skills are not installed', async () => {
+    tmp = makeTmpDir();
+    createMinimalProject(tmp);
+
+    // Verify no skills before chat
+    assert.ok(!existsSync(join(tmp, '.agents')), 'No .agents/ before chat');
+
+    // Run chat with a nonexistent agent to trigger setup but fail at launch
+    // (we just want to verify setup runs, not actually launch an agent)
+    const result = await run(['chat', '--agent', 'nonexistent-agent', '--app-path', tmp]);
+
+    // Skills should be auto-installed even though agent launch fails
+    assert.ok(existsSync(join(tmp, '.agents', 'skills', 'fnx-diagnostics', 'SKILL.md')),
+      'Skills should be auto-installed by fnx chat');
+    assert.ok(existsSync(join(tmp, 'AGENTS.md')),
+      'AGENTS.md should be auto-created by fnx chat');
+  });
+
+  it('skips auto-setup when skills are already installed', async () => {
+    tmp = makeTmpDir();
+    createMinimalProject(tmp);
+
+    // Pre-install skills via setup
+    await run(['setup', '--all', '--app-path', tmp]);
+    assert.ok(existsSync(join(tmp, '.agents', 'skills', 'fnx-diagnostics', 'SKILL.md')));
+
+    // Run chat — should NOT re-run setup
+    const result = await run(['chat', '--agent', 'nonexistent-agent', '--app-path', tmp]);
+
+    // Should not mention "auto-setup" or "Running fnx setup"
+    assert.ok(!result.stdout.includes('Running fnx setup'),
+      'Should not re-run setup when skills already exist');
+  });
+});
