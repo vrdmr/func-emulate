@@ -59,46 +59,35 @@ export async function runChat(args) {
     console.log(warning('  ⚠ No Azure Functions project detected. The agent can help you create one.'));
   }
 
-  // Auto-run setup if skills not installed (works with or without project)
+  // Show skill status (informational only — setup runs after agent selection)
   const skillsDir = join(appPath, '.agents', 'skills');
-  if (existsSync(skillsDir)) {
+  const needsSetup = !existsSync(skillsDir);
+  if (!needsSetup) {
     try {
       const { readdir } = await import('node:fs/promises');
       const skills = (await readdir(skillsDir)).filter(d => !d.startsWith('.'));
       console.log(dim(`    Skills: ${skills.length} installed in .agents/skills/`));
     } catch { /* ignore */ }
-  } else {
-    console.log(warning('    ⚠ No skills installed. Running fnx setup automatically...'));
-    console.log();
-    const { runSetup } = await import('../setup/index.js');
-    await runSetup(['--all', '--app-path', appPath]);
   }
   console.log();
 
-  // Step 2: Generate .fnx/agent.md
-  const agentMdPath = join(appPath, '.fnx', 'agent.md');
-  await generateAgentMd(appPath, project, agentMdPath);
-
-  // Step 3: Detect agents
+  // Step 2: Detect agents and select
   console.log(bold('🤖 Detecting coding agents...'));
   let agents = await detectAgents(appPath);
-
-  // Filter to agents that have launchers
   const launchableAgents = agents.filter(a => LAUNCHERS[a.id]);
 
+  let selectedId;
+
   if (agentFlag) {
-    // Use explicit agent
+    // Validate explicit agent
     const launcher = LAUNCHERS[agentFlag];
     if (!launcher) {
       console.error(errorColor(`  ✗ Unknown agent: ${agentFlag}`));
       console.error(dim(`    Available: ${Object.keys(LAUNCHERS).join(', ')}`));
       process.exit(1);
     }
-    await launchAgent(agentFlag, launcher, appPath, project, promptFlag);
-    return;
-  }
-
-  if (launchableAgents.length === 0) {
+    selectedId = agentFlag;
+  } else if (launchableAgents.length === 0) {
     console.log(warning('  ⚠ No supported CLI agents detected.'));
     console.log();
     console.log('  Install one of the following:');
@@ -108,21 +97,33 @@ export async function runChat(args) {
     console.log();
     console.log(dim('  Or use --agent to specify: fnx chat --agent claude-code'));
     process.exit(1);
-  }
-
-  for (const a of launchableAgents) {
-    console.log(success(`  ✓ ${a.name}`));
-  }
-  console.log();
-
-  // Step 4: Select agent (auto-pick if only one)
-  let selectedId;
-  if (launchableAgents.length === 1) {
-    selectedId = launchableAgents[0].id;
   } else {
-    selectedId = await promptAgentSelection(launchableAgents);
+    for (const a of launchableAgents) {
+      console.log(success(`  ✓ ${a.name}`));
+    }
+    console.log();
+
+    if (launchableAgents.length === 1) {
+      selectedId = launchableAgents[0].id;
+    } else {
+      selectedId = await promptAgentSelection(launchableAgents);
+    }
   }
 
+  // Step 3: Auto-run setup if needed (after agent is selected)
+  if (needsSetup) {
+    console.log();
+    console.log(warning('  ⚠ No skills installed. Running fnx setup for ' + selectedId + '...'));
+    console.log();
+    const { runSetup } = await import('../setup/index.js');
+    await runSetup(['--all', '--agent', selectedId, '--app-path', appPath]);
+  }
+
+  // Step 4: Generate .fnx/agent.md
+  const agentMdPath = join(appPath, '.fnx', 'agent.md');
+  await generateAgentMd(appPath, project, agentMdPath);
+
+  // Step 5: Launch agent
   const launcher = LAUNCHERS[selectedId];
   await launchAgent(selectedId, launcher, appPath, project, promptFlag);
 }
