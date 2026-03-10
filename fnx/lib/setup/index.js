@@ -71,36 +71,40 @@ export async function runSetup(args) {
   }
   console.log();
 
-  // Step 3: Apply modules
+  // Step 2b: If multiple plugin-capable agents and interactive, ask which to target
+  const pluginAgents = agents.filter(a => PLUGIN_AGENTS[a.id]);
+  let selectedAgents = agents;
+  if (pluginAgents.length > 1 && !nonInteractive && !agentFilter) {
+    const selected = await promptPluginAgentSelection(pluginAgents);
+    // Use the selected agents for all modules (skills, MCP, plugin)
+    selectedAgents = selected;
+    console.log();
+  } else if (pluginAgents.length === 1) {
+    selectedAgents = pluginAgents;
+  }
+
+  // Step 3: Apply modules (using selected agents)
   const results = [];
 
   if (!module || module === 'agent') {
     console.log(bold('📦 Applying agent workspace files...'));
-    const r = await applyAgentModule(appPath, project, agents, { force: forceFlag, dryRun });
+    const r = await applyAgentModule(appPath, project, selectedAgents, { force: forceFlag, dryRun });
     results.push(...r);
     console.log();
   }
 
   if (!module || module === 'mcp') {
     console.log(bold('🔌 Configuring MCP servers...'));
-    const r = await applyMcpModule(appPath, agents, { force: forceFlag, dryRun });
+    const r = await applyMcpModule(appPath, selectedAgents, { force: forceFlag, dryRun });
     results.push(...r);
     console.log();
   }
 
   if (!module || module === 'plugin') {
-    // Filter to agents that support plugins
-    const pluginAgents = agents.filter(a => PLUGIN_AGENTS[a.id]);
-    let selectedPluginAgents = pluginAgents;
-
-    if (pluginAgents.length > 1 && !nonInteractive && !agentFilter) {
-      // Ask which agents should get the plugin
-      selectedPluginAgents = await promptPluginAgentSelection(pluginAgents);
-    }
-
-    if (selectedPluginAgents.length > 0) {
+    const targetPluginAgents = selectedAgents.filter(a => PLUGIN_AGENTS[a.id]);
+    if (targetPluginAgents.length > 0) {
       console.log(bold('🧩 Installing azure-skills plugin...'));
-      const r = await applyPluginModule(selectedPluginAgents, { force: forceFlag, dryRun });
+      const r = await applyPluginModule(targetPluginAgents, { force: forceFlag, dryRun });
       results.push(...r);
       console.log();
     }
@@ -355,7 +359,7 @@ async function ensureMarketplace(pluginDef, agentLabel) {
 async function promptPluginAgentSelection(pluginAgents) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-  console.log(bold('🧩 azure-skills plugin — select agents to install:'));
+  console.log(bold('  Which agent should fnx configure?'));
   pluginAgents.forEach((a, i) => {
     console.log(`    ${i + 1}. ${a.name || a.id}`);
   });
