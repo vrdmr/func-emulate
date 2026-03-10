@@ -1,82 +1,82 @@
-# fnx setup (Agent/MCP) & fnx chat — 実装仕様書
+# fnx setup (Agent/MCP) & fnx chat — Implementation Specification
 
-> **日付**: 2026-03-09  
-> **ベース仕様**: F20 エージェントモード  
-> **スコープ**: `fnx setup --module agent`, `fnx setup --module mcp`, `fnx chat`  
-> **デモ目標**: 本日中に動作する最小デモ（フル機能は不要）
-
----
-
-## 目次
-
-1. [F20 からの変更点](#1-f20-からの変更点)
-2. [Manifest ファイル設計](#2-manifest-ファイル設計)
-3. [fnx setup —— Agent/MCP モジュール](#3-fnx-setup--agentmcp-モジュール)
-4. [fnx chat —— エージェントランチャー](#4-fnx-chat--エージェントランチャー)
-5. [初期スキル提案](#5-初期スキル提案)
-6. [Manvir の作業との共存設計](#6-manvir-の作業との共存設計)
-7. [実装方法の選択と理由](#7-実装方法の選択と理由)
-8. [デモスコープ（今日の目標）](#8-デモスコープ今日の目標)
-9. [将来の拡張](#9-将来の拡張)
+> **Date**: 2026-03-09  
+> **Base spec**: F20 Agent Mode  
+> **Scope**: `fnx setup --module agent`, `fnx setup --module mcp`, `fnx chat`  
+> **Demo goal**: Minimal working demo by end of day (full feature set not required)
 
 ---
 
-## 1. F20 からの変更点
+## Table of Contents
 
-F20 仕様を基盤とするが、以下の点を変更・拡張する。
-
-### 1.1 スキル配置パスの更新
-
-**問題**: F20 ではエージェントごとに固定パス（`.github/copilot-instructions.md`, `.cursor/rules/`, `.claude/`）を直接書き出す設計だった。agent-workspace-specs の調査により、**skills.sh エコシステムの `.agents/skills/` がユニバーサルディレクトリ**として 10+ エージェントで共有されていることが判明。
-
-**変更**: スキルの配置先を **Manifest のエージェントマッピングテーブル**で動的に解決する。
-
-| カテゴリ | F20 の設計 | 本仕様の設計 |
-|---------|-----------|-------------|
-| Skills | 各エージェント固有パスにコピー | `.agents/skills/` に実体 → 各エージェントへ symlink |
-| Instructions | `.github/copilot-instructions.md` 等を直接生成 | Manifest テーブルに従い、検出エージェントに応じて生成 |
-| MCP | `.vscode/mcp.json` のみ | 検出エージェントの MCP 設定ファイルに出力 |
-
-### 1.2 Agent Definition の追加
-
-**問題**: F20 では Agent Definition（`.github/agents/*.agent.md`）が考慮されていなかった。
-
-**変更**: Manifest に `agentDefinitions` セクションを追加。`fnx setup --module agent` で `.github/agents/fnx.agent.md` 等を生成し、`@fnx` でカスタムエージェントを呼び出せるようにする。
-
-### 1.3 ワンコマンド適用
-
-**問題**: MCP を入れて、スキルを入れて、instructions を入れて…と複数ステップが必要。
-
-**変更**: `fnx setup --module agent` で **Skills + Instructions + Agent Definitions を一括適用**。`--module mcp` で MCP 設定を一括適用。`fnx setup --all` で全部。
-
-### 1.4 エージェント検出の拡張
-
-**問題**: F20 の自動検出は CLI エージェント（`which copilot` 等）のみ。GUI エージェント（VSCode Copilot、Cursor IDE）は検出されない。
-
-**変更**: 検出戦略を 3 層に拡張:
-
-| 検出レイヤー | 対象 | 方法 |
-|-------------|------|------|
-| CLI バイナリ | Claude Code, Codex, Amp 等 | `which` / `where.exe` |
-| IDE 設定ファイル | VSCode+Copilot, Cursor | `.vscode/`, `.cursor/` の存在確認 |
-| 明示的指定 | 全エージェント | `--agent copilot,claude,cursor` フラグ |
-
-検出結果は必ずユーザーに表示し、確認を求める。
+1. [Changes from F20](#1-changes-from-f20)
+2. [Manifest File Design](#2-manifest-file-design)
+3. [fnx setup — Agent/MCP Modules](#3-fnx-setup--agentmcp-modules)
+4. [fnx chat — Agent Launcher](#4-fnx-chat--agent-launcher)
+5. [Initial Skill Proposals](#5-initial-skill-proposals)
+6. [Coexistence Design with Manvir's Work](#6-coexistence-design-with-manvirs-work)
+7. [Implementation Approach Selection and Rationale](#7-implementation-approach-selection-and-rationale)
+8. [Demo Scope (Today's Goal)](#8-demo-scope-todays-goal)
+9. [Future Extensions](#9-future-extensions)
 
 ---
 
-## 2. Manifest ファイル設計
+## 1. Changes from F20
 
-### 2.1 設計方針
+This specification builds on the F20 spec as its foundation, with the following modifications and extensions.
 
-Loom の `manifest.yaml` を参考にしつつ、fnx 固有のニーズ（SKU 検出、Functions ドメイン）を反映した汎用的な形式を定義する。
+### 1.1 Updated Skill Placement Paths
 
-**選択理由**: 
-- Loom 形式の `$ref` パターン（外部ファイル参照）はモジュール性に優れる
-- YAML は人間が読み書きしやすく、JSON より記述量が少ない
-- Loom との将来的な相互運用性を考慮
+**Problem**: In F20, the design wrote directly to fixed per-agent paths (`.github/copilot-instructions.md`, `.cursor/rules/`, `.claude/`). Investigation of agent-workspace-specs revealed that **the skills.sh ecosystem's `.agents/skills/` serves as a universal directory** shared across 10+ agents.
 
-### 2.2 Manifest スキーマ
+**Change**: Skill placement is now dynamically resolved via the **Manifest's agent mapping table**.
+
+| Category | F20 Design | This Spec's Design |
+|----------|-----------|---------------------|
+| Skills | Copied to each agent's unique path | Placed in `.agents/skills/` → symlinked to each agent |
+| Instructions | Directly generated `.github/copilot-instructions.md` etc. | Generated according to the Manifest table, based on detected agents |
+| MCP | `.vscode/mcp.json` only | Output to detected agent's MCP config file |
+
+### 1.2 Addition of Agent Definitions
+
+**Problem**: F20 did not account for Agent Definitions (`.github/agents/*.agent.md`).
+
+**Change**: Added an `agentDefinitions` section to the Manifest. `fnx setup --module agent` generates `.github/agents/fnx.agent.md` etc., enabling custom agent invocation via `@fnx`.
+
+### 1.3 One-Command Application
+
+**Problem**: Multiple steps were required — install MCP, install skills, install instructions, etc.
+
+**Change**: `fnx setup --module agent` **applies Skills + Instructions + Agent Definitions in one step**. `--module mcp` applies MCP configuration in one step. `fnx setup --all` applies everything.
+
+### 1.4 Extended Agent Detection
+
+**Problem**: F20's auto-detection only covered CLI agents (`which copilot` etc.). GUI agents (VSCode Copilot, Cursor IDE) were not detected.
+
+**Change**: Detection strategy expanded to 3 layers:
+
+| Detection Layer | Target | Method |
+|----------------|--------|--------|
+| CLI binary | Claude Code, Codex, Amp, etc. | `which` / `where.exe` |
+| IDE config files | VSCode+Copilot, Cursor | Check for existence of `.vscode/`, `.cursor/` |
+| Explicit specification | All agents | `--agent copilot,claude,cursor` flag |
+
+Detection results are always displayed to the user for confirmation.
+
+---
+
+## 2. Manifest File Design
+
+### 2.1 Design Principles
+
+Defines a general-purpose format inspired by Loom's `manifest.yaml`, while incorporating fnx-specific needs (SKU detection, Functions domain).
+
+**Rationale**:
+- Loom's `$ref` pattern (external file references) provides excellent modularity
+- YAML is human-readable/writable and more concise than JSON
+- Future interoperability with Loom is considered
+
+### 2.2 Manifest Schema
 
 ```yaml
 # fnx-agent-manifest.yaml
@@ -90,10 +90,10 @@ manifest:
   tags: [azure-functions, serverless, fnx]
   updated: "2026-03-09"
 
-# ──── エージェント別パスマッピング ────
-# skills.sh + 独自調査に基づく正確なパスマッピング
+# ──── Per-Agent Path Mapping ────
+# Accurate path mapping based on skills.sh + independent research
 agentPaths:
-  # .agents/skills/ を共有するエージェント群
+  # Agents sharing .agents/skills/
   shared:
     projectSkills: ".agents/skills"
     agents:
@@ -105,7 +105,7 @@ agentPaths:
       - opencode
       - amp
   
-  # 固有パスを持つエージェント
+  # Agents with custom paths
   custom:
     claude-code:
       projectSkills: ".claude/skills"
@@ -127,75 +127,75 @@ agentPaths:
       projectSkills: ".windsurf/skills"
       mcp: "~/.codeium/windsurf/mcp_config.json"  # global only
 
-# ──── コンテンツ定義 ────
+# ──── Content Definitions ────
 contents:
-  # Skills（SKILL.md ファイル群）
+  # Skills (SKILL.md files)
   skills:
     - id: fnx-diagnostics
       name: "fnx Diagnostics"
-      description: "fnx start の問題診断、エラー解決、ログ分析"
+      description: "Diagnose fnx start issues, resolve errors, analyze logs"
       file: skills/fnx-diagnostics/SKILL.md
     
     - id: fnx-best-practices
       name: "Azure Functions Best Practices"
-      description: "SKU 別のベストプラクティス、パフォーマンス、セキュリティガイダンス"
+      description: "SKU-specific best practices, performance, and security guidance"
       file: skills/fnx-best-practices/SKILL.md
     
     - id: fnx-create-function
       name: "Create Azure Function"
-      description: "fnx テンプレートを使った新規関数作成ワークフロー"
+      description: "New function creation workflow using fnx templates"
       file: skills/fnx-create-function/SKILL.md
     
     - id: fnx-intro
       name: "fnx Introduction"
-      description: "fnx の機能紹介、インストール済みスキル一覧、使い方ガイド"
+      description: "fnx feature overview, list of installed skills, usage guide"
       file: skills/fnx-intro/SKILL.md
     
     - id: fnx-feedback
       name: "fnx Feedback"
-      description: "会話履歴から Issue を生成して報告するフィードバックスキル"
+      description: "Feedback skill that generates and reports Issues from conversation history"
       file: skills/fnx-feedback/SKILL.md
 
-  # Instructions（エージェント共通の指示）
+  # Instructions (shared across agents)
   instructions:
     - id: functions-general
-      description: "Azure Functions 開発の基本ガイダンス"
+      description: "Basic guidance for Azure Functions development"
       file: instructions/functions-general.md
-      # 以下のテンプレート変数がプロジェクト検出から注入される
+      # The following template variables are injected from project detection
       variables:
         - runtime       # node, python, dotnet-isolated, java
         - sku           # flex, premium, dedicated
         - programmingModel  # v4, v2, isolated
-        - functions     # 検出された関数のリスト
+        - functions     # list of detected functions
 
-  # MCP サーバー定義
+  # MCP server definitions
   mcp:
     - id: fnx-templates
       name: "fnx Templates MCP"
-      description: "Azure Functions テンプレートの検出と足場生成"
+      description: "Azure Functions template discovery and scaffolding"
       command: "npx"
       args: ["manvir-templates-mcp-server"]
-      # 将来: Azure MCP Server (microsoft/mcp) に移行
+      # Future: migrate to Azure MCP Server (microsoft/mcp)
       # command: "npx"
       # args: ["@azure/mcp-server"]
     
     - id: fnx-debug
       name: "fnx Debug MCP"
-      description: "実行中の Functions ホストのデバッグと可観測性"
+      description: "Debugging and observability for running Functions host"
       command: "node"
       args: ["fnx/bin/fnx", "start", "--mcp-port", "9100"]
-      optional: true  # fnx start 実行時のみ有効
+      optional: true  # Only active when fnx start is running
 
-  # Agent Definitions（GitHub Copilot 向け）
+  # Agent Definitions (for GitHub Copilot)
   agentDefinitions:
     - id: fnx-agent
       name: "fnx"
-      description: "Azure Functions 開発エキスパート"
+      description: "Azure Functions development expert"
       file: agents/fnx.agent.md
 
-# ──── プロジェクト検出ルール ────
+# ──── Project Detection Rules ────
 detection:
-  # 検出優先度順に評価
+  # Evaluated in priority order
   rules:
     - name: "Azure Functions (Node.js)"
       match:
@@ -228,7 +228,7 @@ detection:
       result:
         runtime: java
   
-  # SKU の検出（app-config.yaml → local.settings.json → default）
+  # SKU detection (app-config.yaml → local.settings.json → default)
   sku:
     sources:
       - file: "app-config.yaml"
@@ -238,81 +238,81 @@ detection:
     default: flex
 ```
 
-### 2.3 Manifest の配置戦略
+### 2.3 Manifest Placement Strategy
 
-| 段階 | ソース | 説明 |
-|------|-------|------|
-| **デモ（今日）** | ローカルバンドル | fnx パッケージ内の `manifests/` に同梱 |
-| **短期** | GitHub リポジトリ | `vrdmr/func-emulate` の `manifests/` から raw URL で取得 |
-| **中期** | CDN + GitHub | CDN にキャッシュ付きで配置。GitHub がソースオブトゥルース |
-| **長期** | Loom レジストリ統合 | `loom registry add fnx <url>` で Loom からもインストール可能 |
+| Phase | Source | Description |
+|-------|--------|-------------|
+| **Demo (today)** | Local bundle | Bundled in the fnx package under `manifests/` |
+| **Short-term** | GitHub repository | Fetched via raw URL from `vrdmr/func-emulate` `manifests/` |
+| **Mid-term** | CDN + GitHub | Placed on CDN with caching. GitHub remains the source of truth |
+| **Long-term** | Loom registry integration | Installable from Loom via `loom registry add fnx <url>` |
 
-**選択理由**: ローカルバンドルからスタートすることで、今日中にデモが動く。将来のリモート取得は `profile-resolver.js` の既存パターン（URL → キャッシュ → バンドルフォールバック）を再利用する。
+**Rationale**: Starting with a local bundle ensures the demo works today. Future remote fetching will reuse the existing pattern in `profile-resolver.js` (URL → cache → bundle fallback).
 
 ---
 
-## 3. fnx setup —— Agent/MCP モジュール
+## 3. fnx setup — Agent/MCP Modules
 
-### 3.1 全体フロー
+### 3.1 Overall Flow
 
 ```
 $ fnx setup
 
-🔍 プロジェクトを検出中...
+🔍 Detecting project...
   ├── host.json ✓
-  ├── package.json → @azure/functions 4.x (Node.js v4 モデル)
-  ├── 3 つの関数を検出: httpTrigger, processQueue, timerCleanup
-  ├── SKU: flex (app-config.yaml より)
+  ├── package.json → @azure/functions 4.x (Node.js v4 model)
+  ├── 3 functions detected: httpTrigger, processQueue, timerCleanup
+  ├── SKU: flex (from app-config.yaml)
   └── Runtime: Node.js 20
 
-🤖 コーディングエージェントを検出中...
-  ✓ GitHub Copilot (VSCode) — .vscode/ を検出
-  ✓ Claude Code — claude コマンドを検出
-  ✗ Cursor — 未検出
-  ✗ Codex — 未検出
+🤖 Detecting coding agents...
+  ✓ GitHub Copilot (VSCode) — .vscode/ detected
+  ✓ Claude Code — claude command detected
+  ✗ Cursor — not detected
+  ✗ Codex — not detected
 
-何を追加しますか？
-  ◉ Agent（Skills + Instructions + Agent Definitions）
-  ◉ MCP 設定
-  ◯ CI/CD パイプライン（未実装）
-  ◯ Infrastructure as Code（未実装）
+What would you like to add?
+  ◉ Agent (Skills + Instructions + Agent Definitions)
+  ◉ MCP configuration
+  ◯ CI/CD pipeline (not yet implemented)
+  ◯ Infrastructure as Code (not yet implemented)
 
-[スペースで切替、Enter で確定]
+[Space to toggle, Enter to confirm]
 ```
 
-### 3.2 `fnx setup --module agent` の動作
+### 3.2 Behavior of `fnx setup --module agent`
 
-#### Step 1: プロジェクト検出
+#### Step 1: Project Detection
 
 ```javascript
 // lib/setup/detect.js
 async function detectProject(appPath) {
   return {
-    runtime: 'node',           // host.json + package.json から
-    programmingModel: 'v4',    // @azure/functions バージョンから
+    runtime: 'node',           // from host.json + package.json
+    programmingModel: 'v4',    // from @azure/functions version
     sku: 'flex',               // app-config.yaml → local.settings.json → default
-    functions: [               // src/functions/ のスキャンから
+    functions: [               // from scanning src/functions/
       { name: 'httpTrigger', type: 'httpTrigger' },
       { name: 'processQueue', type: 'queueTrigger' },
     ],
-    language: 'typescript',    // tsconfig.json の存在から
+    language: 'typescript',    // from presence of tsconfig.json
   };
 }
 ```
 
-#### Step 2: エージェント検出
+#### Step 2: Agent Detection
 
 ```javascript
 // lib/setup/agent-detect.js
 async function detectAgents() {
   const agents = [];
   
-  // CLI バイナリ検出
+  // CLI binary detection
   for (const [name, cmd] of CLI_AGENTS) {
     if (await commandExists(cmd)) agents.push({ name, type: 'cli' });
   }
   
-  // IDE 設定ファイル検出
+  // IDE config file detection
   if (await fileExists('.vscode/settings.json') || await fileExists('.vscode/')) {
     agents.push({ name: 'github-copilot', type: 'ide' });
   }
@@ -332,43 +332,43 @@ const CLI_AGENTS = [
 ];
 ```
 
-#### Step 3: コンテンツの適用
+#### Step 3: Applying Content
 
-検出されたエージェントに応じて、Manifest の `agentPaths` テーブルを参照し、正しいパスにファイルを配置。
+Files are placed at the correct paths by referencing the Manifest's `agentPaths` table based on detected agents.
 
 ```
-# GitHub Copilot が検出された場合:
-.agents/skills/fnx-diagnostics/SKILL.md          ← スキル実体
+# When GitHub Copilot is detected:
+.agents/skills/fnx-diagnostics/SKILL.md          ← skill content
 .agents/skills/fnx-best-practices/SKILL.md
 .agents/skills/fnx-create-function/SKILL.md
 .agents/skills/fnx-intro/SKILL.md
 .agents/skills/fnx-feedback/SKILL.md
-.github/copilot-instructions.md                   ← Instructions (テンプレート変数展開済み)
+.github/copilot-instructions.md                   ← Instructions (with template variables expanded)
 .github/agents/fnx.agent.md                       ← Agent Definition
-AGENTS.md                                         ← 汎用 Instructions
+AGENTS.md                                         ← Generic Instructions
 
-# Claude Code も検出された場合（追加）:
-.claude/skills/ → .agents/skills/ への symlink     ← symlink
-.claude/CLAUDE.md に Functions セクションを追記       ← append mode
+# When Claude Code is also detected (additional):
+.claude/skills/ → symlink to .agents/skills/       ← symlink
+Append Functions section to .claude/CLAUDE.md       ← append mode
 ```
 
-### 3.3 `fnx setup --module mcp` の動作
+### 3.3 Behavior of `fnx setup --module mcp`
 
 ```
-# GitHub Copilot (VSCode) が検出された場合:
-.vscode/mcp.json に以下を追加（既存があればマージ）:
+# When GitHub Copilot (VSCode) is detected:
+Add the following to .vscode/mcp.json (merge if existing):
 {
   "servers": {
     "fnx-templates": {
       "command": "npx",
       "args": ["manvir-templates-mcp-server"],
-      "description": "Azure Functions テンプレートの検出と足場生成"
+      "description": "Azure Functions template discovery and scaffolding"
     }
   }
 }
 
-# Claude Code が検出された場合:
-.claude/settings.json の mcpServers に追加（既存があればマージ）:
+# When Claude Code is detected:
+Add to .claude/settings.json mcpServers (merge if existing):
 {
   "mcpServers": {
     "fnx-templates": {
@@ -378,66 +378,66 @@ AGENTS.md                                         ← 汎用 Instructions
   }
 }
 
-# Cursor が検出された場合:
-.cursor/mcp.json に追加
+# When Cursor is detected:
+Add to .cursor/mcp.json
 ```
 
-### 3.4 CLI インターフェース
+### 3.4 CLI Interface
 
 ```
 fnx setup [options]
 
 Options:
-  --module <name>        特定のモジュールのみ: agent, mcp, ci, iac, docker
-  --agent <agents...>    エージェント指定（自動検出スキップ）: copilot, claude, cursor, codex
-  --all                  全モジュールを適用（プロンプトなし）
-  --non-interactive      デフォルト値を使用
-  --force                既存ファイルを上書き
-  --manifest <path|url>  カスタム Manifest を使用（デフォルト: バンドル版）
-  --dry-run              変更を表示するが適用しない
+  --module <name>        Specific module only: agent, mcp, ci, iac, docker
+  --agent <agents...>    Specify agents (skip auto-detection): copilot, claude, cursor, codex
+  --all                  Apply all modules (no prompts)
+  --non-interactive      Use default values
+  --force                Overwrite existing files
+  --manifest <path|url>  Use custom Manifest (default: bundled version)
+  --dry-run              Show changes without applying them
 ```
 
-### 3.5 冪等性
+### 3.5 Idempotency
 
-- 既存ファイルがある場合は **diff を表示** し、`--force` なしでは上書きしない
-- MCP 設定は **マージ方式**（既存の servers/mcpServers を保持し、fnx 分を追加）
-- Skills は **バージョン比較** — Manifest の `updated` が新しい場合のみ更新提案
+- If existing files are present, a **diff is displayed** and files are not overwritten without `--force`
+- MCP configuration uses a **merge approach** (preserves existing servers/mcpServers and adds fnx entries)
+- Skills use **version comparison** — only proposes an update if the Manifest's `updated` date is newer
 
 ---
 
-## 4. fnx chat —— エージェントランチャー
+## 4. fnx chat — Agent Launcher
 
-### 4.1 設計方針
+### 4.1 Design Principles
 
-F20 の設計を踏襲するが、以下を変更:
+Follows the F20 design with the following changes:
 
-| 観点 | F20 | 本仕様 |
-|------|-----|--------|
-| エージェント検出 | CLI のみ | CLI + IDE + 明示指定 |
-| 指示ファイル | `.fnx/agent.md` のみ | `.fnx/agent.md` + 検出コンテキスト自動注入 |
-| MCP 起動 | エージェントと同時起動 | 既に MCP 設定済みなら不要（`fnx setup` で設定済み） |
+| Aspect | F20 | This Spec |
+|--------|-----|-----------|
+| Agent detection | CLI only | CLI + IDE + explicit specification |
+| Instruction files | `.fnx/agent.md` only | `.fnx/agent.md` + auto-injected detection context |
+| MCP startup | Started alongside the agent | Not needed if MCP is already configured (set up via `fnx setup`) |
 
-### 4.2 動作フロー
+### 4.2 Operation Flow
 
 ```
 $ fnx chat
 
-🔍 プロジェクトコンテキストを読み込み中...
+🔍 Loading project context...
   ├── Runtime: Node.js v4 (TypeScript)
   ├── SKU: Flex Consumption
   ├── Functions: httpTrigger (HTTP), processQueue (Queue)
   └── Agent workspace: .agents/skills/ (5 skills installed)
 
-🤖 利用可能なコーディングエージェントを検出中...
+🤖 Detecting available coding agents...
   ✓ GitHub Copilot CLI (ghcs)
   ✓ Claude Code (claude)
-  ✗ Codex CLI（未インストール）
+  ✗ Codex CLI (not installed)
 
-どのエージェントを使用しますか？
-  ❯ Claude Code（推奨 — CLI エージェントとして最も機能が豊富）
+Which agent would you like to use?
+  ❯ Claude Code (recommended — most feature-rich as a CLI agent)
     GitHub Copilot CLI
 
-🚀 Azure Functions コンテキスト付きで Claude Code を起動中...
+🚀 Launching Claude Code with Azure Functions context...
 
 ┌──────────────────────────────────────────────────┐
 │  fnx chat • Claude Code • Flex Consumption       │
@@ -445,28 +445,28 @@ $ fnx chat
 │  Project: my-functions-app (2 functions)          │
 └──────────────────────────────────────────────────┘
 
-Claude Code が起動しました。Azure Functions の知識で強化されています。
+Claude Code has been launched, enhanced with Azure Functions knowledge.
 ```
 
-### 4.3 エージェント起動コマンド
+### 4.3 Agent Launch Commands
 
-各エージェントは異なるフラグでコンテキストを渡す必要がある:
+Each agent requires different flags to pass context:
 
 ```javascript
 // lib/chat/launchers.js
 const AGENT_LAUNCHERS = {
   'claude-code': {
     command: 'claude',
-    // Claude Code は CLAUDE.md と .claude/skills/ を自動読み込み
-    // 追加コンテキストは --system-prompt で渡す
+    // Claude Code auto-reads CLAUDE.md and .claude/skills/
+    // Additional context is passed via --system-prompt
     buildArgs: (context) => [
       '--system-prompt', context.agentMdPath,
     ],
   },
   'github-copilot-cli': {
     command: 'ghcs',
-    // Copilot CLI は .github/copilot-instructions.md を自動読み込み
-    // 追加は --agent-instructions で
+    // Copilot CLI auto-reads .github/copilot-instructions.md
+    // Additional context via --agent-instructions
     buildArgs: (context) => [
       '--agent-instructions', context.agentMdPath,
     ],
@@ -480,9 +480,9 @@ const AGENT_LAUNCHERS = {
 };
 ```
 
-### 4.4 `.fnx/agent.md` の自動生成
+### 4.4 Auto-generation of `.fnx/agent.md`
 
-プロジェクト検出結果からテンプレートを展開:
+Template is expanded from project detection results:
 
 ```markdown
 # Azure Functions Development Agent
@@ -517,149 +517,149 @@ You have access to the fnx Templates MCP server:
 - Follow established project structure
 ```
 
-### 4.5 CLI インターフェース
+### 4.5 CLI Interface
 
 ```
 fnx chat [options]
 
 Options:
-  --agent <name>     エージェントを指定（検出スキップ）: claude, copilot, codex, amp
-  --no-mcp           MCP サーバーを起動しない
-  --prompt <text>    非対話モード: 単一プロンプトを送信して終了
-  --no-setup         fnx setup 未実行でもエラーにしない
+  --agent <name>     Specify agent (skip detection): claude, copilot, codex, amp
+  --no-mcp           Do not start MCP servers
+  --prompt <text>    Non-interactive mode: send a single prompt and exit
+  --no-setup         Do not error if fnx setup has not been run
 ```
 
 ---
 
-## 5. 初期スキル提案
+## 5. Initial Skill Proposals
 
-デモ用に 5 つのスキルを初期実装する。
+Five skills will be initially implemented for the demo.
 
-### 5.1 fnx-diagnostics（診断スキル）
+### 5.1 fnx-diagnostics (Diagnostics Skill)
 
 ```yaml
 ---
 name: fnx-diagnostics
-description: "fnx start の問題を診断し解決する。エラーメッセージ分析、ログ解釈、一般的な問題の解決策を提供。USE FOR: fnx start が失敗した、エラーが出た、関数が動かない、ホストがクラッシュした"
+description: "Diagnose and resolve fnx start issues. Provides error message analysis, log interpretation, and solutions for common problems. USE FOR: fnx start failed, got an error, function not working, host crashed"
 tags: [fnx, diagnostics, troubleshooting]
 category: Development
 ---
 ```
 
-**内容**: SKU 別の一般的なエラーパターン、host.json 設定問題、ポート競合、依存関係エラー、Azurite 関連問題の診断フロー。
+**Content**: Diagnostic flows for common error patterns by SKU, host.json configuration issues, port conflicts, dependency errors, and Azurite-related problems.
 
-### 5.2 fnx-best-practices（ベストプラクティス）
+### 5.2 fnx-best-practices (Best Practices)
 
 ```yaml
 ---
 name: fnx-best-practices
-description: "Azure Functions の SKU 別ベストプラクティス。パフォーマンス、セキュリティ、コスト最適化のガイダンス。USE FOR: best practices, performance, security, cost, SKU constraints"
+description: "Azure Functions SKU-specific best practices. Guidance for performance, security, and cost optimization. USE FOR: best practices, performance, security, cost, SKU constraints"
 tags: [azure-functions, best-practices, performance, security]
 category: Development
 ---
 ```
 
-**内容**: Flex Consumption / Premium / Dedicated 別の制約、推奨パターン、`local.settings.json` のセキュリティ問題（シークレットをワークスペースに置かない推奨）、binding パターン。
+**Content**: Constraints, recommended patterns, `local.settings.json` security concerns (recommendation not to store secrets in the workspace), and binding patterns for Flex Consumption / Premium / Dedicated.
 
-### 5.3 fnx-create-function（関数作成スキル）
+### 5.3 fnx-create-function (Function Creation Skill)
 
 ```yaml
 ---
 name: fnx-create-function
-description: "fnx テンプレートを使って新しい Azure Function を作成するワークフロー。MCP ツールと連携してテンプレートを検出・適用。USE FOR: create function, add trigger, new function, template"
+description: "Workflow for creating new Azure Functions using fnx templates. Works with MCP tools to discover and apply templates. USE FOR: create function, add trigger, new function, template"
 tags: [fnx, create, template, scaffold]
 category: Development
 ---
 ```
 
-**内容**: MCP ツールの使い方（`functions_template_get`）、トリガータイプ別のテンプレート一覧、SKU 互換性チェックフロー。
+**Content**: How to use MCP tools (`functions_template_get`), template list by trigger type, SKU compatibility check flow.
 
-### 5.4 fnx-intro（紹介スキル）
+### 5.4 fnx-intro (Introduction Skill)
 
 ```yaml
 ---
 name: fnx-intro
-description: "fnx の機能紹介、インストール済みスキル一覧、できることの概要。USE FOR: what is fnx, what can fnx do, list skills, help, getting started"
+description: "Introduction to fnx features, list of installed skills, overview of capabilities. USE FOR: what is fnx, what can fnx do, list skills, help, getting started"
 tags: [fnx, introduction, help, overview]
 category: General
 ---
 ```
 
-**内容**: fnx のコマンド一覧、インストール済みスキルの説明、ワークフロー例、よくある質問。
+**Content**: fnx command list, installed skill descriptions, workflow examples, frequently asked questions.
 
-### 5.5 fnx-feedback（フィードバックスキル）
+### 5.5 fnx-feedback (Feedback Skill)
 
 ```yaml
 ---
 name: fnx-feedback
-description: "会話中に発生した問題を GitHub Issue として報告する。会話履歴から問題を抽出し、再現手順を含む Issue を生成。USE FOR: report issue, feedback, bug report, file issue"
+description: "Report issues encountered during conversation as GitHub Issues. Extracts problems from conversation history and generates Issues with reproduction steps. USE FOR: report issue, feedback, bug report, file issue"
 tags: [fnx, feedback, issue, bug-report]
 category: Utility
 ---
 ```
 
-**内容**: 会話履歴の分析手順、Issue テンプレート、再現手順の構造化、ラベルの推奨、`gh issue create` コマンドの生成フロー。
+**Content**: Conversation history analysis procedure, Issue template, structuring reproduction steps, recommended labels, `gh issue create` command generation flow.
 
 ---
 
-## 6. Manvir の作業との共存設計
+## 6. Coexistence Design with Manvir's Work
 
-### 6.1 Manvir の現在の作業
+### 6.1 Manvir's Current Work
 
-| 作業 | ステータス | ファイル/場所 |
-|------|-----------|-------------|
-| `fnx init` (プロジェクト足場) | ✅ 完了 | `lib/init.js`, `lib/init/` |
-| CI/CD ドキュメント (GitHub Actions, ADO) | ✅ コミット済み | `docs/f17-fnx-init-cd-*.md` |
-| Docker ドキュメント | ✅ コミット済み | `docs/f17-fnx-init-docker.md` |
-| Templates MCP サーバー | ✅ npm 公開済み | `manvir-templates-mcp-server` |
-| Azure MCP PR (#1959) | 🔄 レビュー中 | `microsoft/mcp` repo |
+| Work Item | Status | Files/Location |
+|-----------|--------|----------------|
+| `fnx init` (project scaffolding) | ✅ Complete | `lib/init.js`, `lib/init/` |
+| CI/CD documentation (GitHub Actions, ADO) | ✅ Committed | `docs/f17-fnx-init-cd-*.md` |
+| Docker documentation | ✅ Committed | `docs/f17-fnx-init-docker.md` |
+| Templates MCP server | ✅ Published to npm | `manvir-templates-mcp-server` |
+| Azure MCP PR (#1959) | 🔄 Under review | `microsoft/mcp` repo |
 
-### 6.2 共存ルール
+### 6.2 Coexistence Rules
 
 ```
-fnx のコマンド体系:
+fnx command hierarchy:
 
-fnx init     ← Manvir の担当（F17）。プロジェクト足場。
-fnx start    ← 既存。ホスト起動。
-fnx config   ← 既存。設定管理。
-fnx setup    ← 本仕様（F20）。既存プロジェクトの Agent/DevOps 足場。
-fnx chat     ← 本仕様（F20）。エージェントランチャー。
+fnx init     ← Manvir's responsibility (F17). Project scaffolding.
+fnx start    ← Existing. Host startup.
+fnx config   ← Existing. Configuration management.
+fnx setup    ← This spec (F20). Agent/DevOps scaffolding for existing projects.
+fnx chat     ← This spec (F20). Agent launcher.
 ```
 
-**コンフリクト回避策**:
+**Conflict avoidance strategies**:
 
-1. **`fnx init` には触れない** — Manvir の `lib/init/` 配下は変更しない
-2. **新しいディレクトリに実装** — `lib/setup/` と `lib/chat/` を新規作成
-3. **CI/CD・Docker は `fnx setup` に移動可能** — Manvir のドキュメントにも「these can be moved from init to setup」とある。将来的に `fnx setup --module ci` で実装
-4. **MCP サーバーは Manvir の既存を使用** — `manvir-templates-mcp-server` を MCP 設定で参照。Azure MCP (#1959) がマージされたらそちらに切り替え
-5. **Manifest で新規コマンドとの統合ポイントを定義** — `fnx init --agent-config` から `fnx setup --module agent` のロジックを呼べるように export
+1. **Do not touch `fnx init`** — No modifications to Manvir's `lib/init/` directory
+2. **Implement in new directories** — Create new `lib/setup/` and `lib/chat/`
+3. **CI/CD and Docker can be moved to `fnx setup`** — Manvir's documentation also states "these can be moved from init to setup". Future implementation via `fnx setup --module ci`
+4. **Use Manvir's existing MCP server** — Reference `manvir-templates-mcp-server` in MCP configuration. Switch to Azure MCP (#1959) once merged
+5. **Define integration points with new commands via Manifest** — Export logic so `fnx init --agent-config` can call `fnx setup --module agent`
 
-### 6.3 ファイル配置（func-emulate リポジトリ）
+### 6.3 File Layout (func-emulate Repository)
 
 ```
 fnx/
 ├── lib/
-│   ├── cli.js                    # 既存 — setup/chat コマンドを追加
-│   ├── init.js                   # Manvir の担当 — 変更なし
-│   ├── init/                     # Manvir の担当 — 変更なし
-│   ├── setup/                    # ← 新規（本仕様）
-│   │   ├── index.js              # fnx setup エントリポイント
-│   │   ├── detect.js             # プロジェクト自動検出
-│   │   ├── agent-detect.js       # エージェント自動検出
-│   │   ├── manifest-loader.js    # Manifest 読み込み（ローカル/リモート）
-│   │   ├── apply-skills.js       # スキル適用ロジック
-│   │   ├── apply-instructions.js # Instructions 生成・適用
-│   │   ├── apply-mcp.js          # MCP 設定生成・マージ
-│   │   ├── apply-agents.js       # Agent Definition 生成
-│   │   └── ui.js                 # 対話型 UI（モジュール選択）
-│   ├── chat/                     # ← 新規（本仕様）
-│   │   ├── index.js              # fnx chat エントリポイント
-│   │   ├── launchers.js          # エージェント起動定義
-│   │   └── agent-md-gen.js       # .fnx/agent.md 生成
+│   ├── cli.js                    # Existing — add setup/chat commands
+│   ├── init.js                   # Manvir's responsibility — no changes
+│   ├── init/                     # Manvir's responsibility — no changes
+│   ├── setup/                    # ← New (this spec)
+│   │   ├── index.js              # fnx setup entry point
+│   │   ├── detect.js             # Project auto-detection
+│   │   ├── agent-detect.js       # Agent auto-detection
+│   │   ├── manifest-loader.js    # Manifest loading (local/remote)
+│   │   ├── apply-skills.js       # Skill application logic
+│   │   ├── apply-instructions.js # Instructions generation & application
+│   │   ├── apply-mcp.js          # MCP config generation & merging
+│   │   ├── apply-agents.js       # Agent Definition generation
+│   │   └── ui.js                 # Interactive UI (module selection)
+│   ├── chat/                     # ← New (this spec)
+│   │   ├── index.js              # fnx chat entry point
+│   │   ├── launchers.js          # Agent launch definitions
+│   │   └── agent-md-gen.js       # .fnx/agent.md generation
 │   └── ...existing files...
-├── manifests/                    # ← 新規
-│   ├── default.yaml              # デフォルト Manifest（バンドル）
-│   └── skills/                   # バンドルされたスキルファイル
+├── manifests/                    # ← New
+│   ├── default.yaml              # Default Manifest (bundled)
+│   └── skills/                   # Bundled skill files
 │       ├── fnx-diagnostics/SKILL.md
 │       ├── fnx-best-practices/SKILL.md
 │       ├── fnx-create-function/SKILL.md
@@ -670,169 +670,169 @@ fnx/
 
 ---
 
-## 7. 実装方法の選択と理由
+## 7. Implementation Approach Selection and Rationale
 
-### 7.1 Manifest ベースのアプローチ（採用）
+### 7.1 Manifest-Based Approach (Adopted)
 
-**選択**: エージェント別のパスマッピングとコンテンツ定義を YAML Manifest で管理する。
+**Selection**: Manage per-agent path mappings and content definitions via a YAML Manifest.
 
-**理由**:
-1. **新しいエージェントへの対応が容易** — コードを変更せず Manifest を更新するだけ
-2. **リモート更新が可能** — バンドルを超えて、最新の Manifest をフェッチできる
-3. **Loom との相互運用性** — Loom の manifest.yaml と構造が近く、将来 Loom テンプレートとして公開可能
-4. **宣言的** — 何をどこに配置するかが Manifest を見ればわかる
+**Rationale**:
+1. **Easy to support new agents** — Only update the Manifest, no code changes required
+2. **Remote updates possible** — Can fetch the latest Manifest beyond what's bundled
+3. **Interoperability with Loom** — Structure is similar to Loom's manifest.yaml, enabling future publication as a Loom template
+4. **Declarative** — What goes where is clear from reading the Manifest
 
-**不採用案**: 
-- ハードコード方式 — エージェント追加のたびにコード変更が必要
-- skills.sh CLI 依存 — `npx skills add` に委譲する案もあったが、fnx のゼロ依存ポリシーに反する
+**Rejected alternatives**:
+- Hardcoded approach — Requires code changes for every new agent
+- skills.sh CLI dependency — Delegating to `npx skills add` was considered, but conflicts with fnx's zero-dependency policy
 
-### 7.2 コピーをデフォルト + junction オプション（採用）
+### 7.2 Copy as Default + Junction Option (Adopted)
 
-**選択**: `.agents/skills/` にスキルの実体をコピーで配置。`--link` フラグで directory junction（Windows）/ symlink（macOS/Linux）をオプション提供。
+**Selection**: Place skill content in `.agents/skills/` via copy by default. Provide directory junction (Windows) / symlink (macOS/Linux) via the `--link` flag as an option.
 
-**理由**（付録 A の dobby 調査に基づく変更）:
-1. **VSCode アトミック保存問題の回避** — dobby #406, #426 で file symlink/hard link が VSCode の保存で壊れることが確認済み
-2. **Windows 権限問題の回避** — file symlink は Developer Mode か管理者権限が必要。コピーなら不要
-3. **サイレント失敗の回避** — junction ターゲット消失がサイレントに空を返す（#658）
-4. **コストが小さい** — スキルファイルは数 KB〜数十 KB。コピーのオーバーヘッドは無視できる
-5. **更新は明示的** — `fnx setup --force` で最新に更新。暗黙的な同期よりも安全
+**Rationale** (changed based on the dobby investigation in Appendix A):
+1. **Avoids VSCode atomic save issue** — dobby #406, #426 confirmed that file symlinks/hard links break on VSCode save
+2. **Avoids Windows permission issues** — File symlinks require Developer Mode or administrator privileges. Copy does not
+3. **Avoids silent failures** — Junction target disappearance silently returns empty (#658)
+4. **Low cost** — Skill files are a few KB to tens of KB. Copy overhead is negligible
+5. **Updates are explicit** — Update to latest via `fnx setup --force`. Safer than implicit synchronization
 
-**不採用案**:
-- file symlink → VSCode アトミック保存で壊れる（dobby #406）
-- hard link → 同じ理由で壊れる（dobby #426）
-- symlink デフォルト → skills.sh 方式だが、dobby の 6 件以上のバグを考慮し安全側に倒す
+**Rejected alternatives**:
+- File symlink → Breaks on VSCode atomic save (dobby #406)
+- Hard link → Breaks for the same reason (dobby #426)
+- Symlink as default → The skills.sh approach, but erring on the safe side given 6+ bugs from dobby
 
-### 7.3 エージェント自動検出 + 確認 UI（採用）
+### 7.3 Auto-Detection + Confirmation UI (Adopted)
 
-**選択**: 自動検出するが、結果を必ずユーザーに表示して確認を求める。
+**Selection**: Auto-detect, but always display results to the user and ask for confirmation.
 
-**理由**:
-1. **ユーザーの認知負荷を下げる** — どのエージェントがあるか知らなくても動く
-2. **透明性** — 何が検出されたか見えるので、誤検出に気づける
-3. **手動オーバーライド可能** — `--agent` フラグで検出をスキップ
+**Rationale**:
+1. **Reduces cognitive load** — Works even if the user doesn't know which agents are installed
+2. **Transparency** — Detection results are visible, so false positives can be caught
+3. **Manual override available** — Skip detection with the `--agent` flag
 
-### 7.4 MCP 設定のマージ方式（採用）
+### 7.4 MCP Configuration Merge Approach (Adopted)
 
-**選択**: 既存の MCP 設定ファイルを読み込み、fnx 分の MCP サーバーだけを追加する。
+**Selection**: Read existing MCP configuration files and add only fnx MCP servers.
 
-**理由**:
-1. **既存設定を壊さない** — ユーザーが追加した他の MCP サーバーを保持
-2. **冪等性** — 2 回実行しても fnx-templates が重複しない（id でチェック）
+**Rationale**:
+1. **Does not break existing config** — Preserves other MCP servers the user has added
+2. **Idempotent** — Running twice does not duplicate fnx-templates (checked by id)
 
-**不採用案**: ファイル上書き方式 — 既存の MCP 設定を消してしまうリスク
-
----
-
-## 8. デモスコープ（今日の目標）
-
-### 8.1 最小デモで実装するもの
-
-| 機能 | スコープ | 優先度 |
-|------|---------|-------|
-| プロジェクト自動検出 | Node.js のみ（host.json + package.json） | ★★★ |
-| エージェント自動検出 | Copilot(VSCode) + Claude Code の 2 つ | ★★★ |
-| `fnx setup --module agent` | Skills 5 点 + Instructions + AGENTS.md の配置 | ★★★ |
-| `fnx setup --module mcp` | .vscode/mcp.json への fnx-templates 追加 | ★★★ |
-| `fnx chat` | Claude Code のランチャー（1 エージェントのみ） | ★★☆ |
-| Manifest ローカルバンドル | default.yaml + スキル 5 点 | ★★★ |
-| Agent Definition | `.github/agents/fnx.agent.md` 生成 | ★☆☆ |
-| 対話型 UI | シンプルな readline ベースの選択 | ★★☆ |
-
-### 8.2 デモでやらないもの
-
-- リモート Manifest 取得
-- CI/CD, IaC, Docker, azd モジュール
-- Python / .NET / Java プロジェクト検出
-- Cursor / Codex / その他エージェント対応
-- symlink（Windows のデモなのでコピーで十分）
-- テスト（デモ後にユニットテスト追加）
+**Rejected alternative**: File overwrite approach — Risk of deleting existing MCP configuration
 
 ---
 
-## 9. 将来の拡張
+## 8. Demo Scope (Today's Goal)
 
-| 段階 | 内容 |
-|------|------|
-| **v1.1** | リモート Manifest 取得（GitHub raw URL → キャッシュ → バンドルフォールバック） |
-| **v1.2** | Python / .NET / Java プロジェクト検出 |
-| **v1.3** | Cursor / Codex / Windsurf 等の追加エージェント対応 |
-| **v2.0** | `fnx setup --module ci` (CI/CD)、`--module iac` (IaC) — Manvir の docs を実装化 |
-| **v2.1** | `fnx init` との統合 — `fnx init --agent-config` で init 時にスキル自動同梱 |
-| **v3.0** | Loom レジストリ統合 — `loom apply fnx --registry functions` で Loom からインストール |
-| **v3.1** | Manifest のコミュニティ拡張 — サードパーティが独自スキルを Manifest に追加可能 |
+### 8.1 What to Implement for the Minimal Demo
+
+| Feature | Scope | Priority |
+|---------|-------|----------|
+| Project auto-detection | Node.js only (host.json + package.json) | ★★★ |
+| Agent auto-detection | Copilot (VSCode) + Claude Code only | ★★★ |
+| `fnx setup --module agent` | Place 5 skills + Instructions + AGENTS.md | ★★★ |
+| `fnx setup --module mcp` | Add fnx-templates to .vscode/mcp.json | ★★★ |
+| `fnx chat` | Claude Code launcher (single agent only) | ★★☆ |
+| Manifest local bundle | default.yaml + 5 skills | ★★★ |
+| Agent Definition | Generate `.github/agents/fnx.agent.md` | ★☆☆ |
+| Interactive UI | Simple readline-based selection | ★★☆ |
+
+### 8.2 What the Demo Will Not Include
+
+- Remote Manifest fetching
+- CI/CD, IaC, Docker, azd modules
+- Python / .NET / Java project detection
+- Cursor / Codex / other agent support
+- Symlinks (copy is sufficient for a Windows demo)
+- Tests (unit tests to be added after the demo)
 
 ---
 
-## 付録 A: Symlink / Junction の既知問題と対策（dobby/loom 調査）
+## 9. Future Extensions
 
-> **出典**: [serverless-paas-balam/dobby](https://github.com/serverless-paas-balam/dobby) — Loom の前身プロジェクト。symlink/junction 関連で多数の問題を経験しており、本仕様の設計に反映すべき教訓が含まれる。
+| Phase | Content |
+|-------|---------|
+| **v1.1** | Remote Manifest fetching (GitHub raw URL → cache → bundle fallback) |
+| **v1.2** | Python / .NET / Java project detection |
+| **v1.3** | Additional agent support for Cursor / Codex / Windsurf, etc. |
+| **v2.0** | `fnx setup --module ci` (CI/CD), `--module iac` (IaC) — Implement Manvir's docs |
+| **v2.1** | Integration with `fnx init` — Auto-bundle skills at init time via `fnx init --agent-config` |
+| **v3.0** | Loom registry integration — Install from Loom via `loom apply fnx --registry functions` |
+| **v3.1** | Community-extensible Manifests — Third parties can add custom skills to Manifests |
 
-### A.1 発見された問題一覧
+---
 
-| # | Issue | 深刻度 | ステータス | 概要 |
-|---|-------|--------|-----------|------|
-| [#406](https://github.com/serverless-paas-balam/dobby/issues/406) | Agent definition symlink sometimes replaced with regular file | 高 | Closed | **VSCode のアトミック保存**（一時ファイル書き込み → 元ファイル削除 → リネーム）が symlink を通常ファイルに置き換える。エージェントが自身の定義を編集する際にも発生。 |
-| [#426](https://github.com/serverless-paas-balam/dobby/issues/426) | Personal symlinks use hard links — vulnerable to atomic save | 高 | Closed | **Windows の hard link** (`fs.link()`) は VSCode のアトミック保存で壊れる。保存後にリンクが切れ、ワークスペースのファイルとソースが乖離する。 |
-| [#420](https://github.com/serverless-paas-balam/dobby/issues/420) | Instructions folder symlink not created during provisioning | 中 | Closed | symlink 作成がサイレントに失敗。Windows の権限問題、パス計算エラー、エラーハンドリング不足が原因。 |
-| [#658](https://github.com/serverless-paas-balam/dobby/issues/658) | Agent mode breaks when repo switches branches (junction target disappears) | 高 | Open | **Directory junction のターゲットが消える**。ブランチ切り替えでターゲットのディレクトリが存在しなくなると、junction はサイレントに空を返す。 |
-| [#424](https://github.com/serverless-paas-balam/dobby/issues/424) | Improve setupPersonalSymlinks error handling | 中 | Closed | junction → 実ディレクトリ変換時に内部 symlink が失敗してもエラーが swallow される。 |
-| [#481](https://github.com/serverless-paas-balam/dobby/issues/481) | Detect and remediate stale pre-v1.5.0 workspaces | 低 | Open | 古い方式（file symlink/hard link）で作られたワークスペースが stale になる。v1.5.0 で directory junction に移行。 |
-| [#229](https://github.com/serverless-paas-balam/dobby/issues/229) | Create .github/skills and .github/instructions symlinks | — | Closed | スキルと instructions の symlink 配置の元提案。 |
+## Appendix A: Known Issues and Mitigations for Symlinks / Junctions (dobby/loom Investigation)
 
-**Loom (後継):**
-| # | Issue | 概要 |
-|---|-------|------|
-| [loom#6](https://github.com/serverless-paas-balam/loom/issues/6) | Use directory junctions for cloned repos | Windows では `mklink /J`（管理者権限不要）、macOS/Linux では `ln -s` を使用。ファイル単位の symlink ではなく **ディレクトリ単位の junction** を推奨。 |
+> **Source**: [serverless-paas-balam/dobby](https://github.com/serverless-paas-balam/dobby) — A predecessor project to Loom. It encountered numerous symlink/junction-related issues, and the lessons learned are reflected in this spec's design.
 
-### A.2 主要な教訓
+### A.1 Discovered Issues
 
-#### 教訓 1: VSCode のアトミック保存が symlink を破壊する（#406, #426）
+| # | Issue | Severity | Status | Summary |
+|---|-------|----------|--------|---------|
+| [#406](https://github.com/serverless-paas-balam/dobby/issues/406) | Agent definition symlink sometimes replaced with regular file | High | Closed | **VSCode's atomic save** (write to temp file → delete original → rename) replaces symlinks with regular files. Also occurs when agents edit their own definitions. |
+| [#426](https://github.com/serverless-paas-balam/dobby/issues/426) | Personal symlinks use hard links — vulnerable to atomic save | High | Closed | **Windows hard links** (`fs.link()`) break on VSCode's atomic save. After saving, the link count drops to 1 and the two files diverge. |
+| [#420](https://github.com/serverless-paas-balam/dobby/issues/420) | Instructions folder symlink not created during provisioning | Medium | Closed | Symlink creation silently fails. Caused by Windows permission issues, path calculation errors, and insufficient error handling. |
+| [#658](https://github.com/serverless-paas-balam/dobby/issues/658) | Agent mode breaks when repo switches branches (junction target disappears) | High | Open | **Directory junction target disappears**. When a branch switch causes the target directory to no longer exist, the junction silently returns empty. |
+| [#424](https://github.com/serverless-paas-balam/dobby/issues/424) | Improve setupPersonalSymlinks error handling | Medium | Closed | Internal symlinks fail during junction-to-real-directory conversion, but errors are swallowed. |
+| [#481](https://github.com/serverless-paas-balam/dobby/issues/481) | Detect and remediate stale pre-v1.5.0 workspaces | Low | Open | Workspaces created with old methods (file symlink/hard link) become stale. Migrated to directory junctions in v1.5.0. |
+| [#229](https://github.com/serverless-paas-balam/dobby/issues/229) | Create .github/skills and .github/instructions symlinks | — | Closed | Original proposal for skill and instructions symlink placement. |
 
-VSCode はファイル保存時に「一時ファイルに書き込み → 元ファイル削除 → 一時ファイルをリネーム」というアトミック保存パターンを使う。これにより:
+**Loom (successor):**
+| # | Issue | Summary |
+|---|-------|---------|
+| [loom#6](https://github.com/serverless-paas-balam/loom/issues/6) | Use directory junctions for cloned repos | Use `mklink /J` on Windows (no admin privileges required), `ln -s` on macOS/Linux. Recommends **directory-level junctions** rather than per-file symlinks. |
 
-- **File symlink** → 元ファイルの削除で symlink のターゲットが消え、新しい通常ファイルに置き換わる
-- **Hard link** (`fs.link()`) → 同様に壊れる。保存後にリンクカウントが 1 になり、2 つのファイルが乖離
+### A.2 Key Lessons
 
-**dobby の解決策**: ファイル単位の symlink/hard link を廃止し、**ディレクトリ単位の junction** (`mklink /J`) に移行（v1.5.0, PR #468）。Junction 内のファイルは通常のファイル操作で読み書きされるため、VSCode のアトミック保存の影響を受けない。
+#### Lesson 1: VSCode's Atomic Save Destroys Symlinks (#406, #426)
 
-#### 教訓 2: Windows の symlink は権限問題がある（#420）
+When saving files, VSCode uses an atomic save pattern: "write to temp file → delete original file → rename temp file." This causes:
 
-Windows でファイル symlink を作成するには **Developer Mode** または **管理者権限** が必要。これがサイレントに失敗し、ユーザーが気づかない。
+- **File symlinks** → Deleting the original file removes the symlink target, replacing it with a new regular file
+- **Hard links** (`fs.link()`) → Break in the same way. After saving, the link count drops to 1 and the two files diverge
 
-**dobby の解決策**:
-- **Directory junction** (`mklink /J`) は管理者権限不要 → 推奨
-- ファイル symlink が必要な場合は **コピーにフォールバック**
+**dobby's solution**: Deprecated per-file symlinks/hard links and migrated to **directory-level junctions** (`mklink /J`) in v1.5.0, PR #468. Files within a junction are read/written through normal file operations and are unaffected by VSCode's atomic save.
 
-#### 教訓 3: Junction ターゲットの消失はサイレントに壊れる（#658）
+#### Lesson 2: Windows Symlinks Have Permission Issues (#420)
 
-Git のブランチ切り替え等で junction のターゲットディレクトリが消えると、junction はエラーを返さず **空のディレクトリとして振る舞う**。VSCode / Copilot は何も表示されない。
+Creating file symlinks on Windows requires **Developer Mode** or **administrator privileges**. This fails silently, leaving the user unaware.
 
-**fnx への影響**: fnx のスキルは fnx パッケージからコピーされるため、ブランチ切り替えの問題は発生しにくい。ただし、リモート Manifest からの更新時にターゲット消失が起きる可能性がある。
+**dobby's solution**:
+- **Directory junctions** (`mklink /J`) do not require admin privileges → recommended
+- **Fall back to copy** when file symlinks are needed
 
-#### 教訓 4: エラーハンドリングは必須（#424）
+#### Lesson 3: Junction Target Disappearance Fails Silently (#658)
 
-symlink/junction の作成失敗をサイレントに swallow すると、ユーザーが何が起きたか分からず、デバッグが困難になる。
+When a junction's target directory disappears (e.g., due to a Git branch switch), the junction does not return an error — it **behaves as an empty directory**. VSCode / Copilot displays nothing.
 
-### A.3 fnx 仕様への反映
+**Impact on fnx**: Since fnx skills are copied from the fnx package, branch switch issues are unlikely. However, target disappearance could occur during remote Manifest updates.
 
-上記の教訓を踏まえ、本仕様では以下の戦略を採用する:
+#### Lesson 4: Error Handling Is Essential (#424)
 
-| 観点 | 戦略 | 理由 |
-|------|------|------|
-| **デフォルト方式** | **コピー**（`--copy` 相当） | 最も安全。VSCode アトミック保存の問題なし。Windows 権限問題なし。fnx のスキルは小さいテキストファイルなので、コピーコストは無視できる |
-| **オプション方式** | `fnx setup --link` で **directory junction**（Windows）/ **symlink**（macOS/Linux） | 上級ユーザーやワークスペースの一元管理を望む場合に提供 |
-| **ファイル symlink** | **使用しない** | dobby #406, #426 の教訓。VSCode のアトミック保存で壊れる |
-| **Hard link** | **使用しない** | dobby #426 の教訓。同じ理由で壊れる |
-| **エラーハンドリング** | 失敗時は **明示的に警告表示** + フォールバック（コピー） | dobby #420, #424 の教訓 |
-| **健全性チェック** | `fnx setup` 再実行時に既存リンクの健全性を検証 | dobby #481 の教訓。壊れたリンクを検出して修復提案 |
+Silently swallowing symlink/junction creation failures leaves users unable to understand what happened, making debugging difficult.
 
-#### skills.sh との整合性
+### A.3 Implications for the fnx Spec
 
-skills.sh の `npx skills add` は symlink を推奨方式とするが、`--copy` フラグでコピーも可能。**fnx はデフォルトをコピーとし、skills.sh とは逆の安全側にデフォルトを置く**。理由:
+Based on the lessons above, this spec adopts the following strategies:
 
-1. fnx のターゲットユーザーは Azure Functions 開発者であり、symlink の仕組みに詳しくない可能性が高い
-2. スキルファイルは小さい（数 KB〜数十 KB）ためコピーコストが小さい
-3. 更新は `fnx setup --force` で明示的に行えばよい
-4. dobby が 6 件以上の symlink 関連バグを経験した事実は、安全側に倒すべきことを示している
+| Aspect | Strategy | Rationale |
+|--------|----------|-----------|
+| **Default method** | **Copy** (equivalent to `--copy`) | Safest option. No VSCode atomic save issues. No Windows permission issues. fnx skills are small text files, so copy cost is negligible |
+| **Optional method** | `fnx setup --link` for **directory junction** (Windows) / **symlink** (macOS/Linux) | Provided for advanced users or those wanting centralized workspace management |
+| **File symlinks** | **Not used** | Lesson from dobby #406, #426. Broken by VSCode's atomic save |
+| **Hard links** | **Not used** | Lesson from dobby #426. Broken for the same reason |
+| **Error handling** | **Explicit warning display** on failure + fallback (copy) | Lesson from dobby #420, #424 |
+| **Health checks** | Verify health of existing links on `fnx setup` re-run | Lesson from dobby #481. Detect broken links and propose remediation |
 
-> **注記**: skills.sh が将来ディレクトリ junction を標準にした場合、fnx も追随を検討する。ただし、独自にファイル単位の symlink/hard link を使うことは避ける。
+#### Alignment with skills.sh
+
+skills.sh's `npx skills add` recommends symlinks as the default, with a `--copy` flag for copy. **fnx defaults to copy, placing the default on the opposite (safer) side from skills.sh**. Rationale:
+
+1. fnx's target users are Azure Functions developers who may not be familiar with how symlinks work
+2. Skill files are small (a few KB to tens of KB), so copy cost is minimal
+3. Updates can be performed explicitly via `fnx setup --force`
+4. The fact that dobby experienced 6+ symlink-related bugs demonstrates that erring on the safe side is warranted
+
+> **Note**: If skills.sh standardizes on directory junctions in the future, fnx will consider following suit. However, fnx will avoid independently using per-file symlinks/hard links.
