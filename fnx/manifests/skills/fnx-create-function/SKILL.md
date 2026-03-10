@@ -83,5 +83,51 @@ app.http('myFunction', {
 
 1. Run `fnx doctor` to validate the setup
 2. Configure connection strings in `local.settings.json` (for non-HTTP triggers)
-3. Run `fnx start` to test locally
-4. For Queue/Blob/Table triggers, ensure Azurite is available (fnx auto-starts it)
+3. **Build the project** (if TypeScript: `npx tsc`, if Python: `pip install -r requirements.txt`)
+4. Run `fnx start` to test locally — **verify the function appears in the output and responds**
+5. For Queue/Blob/Table triggers, ensure Azurite is available (fnx auto-starts it)
+
+The task is complete only when `fnx start` launches successfully and the function is callable (e.g., `curl http://localhost:7071/api/<name>` returns a response for HTTP triggers).
+
+## Troubleshooting
+
+### Workers directory missing
+
+If `fnx start` fails with `DirectoryNotFoundException: Could not find a part of the path '...\.fnx\hosts\workers'`, the host binary was not fully extracted. Fix:
+
+```bash
+fnx sync host --force
+```
+
+This re-downloads and re-extracts the host including language workers (Node.js, Python, Java, etc.).
+
+### Node.js: `main` field in package.json
+
+The `main` field must point to a concrete JS file, **not** a glob pattern. For multiple functions, create an `index.ts` entry point:
+
+```typescript
+// src/index.ts
+import "./functions/httpTrigger";
+import "./functions/queueTrigger";
+```
+
+Then set `"main": "dist/src/index.js"` in `package.json`.
+
+### Node.js: missing tsconfig.json
+
+If `fnx init` does not generate `tsconfig.json` for TypeScript projects, create one:
+
+```json
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2022",
+    "outDir": "dist",
+    "rootDir": ".",
+    "sourceMap": true,
+    "strict": false,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*"]
+}
+```
