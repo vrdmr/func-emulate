@@ -89,10 +89,21 @@ export async function runSetup(args) {
   }
 
   if (!module || module === 'plugin') {
-    console.log(bold('🧩 Installing azure-skills plugin...'));
-    const r = await applyPluginModule(agents, { force: forceFlag, dryRun });
-    results.push(...r);
-    console.log();
+    // Filter to agents that support plugins
+    const pluginAgents = agents.filter(a => PLUGIN_AGENTS[a.id]);
+    let selectedPluginAgents = pluginAgents;
+
+    if (pluginAgents.length > 1 && !nonInteractive && !agentFilter) {
+      // Ask which agents should get the plugin
+      selectedPluginAgents = await promptPluginAgentSelection(pluginAgents);
+    }
+
+    if (selectedPluginAgents.length > 0) {
+      console.log(bold('🧩 Installing azure-skills plugin...'));
+      const r = await applyPluginModule(selectedPluginAgents, { force: forceFlag, dryRun });
+      results.push(...r);
+      console.log();
+    }
   }
 
   // Summary
@@ -339,6 +350,37 @@ async function ensureMarketplace(pluginDef, agentLabel) {
   } catch {
     return false;
   }
+}
+
+async function promptPluginAgentSelection(pluginAgents) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  console.log(bold('🧩 azure-skills plugin — select agents to install:'));
+  pluginAgents.forEach((a, i) => {
+    console.log(`    ${i + 1}. ${a.name || a.id}`);
+  });
+  console.log(`    ${pluginAgents.length + 1}. All of the above`);
+
+  return new Promise((resolve) => {
+    rl.question(`\n  Select [${pluginAgents.length + 1}]: `, (answer) => {
+      rl.close();
+      const input = (answer || String(pluginAgents.length + 1)).trim();
+
+      // "All" option
+      if (input === String(pluginAgents.length + 1) || input.toLowerCase() === 'all' || input === '') {
+        resolve(pluginAgents);
+        return;
+      }
+
+      // Parse comma-separated or single index
+      const indices = input.split(/[,\s]+/).map(s => parseInt(s, 10) - 1);
+      const selected = indices
+        .filter(i => i >= 0 && i < pluginAgents.length)
+        .map(i => pluginAgents[i]);
+
+      resolve(selected.length > 0 ? selected : pluginAgents);
+    });
+  });
 }
 
 // ─── Content Generators ───
