@@ -12,6 +12,7 @@ import { createInterface } from 'node:readline';
 import { detectProject } from './detect.js';
 import { detectAgents, formatAgentList } from './agent-detect.js';
 import { title, info, funcName, success, error as errorColor, warning, dim, bold } from '../colors.js';
+import { copyDirRecursive } from '../utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MANIFESTS_DIR = resolve(__dirname, '..', '..', 'manifests');
@@ -95,24 +96,6 @@ export async function runSetup(args) {
   if (skipped.length) console.log(dim(`  ○ ${skipped.length} files skipped (already exist, use --force to overwrite)`));
   console.log();
   console.log(dim('  Run ') + funcName('fnx chat') + dim(' to start an AI-assisted development session.'));
-}
-
-// ─── Helpers ───
-
-/** Recursively copy a directory, preserving structure. */
-async function copyDirRecursive(srcDir, dstDir, opts = {}) {
-  await mkdir(dstDir, { recursive: true });
-  const entries = await readdir(srcDir);
-  for (const entry of entries) {
-    const srcPath = join(srcDir, entry);
-    const dstPath = join(dstDir, entry);
-    const s = await stat(srcPath);
-    if (s.isDirectory()) {
-      await copyDirRecursive(srcPath, dstPath, opts);
-    } else {
-      if (!opts.dryRun) await copyFile(srcPath, dstPath);
-    }
-  }
 }
 
 // ─── Agent Module ───
