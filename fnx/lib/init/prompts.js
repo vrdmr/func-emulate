@@ -26,6 +26,15 @@ function canUseRawMode() {
 }
 
 /**
+ * Clean up stdin after raw mode usage to allow process to exit
+ */
+function cleanupStdin(stdin, listener) {
+  stdin.setRawMode(false);
+  stdin.removeListener('data', listener);
+  stdin.pause();
+}
+
+/**
  * Prompt user to select from a list of options using arrow keys
  * Falls back to number input if raw mode is not available
  * @param {string} question - Question to display
@@ -55,14 +64,17 @@ async function selectPrompt(question, options) {
       return from; // No selectable found, stay in place
     };
 
-    // Render the menu
-    const render = () => {
-      // Move cursor up to overwrite previous render (except first render)
-      if (render.rendered) {
-        process.stdout.write(`\x1b[${options.length}A`);
-      }
-      render.rendered = true;
+    // Track total lines rendered (options + hint)
+    let totalLines = 0;
 
+    // Render the menu
+    const render = (isFirstRender = false) => {
+      // Move cursor up to overwrite previous render (except first render)
+      if (!isFirstRender && totalLines > 0) {
+        process.stdout.write(`\x1b[${totalLines}A`);
+      }
+
+      let lines = 0;
       for (let i = 0; i < options.length; i++) {
         const opt = options[i];
         if (opt.disabled) {
@@ -73,15 +85,19 @@ async function selectPrompt(question, options) {
           const label = i === selectedIndex ? bold(opt.label) : opt.label;
           process.stdout.write(`\x1b[2K  ${prefix} ${label}\n`);
         }
+        lines++;
       }
+
+      // Show hint on first render, clear and rewrite on subsequent
+      process.stdout.write(`\x1b[2K${dim('  ↑/↓ to move, Enter to select')}\n`);
+      lines++;
+
+      totalLines = lines;
     };
 
-    // Show question and hint
+    // Show question and initial render
     console.log(bold(question));
-    render();
-    console.log(dim('\n  ↑/↓ to move, Enter to select'));
-    // Move cursor back up after hint
-    process.stdout.write(`\x1b[1A\x1b[2K`);
+    render(true);
 
     // Enable raw mode for keypress detection
     stdin.setRawMode(true);
@@ -91,8 +107,7 @@ async function selectPrompt(question, options) {
     const onKeypress = (key) => {
       // Handle Ctrl+C
       if (key === '\x03') {
-        stdin.setRawMode(false);
-        stdin.removeListener('data', onKeypress);
+        cleanupStdin(stdin, onKeypress);
         console.log('\n');
         process.exit(0);
       }
@@ -109,8 +124,7 @@ async function selectPrompt(question, options) {
       } else if (key === '\r' || key === '\n') {
         // Enter - only if current option is selectable
         if (!options[selectedIndex].disabled) {
-          stdin.setRawMode(false);
-          stdin.removeListener('data', onKeypress);
+          cleanupStdin(stdin, onKeypress);
           process.stdout.write(`\x1b[2K`);
           console.log(success(`  ✓ ${options[selectedIndex].label}\n`));
           resolve(options[selectedIndex].value);
@@ -126,8 +140,7 @@ async function selectPrompt(question, options) {
             if (!options[i].disabled) {
               count++;
               if (count === num) {
-                stdin.setRawMode(false);
-                stdin.removeListener('data', onKeypress);
+                cleanupStdin(stdin, onKeypress);
                 process.stdout.write(`\x1b[2K`);
                 console.log(success(`  ✓ ${options[i].label}\n`));
                 resolve(options[i].value);
@@ -198,9 +211,9 @@ async function selectPromptWithSearch(question, allOptions) {
     let lastRenderHeight = 0;
 
     // Render the menu
-    const render = () => {
+    const render = (isFirstRender = false) => {
       // Clear previous render
-      if (lastRenderHeight > 0) {
+      if (!isFirstRender && lastRenderHeight > 0) {
         process.stdout.write(`\x1b[${lastRenderHeight}A`);
         for (let i = 0; i < lastRenderHeight; i++) {
           process.stdout.write(`\x1b[2K\n`);
@@ -233,15 +246,17 @@ async function selectPromptWithSearch(question, allOptions) {
         }
       }
 
+      // Show hint as part of render
+      const hintText = '↑/↓ to move, type to filter, Esc to clear, Enter to select';
+      process.stdout.write(`\x1b[2K${dim('  ' + hintText)}\n`);
+      lines++;
+
       lastRenderHeight = lines;
     };
 
-    // Show question and hint
+    // Show question and initial render
     console.log(bold(question));
-    render();
-    const hintText = '↑/↓ to move, type to filter, Esc to clear, Enter to select';
-    console.log(dim(`\n  ${hintText}`));
-    process.stdout.write(`\x1b[1A\x1b[2K`);
+    render(true);
 
     stdin.setRawMode(true);
     stdin.resume();
@@ -250,8 +265,7 @@ async function selectPromptWithSearch(question, allOptions) {
     const onKeypress = (key) => {
       // Ctrl+C
       if (key === '\x03') {
-        stdin.setRawMode(false);
-        stdin.removeListener('data', onKeypress);
+        cleanupStdin(stdin, onKeypress);
         console.log('\n');
         process.exit(0);
       }
@@ -281,8 +295,7 @@ async function selectPromptWithSearch(question, allOptions) {
       // Enter
       if (key === '\r' || key === '\n') {
         if (displayOptions.length > 0 && !displayOptions[selectedIndex].disabled) {
-          stdin.setRawMode(false);
-          stdin.removeListener('data', onKeypress);
+          cleanupStdin(stdin, onKeypress);
           process.stdout.write(`\x1b[2K`);
           console.log(success(`  ✓ ${displayOptions[selectedIndex].label}\n`));
           resolve(displayOptions[selectedIndex].value);
@@ -310,8 +323,7 @@ async function selectPromptWithSearch(question, allOptions) {
             if (!displayOptions[i].disabled) {
               count++;
               if (count === num) {
-                stdin.setRawMode(false);
-                stdin.removeListener('data', onKeypress);
+                cleanupStdin(stdin, onKeypress);
                 process.stdout.write(`\x1b[2K`);
                 console.log(success(`  ✓ ${displayOptions[i].label}\n`));
                 resolve(displayOptions[i].value);
@@ -543,8 +555,14 @@ export async function promptTrigger(templates, priorityOrder) {
 }
 
 /**
- * Sort templates by resource type priority, then by binding type within each resource
- * Binding type order: trigger > input > output > other
+ * Sort templates by resource type priority, then by template priority (P0 starters first),
+ * then by binding type within each resource.
+ * 
+ * Sort order:
+ * 1. Resource type (http > blob > timer > queue > servicebus > eventhub > durable > eventgrid > other)
+ * 2. Template priority (P0 starters > P1 > P2 samples)
+ * 3. Binding type (trigger > input > output > other)
+ * 4. Alphabetical by display name
  */
 function sortTemplatesByResourcePriority(templates, priorityOrder) {
   const bindingTypeOrder = { 'trigger': 0, 'input': 1, 'output': 2 };
@@ -558,20 +576,28 @@ function sortTemplatesByResourcePriority(templates, priorityOrder) {
     const bIdx = priorityOrder.indexOf(bResource);
     
     // Prioritized resources come first, others go to end alphabetically
-    const aPriority = aIdx === -1 ? 999 : aIdx;
-    const bPriority = bIdx === -1 ? 999 : bIdx;
+    const aResourcePriority = aIdx === -1 ? 999 : aIdx;
+    const bResourcePriority = bIdx === -1 ? 999 : bIdx;
     
-    if (aPriority !== bPriority) {
-      return aPriority - bPriority;
+    if (aResourcePriority !== bResourcePriority) {
+      return aResourcePriority - bResourcePriority;
     }
     
     // If both unprioritized, sort alphabetically by resource
-    if (aPriority === 999 && bPriority === 999) {
+    if (aResourcePriority === 999 && bResourcePriority === 999) {
       const resourceCmp = aResource.localeCompare(bResource);
       if (resourceCmp !== 0) return resourceCmp;
     }
     
-    // 2. Within same resource: sort by binding type (trigger > input > output)
+    // 2. Within same resource: sort by template priority (P0 starters first, then P1, P2 samples)
+    const aTemplatePriority = a.priority ?? 999;
+    const bTemplatePriority = b.priority ?? 999;
+    
+    if (aTemplatePriority !== bTemplatePriority) {
+      return aTemplatePriority - bTemplatePriority;
+    }
+    
+    // 3. Within same priority: sort by binding type (trigger > input > output)
     const aBinding = bindingTypeOrder[a.bindingType] ?? 3;
     const bBinding = bindingTypeOrder[b.bindingType] ?? 3;
     
@@ -579,7 +605,7 @@ function sortTemplatesByResourcePriority(templates, priorityOrder) {
       return aBinding - bBinding;
     }
     
-    // 3. Alphabetical within same resource + binding type
+    // 4. Alphabetical within same resource + priority + binding type
     return (a.displayName || a.id).localeCompare(b.displayName || b.id);
   });
 }

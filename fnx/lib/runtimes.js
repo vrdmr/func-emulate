@@ -20,7 +20,7 @@ export const SUPPORTED_RUNTIMES = {
     supported: ['20', '22'],
     preview: ['24'],
     deprecated: ['18'],
-    default: '20',
+    default: '22',
   },
   typescript: {
     // TypeScript runs on Node.js runtime

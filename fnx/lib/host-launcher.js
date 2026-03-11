@@ -174,18 +174,38 @@ function createLogFilter(verbose, hostState) {
     const levelMatch = line.match(/^(trce|dbug|info|warn|fail|crit): (.+)/);
 
     if (levelMatch) {
-      const [, level] = levelMatch;
+      const [, level, category] = levelMatch;
       lastLogLevel = level;
 
-      // In clean mode, suppress all structured log headers.
-      // The only info we surface is the function list (extracted separately)
-      // and user-facing messages from Worker.LanguageWorkerChannel.
+      // Always show warnings and errors
+      if (level === 'warn' || level === 'fail' || level === 'crit') {
+        lastLogShown = true;
+        // Format: "[WARN] Category message" or "[ERROR] Category message"
+        // Warnings in yellow, errors/critical in red
+        if (level === 'warn') {
+          return warning(`[WARN] ${category}`);
+        } else {
+          const levelLabel = level === 'crit' ? 'CRIT' : 'ERROR';
+          return errorColor(`[${levelLabel}] ${category}`);
+        }
+      }
+
+      // Show function execution logs (Executing/Executed)
+      if (category.includes('Host.Function.Console') || 
+          category.includes('Function.') ||
+          line.includes("Executing '") || 
+          line.includes("Executed '")) {
+        lastLogShown = true;
+        return null; // Show the continuation message with the details
+      }
+
+      // Show worker initialization
       if (line.includes('Worker process started and initialized')) {
         lastLogShown = true;
         return null; // Show the continuation message
       }
 
-      // Suppress everything else — system, host, framework, even warnings
+      // Suppress everything else — system, host, framework logs
       lastLogShown = false;
       return null;
     }
@@ -196,13 +216,19 @@ function createLogFilter(verbose, hostState) {
       const msg = line.trim();
       if (msg === '' || msg.startsWith('at ') || msg.startsWith('---') ||
           msg.startsWith('{') || msg.startsWith('}') || msg.startsWith('"')) return null;
+      
+      // Format execution messages nicely
+      if (msg.includes("Executing '") || msg.includes("Executed '")) {
+        return `  → ${msg}`;
+      }
       return msg;
     }
 
     // Non-structured lines (plain text from ASP.NET: "Now listening on:", etc.)
     if (line.trim() === '') return null;
     if (line.startsWith('{') || line.startsWith('}') || line.startsWith('"')) return null;
-    return line;
+    // Replace 0.0.0.0 with localhost for friendlier output
+    return line.replace(/0\.0\.0\.0/g, 'localhost');
   }
 
   function extractFunctionInfo(line) {
@@ -213,7 +239,21 @@ function createLogFilter(verbose, hostState) {
       if (hostState) hostState.httpFunctions = [...httpFunctions];
     }
 
-    // Worker indexing JSON: extract non-HTTP trigger types from the indexed metadata
+    // Node.js v4 worker: "Loaded entry point file "dist/src/functions/<name>.js""
+    // Extract function name from the file path - this is a non-HTTP function being loaded
+    const nodeEntryMatch = line.match(/Loaded entry point file "([^"]+)"/);
+    if (nodeEntryMatch) {
+      const entryPath = nodeEntryMatch[1];
+      // Extract filename without extension as function name
+      const fileName = entryPath.split(/[/\\]/).pop()?.replace(/\.[jt]s$/, '');
+      if (fileName && !httpFunctions.some(f => f.name === fileName) && !nonHttpFunctions.some(f => f.name === fileName)) {
+        // Add as non-HTTP function (blob, timer, queue, etc.)
+        nonHttpFunctions.push({ name: fileName, triggerType: 'trigger' });
+        if (hostState) hostState.nonHttpFunctions = [...nonHttpFunctions];
+      }
+    }
+
+    // Worker indexing JSON (Python): extract non-HTTP trigger types from the indexed metadata
     // Format: {"message": "Successfully indexed function app.", "functions": "Function Name: X, Function Binding: [('triggerType', ...)] ..."}
     if (line.includes('Successfully indexed function app')) {
       const jsonStart = line.indexOf('{');
@@ -231,7 +271,7 @@ function createLogFilter(verbose, hostState) {
               // Find all trigger bindings and pick the non-HTTP one if present
               const allTriggers = [...bindings.matchAll(/\('(\w*[Tt]rigger)', '[^']*', '[^']*'\)/g)];
               const nonHttpTrigger = allTriggers.find(m => m[1] !== 'httpTrigger');
-              if (nonHttpTrigger) {
+              if (nonHttpTrigger && !nonHttpFunctions.some(f => f.name === name)) {
                 nonHttpFunctions.push({ name, triggerType: nonHttpTrigger[1] });
                 if (hostState) hostState.nonHttpFunctions = [...nonHttpFunctions];
               }
@@ -272,30 +312,36 @@ function createLogFilter(verbose, hostState) {
   }
 
   function extractListeningUrl(line) {
+    // Capture the base URL when host starts listening
     const match = line.match(/Now listening on: (.+)/);
-    if (match && !functionsShown) {
-      functionsShown = true;
+    if (match) {
       const baseUrl = match[1].replace('0.0.0.0', 'localhost');
-
-      // Update host state
       if (hostState) {
         hostState.state = 'Running';
         hostState.baseUrl = baseUrl;
       }
+    }
 
+    // Show functions list when "Application started" appears (after indexing is complete)
+    if (line.includes('Application started') && !functionsShown) {
+      functionsShown = true;
+      const baseUrl = hostState?.baseUrl || 'http://localhost:7071';
+
+      console.log(title('\nFunctions:\n'));
       if (httpFunctions.length > 0 || nonHttpFunctions.length > 0) {
-        console.log(title('\nFunctions:\n'));
         for (const fn of httpFunctions) {
           console.log(`\t${funcName(fn.name)}: [${fn.methods}] ${urlColor(`${baseUrl}/${fn.route}`)}`);
         }
         for (const fn of nonHttpFunctions) {
           console.log(`\t${funcName(fn.name)}: ${fn.triggerType}`);
         }
-        if (!verbose) {
-          console.log(dim('\nFor detailed output, run fnx with --verbose flag.'));
-        }
-        console.log();
+      } else {
+        console.log(dim(`\tNo functions found. Base URL: ${urlColor(baseUrl)}`));
       }
+      if (!verbose) {
+        console.log(dim('\nFor detailed output, run fnx with --verbose flag.'));
+      }
+      console.log();
     }
   }
 
@@ -342,18 +388,12 @@ export async function launchHost(hostDir, opts) {
     ASPNETCORE_URLS: `http://0.0.0.0:${opts.port}`,
     FUNCTIONS_WORKER_RUNTIME: opts.workerRuntime,
     'AzureFunctionsJobHost:extensionBundle:version': opts.extensionBundleVersion,
-    AzureWebJobsFeatureFlags: 'EnableWorkerIndexing',
     // Enable extension bundle auto-download (host checks IsCoreTools())
     FUNCTIONS_CORETOOLS_ENVIRONMENT: 'true',
     // Set bundle download/cache path under ~/.fnx/bundles/
     'AzureFunctionsJobHost:extensionBundle:downloadPath': join(homedir(), '.fnx', 'bundles',
       'Microsoft.Azure.Functions.ExtensionBundle'),
   };
-
-  // Bypass auth for local development (unless --enforce-auth is set)
-  if (!opts.enforceAuth) {
-    env['AzureFunctionsJobHost__AuthBypassForLocalDevelopment'] = 'true';
-  }
 
   // Merge all app config values into env
   if (opts.mergedValues) {
@@ -423,9 +463,19 @@ export async function launchHost(hostDir, opts) {
 
   hostState.pid = child.pid;
 
-  // Kill the entire process group (host + Python/Node workers it spawns)
+  const isWindows = platform() === 'win32';
+
+  // Kill the entire process tree (host + Python/Node workers it spawns)
   function killHostGroup(signal) {
-    try { process.kill(-child.pid, signal); } catch { /* already dead */ }
+    try {
+      if (isWindows) {
+        // Windows: use taskkill to kill the process tree
+        execSync(`taskkill /T /F /PID ${child.pid}`, { stdio: 'ignore' });
+      } else {
+        // Unix: kill the process group (negative PID)
+        process.kill(-child.pid, signal);
+      }
+    } catch { /* already dead */ }
   }
 
   // Ensure the host process group is killed if Node exits unexpectedly
@@ -449,17 +499,24 @@ export async function launchHost(hostDir, opts) {
     stopAzurite();
     killHostGroup(signal);
     if (hostState._mcpServer) hostState._mcpServer.close();
-    // Give the host 2s to shut down gracefully, then force kill the group
+    // Give the host 2s to shut down gracefully, then force kill
     const forceTimer = setTimeout(() => {
       killHostGroup('SIGKILL');
       process.exit(0);
     }, 2000);
     forceTimer.unref();
-    child.once('exit', () => process.exit(0));
+    child.once('exit', () => {
+      clearTimeout(forceTimer);
+      process.exit(0);
+    });
   }
 
   process.on('SIGINT', () => cleanup('SIGINT'));
   process.on('SIGTERM', () => cleanup('SIGTERM'));
+  // Windows: handle the 'SIGBREAK' (Ctrl+Break) signal as well
+  if (platform() === 'win32') {
+    process.on('SIGBREAK', () => cleanup('SIGTERM'));
+  }
 
   return new Promise((resolve, reject) => {
     child.on('error', (err) => {

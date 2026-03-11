@@ -622,7 +622,12 @@ export function printSuccessBanner(targetDir, projectName, sku, runtime, envSetu
   
   if (envSetupDone) {
     // Environment already set up via --env flag
-    installStep = `${dim('2.')} ${dim('(Dependencies already installed via --env)')}`;
+    // But TypeScript still needs build step
+    if (runtime === 'typescript') {
+      installStep = `${dim('2.')} ${bold('npm run build')}`;
+    } else {
+      installStep = `${dim('2.')} ${dim('(Dependencies already installed via --env)')}`;
+    }
   } else {
     switch (runtime) {
       case 'python':
@@ -655,7 +660,17 @@ export function printSuccessBanner(targetDir, projectName, sku, runtime, envSetu
   }
 
   // Adjust fnx start step number based on extra steps
-  const startStepNum = `${3 + extraSteps}.`;
+  // Also adjust if we skip the cd step (when initializing in current directory)
+  const isCurrentDir = relativePath === '.';
+  const cdStepOffset = isCurrentDir ? -1 : 0;
+  const startStepNum = `${3 + extraSteps + cdStepOffset}.`;
+
+  // Build the cd step (skip if current directory)
+  const cdStep = isCurrentDir ? '' : `  ${dim('1.')} ${bold('cd ' + relativePath)}\n`;
+  
+  // Renumber install step if we skip cd
+  const installStepNum = isCurrentDir ? '1.' : '2.';
+  const renumberedInstallStep = installStep.replace(/^(\s*)2\./, `$1${installStepNum}`);
 
   console.log(`
 ${success('✓')} ${bold('Project created successfully!')}
@@ -666,8 +681,7 @@ ${title('Target SKU:')}  ${info(sku)}
 
 ${title('Next steps:')}
 
-  ${dim('1.')} ${bold('cd ' + (relativePath === '.' ? '' : relativePath))}
-  ${installStep}
+${cdStep}  ${renumberedInstallStep}
   ${dim(startStepNum)} ${bold('fnx start')}
 
 ${dim('For more templates:')}

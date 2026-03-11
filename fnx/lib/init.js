@@ -197,11 +197,11 @@ ${bold('✗ Invalid manifest format')}
 
   // Step 10: Setup development environment (if --env flag)
   if (flags.env) {
-    await setupDevEnvironment(targetDir, runtime, flags.verbose);
+    await setupDevEnvironment(targetDir, runtime, language, flags.verbose);
   }
 
   // Step 11: Print success banner
-  printSuccessBanner(targetDir, projectName, sku, runtime, flags.env);
+  printSuccessBanner(targetDir, projectName, sku, language, flags.env);
 }
 
 /**
@@ -240,11 +240,11 @@ function runCommand(cmd, args, options = {}) {
 /**
  * Setup development environment based on runtime
  * - Python: create venv + pip install
- * - Node.js: npm install
+ * - Node.js: npm install (+ npm run build for TypeScript)
  * - .NET: dotnet restore
  * - Java: mvn dependency:resolve
  */
-async function setupDevEnvironment(targetDir, runtime, verbose) {
+async function setupDevEnvironment(targetDir, runtime, language, verbose) {
   console.log(info('\n📦 Setting up development environment...\n'));
 
   try {
@@ -286,6 +286,13 @@ async function setupDevEnvironment(targetDir, runtime, verbose) {
           console.log(dim(`  Installing Node.js dependencies...`));
           await runCommand('npm', ['install'], { cwd: targetDir, verbose });
           console.log(success(`  ✓ Installed Node.js dependencies`));
+          
+          // For TypeScript, also run npm run build
+          if (language === 'typescript') {
+            console.log(dim(`  Building TypeScript...`));
+            await runCommand('npm', ['run', 'build'], { cwd: targetDir, verbose });
+            console.log(success(`  ✓ Built TypeScript project`));
+          }
         }
         break;
       }
