@@ -56,7 +56,9 @@ async function detectNodeProject(appPath, project) {
   try {
     const pkg = JSON.parse(await readFile(join(appPath, 'package.json'), 'utf8'));
     const afVersion = pkg.dependencies?.['@azure/functions'] || '';
-    project.programmingModel = afVersion.startsWith('3') ? 'v3' : 'v4';
+    // Strip semver range operators (^, ~, >=, etc.) before checking major version
+    const cleanVersion = afVersion.replace(/^[^0-9]*/, '');
+    project.programmingModel = cleanVersion.startsWith('3') ? 'v3' : 'v4';
     project.language = existsSync(join(appPath, 'tsconfig.json')) ? 'typescript' : 'javascript';
   } catch {
     project.programmingModel = 'v4';

@@ -75,8 +75,9 @@ contents:
     - id: fnx-templates
       name: "fnx Templates MCP"
       description: "Azure Functions template discovery and scaffolding"
+      type: "stdio"
       command: "npx"
-      args: ["manvir-templates-mcp-server"]
+      args: ["-y", "manvir-templates-mcp-server"]
 
   agentDefinitions:
     - id: fnx-agent

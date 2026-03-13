@@ -72,10 +72,10 @@ export async function runChat(args) {
   }
   console.log();
 
-  // Step 2: Detect agents and select
+  // Step 2: Detect agents and select (only CLI-launchable agents)
   console.log(bold('🤖 Detecting coding agents...'));
   let agents = await detectAgents(appPath);
-  const launchableAgents = agents.filter(a => LAUNCHERS[a.id]);
+  const launchableAgents = agents.filter(a => LAUNCHERS[a.id] && a.type === 'cli');
 
   let selectedId;
 
@@ -93,7 +93,7 @@ export async function runChat(args) {
     console.log();
     console.log('  Install one of the following:');
     console.log(dim('    • Claude Code: https://claude.ai/download'));
-    console.log(dim('    • GitHub Copilot CLI: gh extension install github/gh-copilot'));
+    console.log(dim('    • GitHub Copilot CLI: npm install -g @anthropic-ai/copilot'));
     console.log(dim('    • Codex CLI: npm install -g @openai/codex'));
     console.log();
     console.log(dim('  Or use --agent to specify: fnx chat --agent claude-code'));
@@ -153,10 +153,11 @@ async function launchAgent(agentId, launcher, appPath, project, prompt) {
   if (prompt) args.push(prompt);
 
   // Launch the agent as an interactive child process
+  // Use shell: false to prevent shell injection via user-controlled args (e.g., --prompt)
   const child = spawn(launcher.command, args, {
     cwd: appPath,
     stdio: 'inherit',
-    shell: true,
+    shell: false,
   });
 
   child.on('error', (err) => {
@@ -264,7 +265,7 @@ ${title('Description:')}
 ${title('Options:')}
   ${success('--agent')} <name>     Use a specific agent: ${funcName('claude-code')}, ${funcName('github-copilot')}, ${funcName('codex')}
   ${success('--app-path')} <dir>   Path to function app (default: current directory)
-  ${success('--prompt')} <text>    Non-interactive: send a single prompt and exit
+  ${success('--prompt')} <text>    Pass prompt text as CLI argument to the agent
   ${success('-h')}, ${success('--help')}       Show this help
 
 ${title('Examples:')}

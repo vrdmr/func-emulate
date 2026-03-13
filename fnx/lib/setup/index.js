@@ -13,7 +13,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { detectProject } from './detect.js';
 import { detectAgents, formatAgentList } from './agent-detect.js';
-import { title, info, funcName, success, error as errorColor, warning, dim, bold } from '../colors.js';
+import { title, funcName, success, error as errorColor, warning, dim, bold } from '../colors.js';
 import { copyDirRecursive } from '../utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +30,14 @@ export async function runSetup(args) {
   const dryRun = args.includes('--dry-run');
   const agentFilter = getFlag(args, '--agent');
   const nonInteractive = args.includes('--non-interactive') || args.includes('--all');
+
+  // Validate --module flag
+  const VALID_MODULES = ['agent', 'mcp', 'plugin'];
+  if (module && !VALID_MODULES.includes(module)) {
+    console.error(errorColor(`  ✗ Unknown module: ${module}`));
+    console.error(dim(`    Valid modules: ${VALID_MODULES.join(', ')}`));
+    process.exit(1);
+  }
 
   console.log();
   console.log(title('fnx setup') + dim(' — Configure your project for AI-assisted development'));
@@ -58,7 +66,7 @@ export async function runSetup(args) {
   let agents = await detectAgents(appPath);
 
   if (agentFilter) {
-    const filterIds = agentFilter.split(',').map(s => s.trim());
+    const filterIds = agentFilter.split(',').map(s => normalizeAgentId(s.trim()));
     agents = agents.filter(a => filterIds.includes(a.id));
   }
 
@@ -157,6 +165,7 @@ async function applyAgentModule(appPath, project, agents, opts) {
     if (agent.id === 'claude-code') {
       const claudeSkills = join(appPath, '.claude', 'skills');
       await mkdir(claudeSkills, { recursive: true });
+      let claudeCopied = 0;
       for (const skillName of skillDirs) {
         const srcSkillDir = join(skillsDir, skillName);
         const srcSkillMd = join(srcSkillDir, 'SKILL.md');
@@ -165,9 +174,15 @@ async function applyAgentModule(appPath, project, agents, opts) {
         if (!existsSync(srcSkillMd)) continue;
         if (existsSync(dstSkillMd) && !opts.force) continue;
         await copyDirRecursive(srcSkillDir, dstSkillDir, opts);
+        claudeCopied++;
       }
-      console.log(success(`    ✓ .claude/skills/ (${skillDirs.length} skills copied)`));
-      results.push({ file: claudeSkills, action: 'created' });
+      if (claudeCopied > 0) {
+        console.log(success(`    ✓ .claude/skills/ (${claudeCopied} skills copied)`));
+        results.push({ file: claudeSkills, action: 'created' });
+      } else {
+        console.log(dim(`    ○ .claude/skills/ (${skillDirs.length} skills already exist)`));
+        results.push({ file: claudeSkills, action: 'skipped' });
+      }
     }
   }
 
@@ -196,8 +211,9 @@ async function applyMcpModule(appPath, agents, opts) {
 
   const mcpServer = {
     "fnx-templates": {
+      type: "stdio",
       command: "npx",
-      args: ["manvir-templates-mcp-server"],
+      args: ["-y", "manvir-templates-mcp-server"],
       env: {},
     }
   };
@@ -224,7 +240,9 @@ async function mergeMcpConfig(filePath, key, servers, displayName, opts) {
   await mkdir(dirname(filePath), { recursive: true });
   let existing = {};
   if (existsSync(filePath)) {
-    try { existing = JSON.parse(await readFile(filePath, 'utf8')); } catch { /* corrupt file */ }
+    try { existing = JSON.parse(await readFile(filePath, 'utf8')); } catch {
+      console.log(warning(`    ⚠ ${displayName} has invalid JSON, will be overwritten`));
+    }
   }
 
   if (!existing[key]) existing[key] = {};
@@ -505,6 +523,18 @@ function resolveSetupAppPath(args) {
 function getFlag(args, name) {
   const idx = args.indexOf(name);
   return idx >= 0 && idx + 1 < args.length ? args[idx + 1] : null;
+}
+
+// Normalize short agent aliases to canonical IDs
+const AGENT_ALIASES = {
+  'copilot': 'github-copilot',
+  'claude': 'claude-code',
+  'cursor': 'cursor',
+  'codex': 'codex',
+};
+
+function normalizeAgentId(input) {
+  return AGENT_ALIASES[input] || input;
 }
 
 export function printSetupHelp() {

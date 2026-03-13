@@ -42,10 +42,9 @@ export async function detectAgents(appPath) {
     }
   }
 
-  // 3. Fallback: include github-copilot if not detected via CLI or IDE
+  // 3. Fallback: check for gh copilot extension (not just gh binary)
   if (!agents.find(a => a.id === 'github-copilot')) {
-    // Check legacy ghcs or gh extension
-    if (await commandExists('ghcs') || await commandExists('gh')) {
+    if (await commandExists('ghcs') || await hasCopilotExtension()) {
       agents.push({ id: 'github-copilot', name: 'GitHub Copilot (gh)', type: 'cli' });
     }
   }
@@ -63,12 +62,20 @@ async function commandExists(cmd) {
   }
 }
 
+async function hasCopilotExtension() {
+  try {
+    const { stdout } = await execFileAsync('gh', ['extension', 'list'], { timeout: 5000 });
+    return stdout.includes('gh-copilot');
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Format agent list for display.
  */
-export function formatAgentList(agents, allKnown) {
+export function formatAgentList(agents) {
   const lines = [];
-  const knownIds = new Set((allKnown || CLI_AGENTS).map(a => a.id || a));
 
   for (const agent of agents) {
     lines.push(`  ✓ ${agent.name}`);
