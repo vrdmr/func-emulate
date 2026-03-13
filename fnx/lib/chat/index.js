@@ -93,7 +93,7 @@ export async function runChat(args) {
     console.log();
     console.log('  Install one of the following:');
     console.log(dim('    • Claude Code: https://claude.ai/download'));
-    console.log(dim('    • GitHub Copilot CLI: npm install -g @anthropic-ai/copilot'));
+    console.log(dim('    • GitHub Copilot CLI: https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line'));
     console.log(dim('    • Codex CLI: npm install -g @openai/codex'));
     console.log();
     console.log(dim('  Or use --agent to specify: fnx chat --agent claude-code'));
