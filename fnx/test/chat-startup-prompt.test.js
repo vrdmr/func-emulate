@@ -52,16 +52,19 @@ describe('startup prompt — helper functions', () => {
     assert.ok(result.includes('none yet'), 'should say none yet for empty functions');
   });
 
-  it('buildSuggestedActions with no project suggests creating one', () => {
+  it('buildSuggestedActions with no project suggests building a function', () => {
     const result = chatModule.buildSuggestedActions(null);
-    assert.ok(result.includes('Suggested next steps'), 'should have heading');
-    assert.ok(result.includes('Create a new'), 'should suggest creating project');
+    assert.ok(result.includes('Tell me what kind of function'), 'should ask what to build');
+    assert.ok(result.includes('HTTP'), 'should give HTTP example');
+    assert.ok(result.includes('queue'), 'should give queue example');
+    assert.ok(result.includes('deployment'), 'should mention deployment');
   });
 
   it('buildSuggestedActions with empty project suggests adding function', () => {
     const project = { runtime: 'node', sku: 'flex-consumption', functions: [] };
     const result = chatModule.buildSuggestedActions(project);
-    assert.ok(result.includes('Add your first function'), 'should suggest first function');
+    assert.ok(result.includes('no functions yet'), 'should note no functions');
+    assert.ok(result.includes('Tell me what to build'), 'should ask what to build');
   });
 
   it('buildSuggestedActions with existing functions suggests next steps', () => {
@@ -73,6 +76,7 @@ describe('startup prompt — helper functions', () => {
     const result = chatModule.buildSuggestedActions(project);
     assert.ok(result.includes('Add another function'), 'should suggest adding function');
     assert.ok(result.includes('Diagnose'), 'should suggest diagnose');
+    assert.ok(result.includes('Deploy to Azure'), 'should suggest deploy');
     assert.ok(result.includes('flex-consumption'), 'should mention SKU');
   });
 });
@@ -152,14 +156,18 @@ describe('startup prompt — template resolution', () => {
     assert.ok(result.includes('Node.js'), 'should include project context');
     assert.ok(result.includes('1'), 'should include skill count');
     assert.ok(result.includes('fnx-intro'), 'should include skill names');
-    assert.ok(result.includes('Suggested next steps'), 'should include suggested actions');
+    assert.ok(result.includes('Add another function'), 'should include suggested actions');
+    // Should not contain markdown formatting
+    assert.ok(!result.includes('## '), 'should not contain markdown headers');
+    assert.ok(!result.includes('**'), 'should not contain markdown bold');
   });
 
   it('buildStartupPrompt works with no project', async () => {
     const result = await chatModule.buildStartupPrompt(tmpDir, null);
     assert.ok(!result.includes('{{'), 'should not have unresolved placeholders');
     assert.ok(result.includes('No Azure Functions project'), 'should indicate no project');
-    assert.ok(result.includes('Create a new'), 'should suggest creating project');
+    assert.ok(result.includes('Tell me what kind of function'), 'should ask what to build');
+    assert.ok(!result.includes('## '), 'should not contain markdown headers');
   });
 });
 

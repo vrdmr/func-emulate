@@ -310,7 +310,7 @@ export async function listSkillSummaries(appPath) {
     const descMatch = content.match(/^description:\s*"?([^"\n]+)"?/m);
     const name = nameMatch ? nameMatch[1].trim() : dir;
     const desc = descMatch ? descMatch[1].trim().split('.')[0] : '';
-    summaries.push(`- **${name}**: ${desc}`);
+    summaries.push(`  - ${name}: ${desc}`);
   }
   return summaries.join('\n') || '(none installed — run fnx setup first)';
 }
@@ -318,24 +318,31 @@ export async function listSkillSummaries(appPath) {
 export function buildSuggestedActions(project) {
   if (!project) {
     return [
-      'Suggested next steps:',
-      '1. Create a new Azure Functions project — ask me to run `fnx init`',
-      '2. Learn about Azure Functions concepts and trigger types',
+      'Tell me what kind of function you want to build, for example:',
+      '  - "Create an HTTP API that processes orders"',
+      '  - "Build a queue-triggered function that sends emails"',
+      '  - "Set up a timer function that runs cleanup every hour"',
+      '',
+      'I will scaffold the project, write the code, and guide you through deployment.',
     ].join('\n');
   }
   if (project.functions.length === 0) {
     return [
-      'Suggested next steps:',
-      '1. Add your first function — ask me to create an HTTP trigger, Timer, Queue, etc.',
-      '2. Run the app locally with `fnx start`',
+      'Your project is set up but has no functions yet. Tell me what to build:',
+      '  - "Add an HTTP trigger that returns user data from a database"',
+      '  - "Create a queue-triggered function to process uploaded images"',
+      '  - "Add a timer function that checks for expired subscriptions"',
+      '',
+      'I will write the function code, help you test locally, and deploy to Azure.',
     ].join('\n');
   }
   return [
-    'Suggested next steps:',
-    '1. Add another function or binding',
-    '2. Run and test locally with `fnx start`',
-    '3. Diagnose issues — describe any errors you see',
-    '4. Review best practices for your ' + project.sku + ' SKU',
+    'Here are some things I can help with:',
+    '  - Add another function (tell me the trigger type and what it should do)',
+    '  - Run and test locally with fnx start',
+    '  - Diagnose issues (paste any error messages)',
+    '  - Deploy to Azure',
+    '  - Review best practices for your ' + project.sku + ' plan',
   ].join('\n');
 }
 

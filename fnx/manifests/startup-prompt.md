@@ -1,13 +1,10 @@
-👋 Welcome to Azure Functions development with fnx!
+Welcome to Azure Functions development with fnx!
 
-## Your Project
 {{projectContext}}
 
-## What I Can Help With
-I have {{skillCount}} specialized Azure Functions skills installed:
+I have {{skillCount}} specialized Azure Functions skills to help you build, test, and deploy.
 {{skillList}}
 
-## Suggested Next Steps
 {{suggestedActions}}
 
-How can I help you today?
+What kind of function would you like to build?
