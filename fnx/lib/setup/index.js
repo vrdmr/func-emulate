@@ -130,6 +130,19 @@ export async function runSetup(args) {
   if (skipped.length) console.log(dim(`  ○ ${skipped.length} files skipped (already exist, use --force to overwrite)`));
   console.log();
   console.log(dim('  Run ') + funcName('fnx chat') + dim(' to start an AI-assisted development session.'));
+
+  // Show startup prompt preview so the user knows what the agent will see
+  try {
+    const { buildStartupPrompt } = await import('../chat/index.js');
+    const greeting = await buildStartupPrompt(appPath, project);
+    console.log();
+    console.log(bold('  Agent startup greeting preview:'));
+    console.log(dim('  ┌─────────────────────────────────────────────────'));
+    for (const line of greeting.split('\n')) {
+      console.log(dim('  │ ') + line);
+    }
+    console.log(dim('  └─────────────────────────────────────────────────'));
+  } catch { /* non-critical — skip if chat module fails */ }
 }
 
 // ─── Agent Module ───
