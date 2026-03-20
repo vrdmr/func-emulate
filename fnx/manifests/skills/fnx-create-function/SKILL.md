@@ -89,6 +89,20 @@ app.http('myFunction', {
 
 The task is complete only when `fnx start` launches successfully and the function is callable (e.g., `curl http://localhost:7071/api/<name>` returns a response for HTTP triggers).
 
+## Next Step: Deploy to Azure
+
+Once the function works locally, prompt the user to deploy:
+
+> Your function is working locally! Ready to deploy to Azure?
+> I can help you set up the infrastructure and deploy. Just say "deploy to Azure" to get started.
+
+Deployment options to suggest:
+- **Azure Developer CLI (azd)**: `azd init` then `azd up` — provisions infrastructure + deploys code in one step
+- **Azure CLI**: `az functionapp create` + `func azure functionapp publish <name>`
+- **VS Code**: Azure Functions extension → Deploy to Function App
+
+Always recommend azd as the first option for new projects.
+
 ## Troubleshooting
 
 ### Workers directory missing
