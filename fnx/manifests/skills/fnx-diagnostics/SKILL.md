@@ -32,7 +32,9 @@ fnx start --verbose 2>&1 | tee fnx-output.log
 Read the full output. Key indicators:
 - `[error]` / `[crit]` — Host-level errors
 - `Fail` / `Exception` — Runtime failures
-- `Port ... in use` — Port conflicts
+- `WorkerConfig for runtime: {lang} not found` — Host cache corrupt (workers missing)
+- `0 functions loaded` with no errors — Missing `EnableWorkerIndexing` for Python v2
+- `Port ... in use` — Port conflicts (check for stale fnx host processes)
 - `Azurite not available` — Storage emulator missing
 
 ### Step 3: Read fnx Source Code
@@ -57,8 +59,10 @@ Read the relevant source file to understand exactly what the error means and wha
 |---------|----------|-------------|
 | `fnx start` exits immediately | Startup | Check host.json, runtime config |
 | Host starts, function returns 503 | Worker | Check runtime package (`@azure/functions`) |
+| No functions listed in output | Worker | Check `EnableWorkerIndexing` (Python v2), or host cache corrupt |
+| `WorkerConfig for runtime not found` | Cache | Delete `~/.fnx/hosts/` and restart |
 | Triggers don't fire | Non-HTTP | Check Azurite, connection strings |
-| Port already in use | Port | `fnx start --port 7072` |
+| Port already in use | Port | Kill stale host process or `fnx start --port 7080` |
 | Azurite errors (connection refused, 403) | Storage | Check Azurite status, connection string |
 | "No host package for platform" | Platform | OS/arch not in SKU profile |
 | Secrets detected in app-config.yaml | Security | Run `fnx config migrate` |

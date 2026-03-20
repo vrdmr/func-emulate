@@ -26,8 +26,12 @@ Error patterns extracted from fnx source code. Use these to precisely identify r
 
 | Error | Source File | Cause | Fix |
 |-------|------------|-------|-----|
-| `Port {port} in use` | cli.js:211 | Another process on port 7071 | `fnx start --port 7072` or kill the other process |
+| `Port {port} in use` | cli.js:211 | Another process on port 7071 | Kill stale host process (`Stop-Process -Id <PID>`) or `fnx start --port 7080` |
 | `MCP server failed to start on port {port}` | cli.js:304 | Port 7072 in use | `fnx start --mcp-port 7073` or `--no-mcp` |
+
+**Stale process detection**: Previous `fnx start` may leave `Microsoft.Azure.WebJobs.Script.WebHost` running. Check with:
+- Windows: `netstat -ano | findstr 7071` then `Stop-Process -Id <PID> -Force`
+- Linux/macOS: `lsof -i :7071` then `kill <PID>`
 
 ## Azurite / Storage Errors
 
@@ -53,8 +57,15 @@ Error patterns extracted from fnx source code. Use these to precisely identify r
 
 | Error | Source File | Cause | Fix |
 |-------|------------|-------|-----|
+| `WorkerConfig for runtime: python not found` | host-launcher.js | Host cache corrupt — `workers/python/worker.config.json` missing | Delete `~/.fnx/hosts/` and restart `fnx start` |
 | `No compatible python (3.9-3.13) found` | host-launcher.js:387 | Python not in PATH or wrong version | Install Python 3.9-3.13, or set `PythonPath` in config |
 | `Python on Windows is for local development only` | host-launcher.js:403 | Windows Python warning | Informational; Azure doesn't host Python on Windows |
+| `0 functions loaded` (no errors) | N/A | Missing `EnableWorkerIndexing` for Python v2 model | Add `"AzureWebJobsFeatureFlags": "EnableWorkerIndexing"` to `local.settings.json` Values |
+
+**Cache corruption diagnosis**: Check `~/.fnx/hosts/<version>/workers/python/`:
+- Must contain `worker.config.json` (host-to-worker config)
+- Must contain `<pyver>/<PLATFORM>/<ARCH>/worker.py` (worker entry point)
+- If only `.pyd` files exist, download was interrupted — delete and re-download
 
 ## .NET-Specific
 

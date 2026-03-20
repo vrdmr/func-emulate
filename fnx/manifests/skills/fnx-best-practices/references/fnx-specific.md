@@ -58,6 +58,20 @@ Always run `fnx doctor` before `fnx start` to catch issues:
 6. Ports 7071 and 7072 available
 7. Azurite status
 
+## Host Cache Reset
+
+If `fnx start` fails with worker errors or functions not loading, the host cache may be corrupt:
+
+```bash
+# Reset host cache only (re-downloads on next fnx start)
+rm -rf ~/.fnx/hosts/
+
+# Full reset (host + extension bundles + all cached data)
+rm -rf ~/.fnx/
+```
+
+Common symptom: `WorkerConfig for runtime: python not found` — means `workers/python/worker.config.json` is missing from the cached host. The cache directory is `~/.fnx/hosts/<version>/`.
+
 ## CI/Docker Optimization
 
 ```bash

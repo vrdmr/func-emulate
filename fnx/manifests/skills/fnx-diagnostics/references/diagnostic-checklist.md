@@ -28,7 +28,9 @@ Structured checklist for comprehensive diagnosis. Work through relevant sections
 ## Infrastructure Health
 
 - [ ] **Host cache**: `ls ~/.fnx/hosts/` — any versions cached?
+- [ ] **Host workers intact**: Check `~/.fnx/hosts/<ver>/workers/<runtime>/worker.config.json` exists — if missing, cache is corrupt. Fix: `rm -rf ~/.fnx/hosts/`
 - [ ] **Ports**: 7071 (HTTP) and 7072 (MCP) available
+- [ ] **Stale processes**: Check for orphaned `Microsoft.Azure.WebJobs.Script.WebHost` processes holding ports
 - [ ] **Azurite**: Running if storage triggers exist. Check ports 10000-10002
 - [ ] **Network**: Can reach CDN for host download (if first run)
 
