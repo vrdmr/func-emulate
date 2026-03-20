@@ -284,10 +284,10 @@ function getFlag(args, name) {
 // --- Startup prompt helpers (exported for testing) ---
 
 export function formatProjectContext(project) {
-  if (!project) return 'No Azure Functions project detected in this directory. I can help you create one!';
+  if (!project) return 'No project detected — I can scaffold one for you!';
   const funcs = project.functions.map(f => `${f.name} (${f.type})`).join(', ') || 'none yet';
   const name = project.runtime === 'node' ? 'Node.js' : project.runtime;
-  return `Your project: ${name} (${project.language || project.runtime}) | SKU: ${project.sku} | Functions: ${funcs}`;
+  return `${name}/${project.language || project.runtime} · ${project.sku} · Functions: ${funcs}`;
 }
 
 export async function countSkills(appPath) {
@@ -299,50 +299,44 @@ export async function countSkills(appPath) {
 
 export async function listSkillSummaries(appPath) {
   const skillsDir = join(appPath, '.agents', 'skills');
-  if (!existsSync(skillsDir)) return '(none installed — run fnx setup first)';
+  if (!existsSync(skillsDir)) return '(none — run fnx setup)';
   const dirs = (await readdir(skillsDir)).filter(d => !d.startsWith('.'));
-  const summaries = [];
+  const names = [];
   for (const dir of dirs) {
     const skillMd = join(skillsDir, dir, 'SKILL.md');
     if (!existsSync(skillMd)) continue;
     const content = await readFile(skillMd, 'utf8');
     const nameMatch = content.match(/^name:\s*(.+)$/m);
-    const descMatch = content.match(/^description:\s*"?([^"\n]+)"?/m);
-    const name = nameMatch ? nameMatch[1].trim() : dir;
-    const desc = descMatch ? descMatch[1].trim().split('.')[0] : '';
-    summaries.push(`  - ${name}: ${desc}`);
+    names.push(nameMatch ? nameMatch[1].trim() : dir);
   }
-  return summaries.join('\n') || '(none installed — run fnx setup first)';
+  return names.join(', ') || '(none — run fnx setup)';
 }
 
 export function buildSuggestedActions(project) {
   if (!project) {
     return [
-      'Tell me what kind of function you want to build, for example:',
-      '  - "Create an HTTP API that processes orders"',
-      '  - "Build a queue-triggered function that sends emails"',
-      '  - "Set up a timer function that runs cleanup every hour"',
-      '',
-      'I will scaffold the project, write the code, and guide you through deployment.',
+      '🚀 Tell me what to build, for example:',
+      '   → "Create an HTTP API that processes orders"',
+      '   → "Build a queue function that sends emails"',
+      '   → "Set up a timer that runs cleanup every hour"',
+      'I will scaffold the project, write the code, and guide you to deploy.',
     ].join('\n');
   }
   if (project.functions.length === 0) {
     return [
-      'Your project is set up but has no functions yet. Tell me what to build:',
-      '  - "Add an HTTP trigger that returns user data from a database"',
-      '  - "Create a queue-triggered function to process uploaded images"',
-      '  - "Add a timer function that checks for expired subscriptions"',
-      '',
-      'I will write the function code, help you test locally, and deploy to Azure.',
+      '🚀 Your project is ready — tell me what to build:',
+      '   → "Add an HTTP trigger that returns user data"',
+      '   → "Create a queue function to process uploads"',
+      '   → "Add a timer that checks expired subscriptions"',
+      'I will write the code, help you test locally, and deploy to Azure.',
     ].join('\n');
   }
   return [
-    'Here are some things I can help with:',
-    '  - Add another function (tell me the trigger type and what it should do)',
-    '  - Run and test locally with fnx start',
-    '  - Diagnose issues (paste any error messages)',
-    '  - Deploy to Azure',
-    '  - Review best practices for your ' + project.sku + ' plan',
+    '🚀 I can help you:',
+    '   → Add another function (tell me the trigger and purpose)',
+    '   → Test locally with fnx start',
+    '   → Diagnose issues (paste error messages)',
+    '   → Deploy to Azure',
   ].join('\n');
 }
 

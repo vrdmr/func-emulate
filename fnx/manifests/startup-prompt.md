@@ -1,10 +1,9 @@
-Welcome to Azure Functions development with fnx!
+⚡ fnx — Azure Functions Development Assistant
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{{projectContext}}
-
-I have {{skillCount}} specialized Azure Functions skills to help you build, test, and deploy.
-{{skillList}}
+📂 {{projectContext}}
+🧩 {{skillCount}} skills loaded: {{skillList}}
 
 {{suggestedActions}}
 
-What kind of function would you like to build?
+💬 What kind of function would you like to build?
