@@ -27,6 +27,7 @@ export const LAUNCHERS = {
       if (ctx.startupPrompt) args.push(ctx.startupPrompt);
       return args;
     },
+    yoloArgs: ['--dangerously-skip-permissions'],
     description: 'Claude Code reads .claude/skills/ and CLAUDE.md automatically',
   },
   'github-copilot': {
@@ -36,6 +37,7 @@ export const LAUNCHERS = {
       if (ctx.startupPrompt) args.push('-i', ctx.startupPrompt);
       return args;
     },
+    yoloArgs: ['--yolo'],
     description: 'GitHub Copilot reads .github/copilot-instructions.md automatically',
   },
   'codex': {
@@ -45,6 +47,7 @@ export const LAUNCHERS = {
       if (ctx.startupPrompt) args.push(ctx.startupPrompt);
       return args;
     },
+    yoloArgs: ['--full-auto'],
     description: 'Codex reads AGENTS.md automatically',
   },
 };
@@ -59,6 +62,7 @@ export async function runChat(args) {
   const promptFlag = getFlag(args, '--prompt');
   const setupOnly = args.includes('--setup-only');
   const noGreeting = args.includes('--no-greeting');
+  const yolo = args.includes('--yolo');
 
   console.log();
   console.log(title('fnx chat') + dim(' — AI-assisted Azure Functions development'));
@@ -147,7 +151,7 @@ export async function runChat(args) {
     return;
   }
   const launcher = LAUNCHERS[selectedId];
-  await launchAgent(selectedId, launcher, appPath, project, promptFlag, { noGreeting });
+  await launchAgent(selectedId, launcher, appPath, project, promptFlag, { noGreeting, yolo });
 }
 
 async function launchAgent(agentId, launcher, appPath, project, prompt, opts = {}) {
@@ -176,6 +180,11 @@ async function launchAgent(agentId, launcher, appPath, project, prompt, opts = {
     // Default: build startup greeting prompt
     const startupPrompt = await buildStartupPrompt(appPath, project);
     args = launcher.buildArgs({ startupPrompt });
+  }
+
+  // Append --yolo equivalent flags for the selected agent
+  if (opts.yolo && launcher.yoloArgs) {
+    args.push(...launcher.yoloArgs);
   }
 
   // Launch the agent as an interactive child process
@@ -370,6 +379,7 @@ ${title('Options:')}
   ${success('--app-path')} <dir>   Path to function app (default: current directory)
   ${success('--prompt')} <text>    Pass prompt text as CLI argument to the agent
   ${success('--no-greeting')}      Launch agent without the startup greeting prompt
+  ${success('--yolo')}             Allow all agent actions without confirmation
   ${success('--setup-only')}       Run setup without launching the agent
   ${success('-h')}, ${success('--help')}       Show this help
 
@@ -385,5 +395,8 @@ ${title('Examples:')}
 
   ${dim('# Launch without startup greeting')}
   fnx chat --no-greeting
+
+  ${dim('# Full auto-approve mode')}
+  fnx chat --yolo
 `);
 }

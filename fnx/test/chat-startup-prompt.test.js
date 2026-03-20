@@ -191,6 +191,22 @@ describe('startup prompt — LAUNCHERS prompt args', () => {
       assert.deepEqual(args, [], `${id} should return empty args without startupPrompt`);
     }
   });
+
+  // --yolo flag tests
+  it('claude-code yoloArgs returns [--dangerously-skip-permissions]', () => {
+    const launcher = chatModule.LAUNCHERS['claude-code'];
+    assert.deepEqual(launcher.yoloArgs, ['--dangerously-skip-permissions']);
+  });
+
+  it('github-copilot yoloArgs returns [--yolo]', () => {
+    const launcher = chatModule.LAUNCHERS['github-copilot'];
+    assert.deepEqual(launcher.yoloArgs, ['--yolo']);
+  });
+
+  it('codex yoloArgs returns [--full-auto]', () => {
+    const launcher = chatModule.LAUNCHERS['codex'];
+    assert.deepEqual(launcher.yoloArgs, ['--full-auto']);
+  });
 });
 
 describe('startup prompt — CLI flags', () => {
@@ -208,13 +224,14 @@ describe('startup prompt — CLI flags', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('--no-greeting is listed in chat help', async () => {
+  it('--no-greeting and --yolo are listed in chat help', async () => {
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
     const execFileAsync = promisify(execFile);
     const FNX_BIN = join(fileURLToPath(import.meta.url), '..', '..', 'bin', 'fnx');
     const { stdout } = await execFileAsync('node', [FNX_BIN, 'chat', '--help']);
     assert.ok(stdout.includes('--no-greeting'), 'help should document --no-greeting flag');
+    assert.ok(stdout.includes('--yolo'), 'help should document --yolo flag');
   });
 
   it('--setup-only still works without startup prompt interference', async () => {
