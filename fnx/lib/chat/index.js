@@ -133,7 +133,7 @@ export async function runChat(args) {
     console.log(warning('  ⚠ No skills installed. Running fnx setup for ' + selectedId + '...'));
     console.log();
     const { runSetup } = await import('../setup/index.js');
-    await runSetup(['--all', '--agent', selectedId, '--app-path', appPath]);
+    await runSetup(['--all', '--agent', selectedId, '--app-path', appPath, '--quiet']);
   }
 
   // Step 4: Generate .fnx/agent.md
