@@ -191,3 +191,150 @@ describe('installAzurite() return path - Windows .cmd suffix', () => {
     }
   });
 });
+
+describe('needsAzurite detection - development storage patterns', () => {
+  // Replicate the detection logic for testing
+  function isDevStorageConnectionString(value) {
+    if (!value || typeof value !== 'string') return false;
+    
+    const normalized = value.toLowerCase();
+    
+    if (normalized.startsWith('usedevelopmentstorage=true')) {
+      return true;
+    }
+    
+    if (normalized.includes('devstoreaccount1')) {
+      return true;
+    }
+    
+    if (normalized.includes('127.0.0.1:10000') || 
+        normalized.includes('127.0.0.1:10001') || 
+        normalized.includes('127.0.0.1:10002') ||
+        normalized.includes('localhost:10000') ||
+        normalized.includes('localhost:10001') ||
+        normalized.includes('localhost:10002')) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  function needsAzurite(mergedValues) {
+    if (!mergedValues) return { needed: false, keys: [] };
+    
+    const devStorageKeys = [];
+    
+    for (const [key, value] of Object.entries(mergedValues)) {
+      if (isDevStorageConnectionString(value)) {
+        devStorageKeys.push(key);
+      }
+    }
+    
+    const webJobsStorage = mergedValues.AzureWebJobsStorage;
+    if ((!webJobsStorage || webJobsStorage === '') && !devStorageKeys.includes('AzureWebJobsStorage')) {
+      devStorageKeys.push('AzureWebJobsStorage');
+    }
+    
+    return { needed: devStorageKeys.length > 0, keys: devStorageKeys };
+  }
+
+  it('detects AzureWebJobsStorage=UseDevelopmentStorage=true', () => {
+    const result = needsAzurite({ AzureWebJobsStorage: 'UseDevelopmentStorage=true' });
+    assert.strictEqual(result.needed, true);
+    assert.deepStrictEqual(result.keys, ['AzureWebJobsStorage']);
+  });
+
+  it('detects UseDevelopmentStorage=true with proxy URI', () => {
+    const result = needsAzurite({ 
+      AzureWebJobsStorage: 'UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://127.0.0.1' 
+    });
+    assert.strictEqual(result.needed, true);
+    assert.deepStrictEqual(result.keys, ['AzureWebJobsStorage']);
+  });
+
+  it('detects devstoreaccount1 (Azurite default account)', () => {
+    const result = needsAzurite({ 
+      AzureWebJobsStorage: 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1' 
+    });
+    assert.strictEqual(result.needed, true);
+    assert.deepStrictEqual(result.keys, ['AzureWebJobsStorage']);
+  });
+
+  it('detects localhost:10000 (Azurite blob port)', () => {
+    const result = needsAzurite({ 
+      BlobStorage: 'DefaultEndpointsProtocol=http;BlobEndpoint=http://localhost:10000/myaccount' 
+    });
+    assert.strictEqual(result.needed, true);
+    assert.ok(result.keys.includes('BlobStorage'));
+  });
+
+  it('detects 127.0.0.1:10001 (Azurite queue port)', () => {
+    const result = needsAzurite({ 
+      QueueConnection: 'DefaultEndpointsProtocol=http;QueueEndpoint=http://127.0.0.1:10001/myaccount' 
+    });
+    assert.strictEqual(result.needed, true);
+    assert.ok(result.keys.includes('QueueConnection'));
+  });
+
+  it('detects any key with UseDevelopmentStorage=true (plus missing AzureWebJobsStorage)', () => {
+    const result = needsAzurite({ MyCustomStorage: 'UseDevelopmentStorage=true' });
+    assert.strictEqual(result.needed, true);
+    // AzureWebJobsStorage is also added because it's missing (empty/missing = dev storage)
+    assert.ok(result.keys.includes('MyCustomStorage'));
+    assert.ok(result.keys.includes('AzureWebJobsStorage'));
+  });
+
+  it('detects multiple keys with UseDevelopmentStorage=true', () => {
+    const result = needsAzurite({
+      AzureWebJobsStorage: 'UseDevelopmentStorage=true',
+      QueueConnection: 'UseDevelopmentStorage=true',
+      BlobStorage: 'UseDevelopmentStorage=true',
+    });
+    assert.strictEqual(result.needed, true);
+    assert.strictEqual(result.keys.length, 3);
+    assert.ok(result.keys.includes('AzureWebJobsStorage'));
+    assert.ok(result.keys.includes('QueueConnection'));
+    assert.ok(result.keys.includes('BlobStorage'));
+  });
+
+  it('detects empty AzureWebJobsStorage as needing Azurite', () => {
+    const result = needsAzurite({ AzureWebJobsStorage: '' });
+    assert.strictEqual(result.needed, true);
+    assert.deepStrictEqual(result.keys, ['AzureWebJobsStorage']);
+  });
+
+  it('detects missing AzureWebJobsStorage as needing Azurite', () => {
+    const result = needsAzurite({});
+    assert.strictEqual(result.needed, true);
+    assert.deepStrictEqual(result.keys, ['AzureWebJobsStorage']);
+  });
+
+  it('does NOT need Azurite for real connection strings', () => {
+    const result = needsAzurite({
+      AzureWebJobsStorage: 'DefaultEndpointsProtocol=https;AccountName=test;AccountKey=xxx',
+    });
+    assert.strictEqual(result.needed, false);
+    assert.deepStrictEqual(result.keys, []);
+  });
+
+  it('detects mixed real and dev storage', () => {
+    const result = needsAzurite({
+      AzureWebJobsStorage: 'DefaultEndpointsProtocol=https;AccountName=test',
+      MyDevStorage: 'UseDevelopmentStorage=true',
+    });
+    assert.strictEqual(result.needed, true);
+    assert.deepStrictEqual(result.keys, ['MyDevStorage']);
+  });
+
+  it('handles null mergedValues', () => {
+    const result = needsAzurite(null);
+    assert.strictEqual(result.needed, false);
+    assert.deepStrictEqual(result.keys, []);
+  });
+
+  it('handles undefined mergedValues', () => {
+    const result = needsAzurite(undefined);
+    assert.strictEqual(result.needed, false);
+    assert.deepStrictEqual(result.keys, []);
+  });
+});

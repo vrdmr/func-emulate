@@ -144,7 +144,7 @@ export async function migrateConfig(appPath) {
  */
 export async function createAppConfig(appPath, overrides = {}, options = {}) {
   const appConfigPath = join(appPath, APP_CONFIG_FILE);
-  
+
   // Skip if already exists
   if (await fileExists(appConfigPath)) {
     return false;
@@ -152,7 +152,7 @@ export async function createAppConfig(appPath, overrides = {}, options = {}) {
 
   const localSettingsPath = join(appPath, LOCAL_SETTINGS_FILE);
   let localSettings = {};
-  
+
   if (await fileExists(localSettingsPath)) {
     try {
       localSettings = await readJsonFile(localSettingsPath);
@@ -163,11 +163,6 @@ export async function createAppConfig(appPath, overrides = {}, options = {}) {
 
   // Build config using shared function (overrides take precedence)
   const config = buildConfigFromLocalSettings(localSettings, overrides);
-
-  // Ensure EnableWorkerIndexing is set
-  config.configurations = config.configurations || {};
-  config.configurations.AzureWebJobsFeatureFlags = 
-    config.configurations.AzureWebJobsFeatureFlags || 'EnableWorkerIndexing';
 
   // Write app-config.yaml
   await writeFile(appConfigPath, generateYaml(config), 'utf-8');
@@ -407,7 +402,6 @@ async function interactiveCreate(appPath) {
     local: { targetSku: 'flex' },
     runtime: { name: runtime },
     configurations: {
-      AzureWebJobsFeatureFlags: 'EnableWorkerIndexing',
     },
   };
 

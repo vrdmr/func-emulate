@@ -14,13 +14,15 @@
  */
 
 import { existsSync, readdirSync } from 'node:fs';
-import { resolve as resolvePath, basename } from 'node:path';
-import { title, info, success, error as errorColor, dim, bold } from './colors.js';
+import { resolve as resolvePath, basename, join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { title, info, success, error as errorColor, dim, bold, warning } from './colors.js';
 import { fetchManifest } from './init/manifest.js';
-import { promptRuntime, promptNodeLanguage, promptTrigger, promptProjectName, promptSku } from './init/prompts.js';
+import { promptRuntime, promptNodeLanguage, promptTrigger, promptProjectName } from './init/prompts.js';
 import { downloadTemplate, generateConfigFiles, printSuccessBanner } from './init/scaffold.js';
 
-const MANIFEST_URL = 'https://cdn-test.functions.azure.com/public/templates/manifest.json';
+const MANIFEST_URL = 'https://cdn.functions.azure.com/public/templates-manifest/manifest.json';
+const MANIFEST_BACKUP_URL = 'https://raw.githubusercontent.com/Azure/azure-functions-templates/dev/Functions.Templates/Template-Manifest/manifest.json';
 
 /**
  * Runtime name mapping (manifest runtime → display name)
@@ -34,7 +36,8 @@ const RUNTIME_DISPLAY = {
 };
 
 /**
- * Priority order for triggers (top ones shown first)
+ * Priority order for templates by resource type.
+ * Templates are sorted: 1) by resource priority, 2) by binding type (trigger > input > output), 3) alphabetically
  */
 const TRIGGER_PRIORITY = [
   'http',
@@ -69,7 +72,7 @@ export async function runInit(args) {
   
   let manifest;
   try {
-    manifest = await fetchManifest(MANIFEST_URL, { verbose: flags.verbose });
+    manifest = await fetchManifest(MANIFEST_URL, { verbose: flags.verbose, backupUrl: MANIFEST_BACKUP_URL });
   } catch (err) {
     console.error(errorColor(`\n✗ Cannot load template manifest`));
     console.error(dim(`
@@ -131,8 +134,9 @@ ${bold('✗ Invalid manifest format')}
   // Step 7: Prompt for project name
   const projectName = flags.name || await promptProjectName(targetDir);
 
-  // Step 8: Prompt for SKU
-  const sku = flags.sku || await promptSku();
+  // Step 8: SKU defaults to flex (no prompt)
+  const sku = flags.sku || 'flex';
+  console.log(dim(`  Using SKU: ${sku}${!flags.sku ? ' (default)' : ''}`));
 
   // Step 9: Download template and generate files
   if (flags.verbose) {
@@ -191,8 +195,137 @@ ${bold('✗ Invalid manifest format')}
     process.exit(1);
   }
 
-  // Step 10: Print success banner
-  printSuccessBanner(targetDir, projectName, sku, runtime);
+  // Step 10: Setup development environment (if --env flag)
+  if (flags.env) {
+    await setupDevEnvironment(targetDir, runtime, language, flags.verbose);
+  }
+
+  // Step 11: Print success banner
+  printSuccessBanner(targetDir, projectName, sku, language, flags.env);
+}
+
+/**
+ * Run a command and return a promise
+ */
+function runCommand(cmd, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args, {
+      cwd: options.cwd,
+      shell: process.platform === 'win32',
+      stdio: options.verbose ? 'inherit' : 'pipe',
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    if (!options.verbose && proc.stdout) {
+      proc.stdout.on('data', (data) => { stdout += data; });
+    }
+    if (!options.verbose && proc.stderr) {
+      proc.stderr.on('data', (data) => { stderr += data; });
+    }
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+      } else {
+        reject(new Error(stderr || `Command failed with exit code ${code}`));
+      }
+    });
+
+    proc.on('error', reject);
+  });
+}
+
+/**
+ * Setup development environment based on runtime
+ * - Python: create venv + pip install
+ * - Node.js: npm install (+ npm run build for TypeScript)
+ * - .NET: dotnet restore
+ * - Java: mvn dependency:resolve
+ */
+async function setupDevEnvironment(targetDir, runtime, language, verbose) {
+  console.log(info('\n📦 Setting up development environment...\n'));
+
+  try {
+    switch (runtime) {
+      case 'python': {
+        // Create virtual environment
+        const venvPath = join(targetDir, '.venv');
+        const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+        
+        console.log(dim(`  Creating Python virtual environment...`));
+        await runCommand(pythonCmd, ['-m', 'venv', '.venv'], { cwd: targetDir, verbose });
+        console.log(success(`  ✓ Created .venv/`));
+
+        // Install dependencies if requirements.txt exists
+        const requirementsPath = join(targetDir, 'requirements.txt');
+        if (existsSync(requirementsPath)) {
+          console.log(dim(`  Installing dependencies...`));
+          const pipCmd = process.platform === 'win32' 
+            ? join(venvPath, 'Scripts', 'pip')
+            : join(venvPath, 'bin', 'pip');
+          await runCommand(pipCmd, ['install', '-r', 'requirements.txt'], { cwd: targetDir, verbose });
+          console.log(success(`  ✓ Installed Python dependencies`));
+        }
+
+        // Print activation instructions
+        console.log(dim(`\n  To activate the virtual environment:`));
+        if (process.platform === 'win32') {
+          console.log(bold(`    .venv\\Scripts\\activate`));
+        } else {
+          console.log(bold(`    source .venv/bin/activate`));
+        }
+        break;
+      }
+
+      case 'node': {
+        // npm install
+        const packageJson = join(targetDir, 'package.json');
+        if (existsSync(packageJson)) {
+          console.log(dim(`  Installing Node.js dependencies...`));
+          await runCommand('npm', ['install'], { cwd: targetDir, verbose });
+          console.log(success(`  ✓ Installed Node.js dependencies`));
+          
+          // For TypeScript, also run npm run build
+          if (language === 'typescript') {
+            console.log(dim(`  Building TypeScript...`));
+            await runCommand('npm', ['run', 'build'], { cwd: targetDir, verbose });
+            console.log(success(`  ✓ Built TypeScript project`));
+          }
+        }
+        break;
+      }
+
+      case 'dotnet-isolated': {
+        // dotnet restore
+        const csproj = readdirSync(targetDir).find(f => f.endsWith('.csproj'));
+        if (csproj) {
+          console.log(dim(`  Restoring .NET dependencies...`));
+          await runCommand('dotnet', ['restore'], { cwd: targetDir, verbose });
+          console.log(success(`  ✓ Restored .NET dependencies`));
+        }
+        break;
+      }
+
+      case 'java': {
+        // mvn dependency:resolve
+        const pomPath = join(targetDir, 'pom.xml');
+        if (existsSync(pomPath)) {
+          console.log(dim(`  Resolving Maven dependencies...`));
+          await runCommand('mvn', ['dependency:resolve'], { cwd: targetDir, verbose });
+          console.log(success(`  ✓ Resolved Maven dependencies`));
+        }
+        break;
+      }
+
+      default:
+        console.log(dim(`  No environment setup needed for ${runtime}`));
+    }
+  } catch (err) {
+    console.log(warning(`\n  ⚠ Environment setup failed: ${err.message}`));
+    console.log(dim(`  You can set up the environment manually later.`));
+  }
 }
 
 /**
@@ -209,6 +342,7 @@ function parseFlags(args) {
     force: false,
     yes: false,
     verbose: false,
+    env: false,  // Setup development environment (venv for Python, npm install for Node, etc.)
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -273,6 +407,10 @@ function parseFlags(args) {
       case '--verbose':
       case '-v':
         flags.verbose = true;
+        break;
+      case '--env':
+      case '-e':
+        flags.env = true;
         break;
       default:
         // Positional argument — treat as search query or project name
@@ -377,6 +515,7 @@ ${title('Options:')}
   ${success('--language')}, ${success('-l')} <lang> For Node.js: typescript (default) or javascript.
   ${success('--template')}, ${success('-t')} <tpl>  Template name (e.g., HttpTrigger, BlobTrigger).
   ${success('--sku')} <sku>            Target SKU: flex (default), premium, dedicated.
+  ${success('--env')}, ${success('-e')}             Setup dev environment (venv for Python, npm install for Node).
   ${success('--force')}, ${success('-f')}           Initialize in non-empty directory (overwrites template files only).
   ${success('--yes')}, ${success('-y')}             Accept all defaults (non-interactive).
   ${success('--verbose')}, ${success('-v')}         Show detailed output (manifest URL, cache, files).
@@ -393,6 +532,8 @@ ${title('Examples:')}
   fnx init                              Interactive mode
   fnx init my-function-app              Create in ./my-function-app
   fnx init -r python -t HttpTrigger     Python HTTP function
+  fnx init -r python --env              Python project with venv setup
+  fnx init -r node --env                Node.js project with npm install
   fnx init -r python --version 3.12     Python 3.12 project
   fnx init -r node -l typescript        TypeScript Node.js project
   fnx init --verbose                    Show detailed output`.trim());

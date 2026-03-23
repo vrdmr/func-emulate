@@ -119,7 +119,7 @@ describe('fnx init - scaffold', () => {
       const content = readFileSync(configPath, 'utf-8');
       assert.ok(content.includes('name: python'), 'Should contain runtime name');
       assert.ok(content.includes('targetSku: flex'), 'Should contain targetSku');
-      assert.ok(content.includes('version: "3.11"'), 'Should contain runtime version');
+      assert.ok(content.includes('version: "3.13"'), 'Should contain runtime version (default Python)');
     });
 
     it('does not overwrite existing app-config.yaml', async () => {
@@ -683,7 +683,7 @@ describe('fnx init - template placeholder replacement', () => {
 
     const content = readFileSync(join(targetDir, 'package.json'), 'utf-8');
     assert.ok(!content.includes('{{nodeVersion}}'), 'Placeholder should be replaced');
-    assert.ok(content.includes('"20"'), 'Should contain Node version 20');
+    assert.ok(content.includes('"22"'), 'Should contain Node version 22 (default)');
   });
 
   it('replaces {{nodeVersion}} for TypeScript runtime', async () => {
@@ -702,7 +702,7 @@ describe('fnx init - template placeholder replacement', () => {
     });
 
     const content = readFileSync(join(targetDir, 'package.json'), 'utf-8');
-    assert.ok(content.includes('"20"'), 'Should contain Node version 20');
+    assert.ok(content.includes('"22"'), 'Should contain Node version 22 (default)');
   });
 
   it('replaces {{javaVersion}} in pom.xml for Java', async () => {

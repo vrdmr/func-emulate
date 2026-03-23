@@ -61,12 +61,14 @@ describe('Console output — formatting and filtering', () => {
 
 describe('Console output — function list display', () => {
 
-  test('extractListeningUrl triggers function list output', () => {
+  test('function list is triggered on Application started', () => {
     const hostState = createHostState();
     const filter = createLogFilter(false, hostState);
 
     // Register an HTTP function first
     filter.extractFunctionInfo("Mapped function route 'api/hello' [GET] to 'hello'");
+    // Set the base URL
+    filter.extractListeningUrl('Now listening on: http://0.0.0.0:7071');
 
     // Capture console.log output
     const logs = [];
@@ -74,7 +76,8 @@ describe('Console output — function list display', () => {
     console.log = (...args) => logs.push(args.join(' '));
 
     try {
-      filter.extractListeningUrl('Now listening on: http://0.0.0.0:7071');
+      // Function list is triggered by "Application started"
+      filter.extractListeningUrl('Application started. Press Ctrl+C to shut down.');
       const allOutput = logs.join('\n');
       assert.ok(allOutput.includes('Functions:'), 'Should print Functions: header');
       assert.ok(allOutput.includes('hello'), 'Should list the hello function');
@@ -91,7 +94,7 @@ describe('Console output — function list display', () => {
     assert.strictEqual(hostState.baseUrl, 'http://localhost:9090');
   });
 
-  test('extractListeningUrl only fires once (first match)', () => {
+  test('function list only fires once', () => {
     const hostState = createHostState();
     const filter = createLogFilter(false, hostState);
 
@@ -101,9 +104,10 @@ describe('Console output — function list display', () => {
 
     try {
       filter.extractListeningUrl('Now listening on: http://0.0.0.0:7071');
+      filter.extractListeningUrl('Application started. Press Ctrl+C to shut down.');
       const count1 = logs.length;
-      filter.extractListeningUrl('Now listening on: http://0.0.0.0:7071');
-      // Second call should not produce additional output
+      // Second "Application started" should not produce additional output
+      filter.extractListeningUrl('Application started. Press Ctrl+C to shut down.');
       assert.strictEqual(logs.length, count1);
     } finally {
       console.log = origLog;
@@ -114,13 +118,14 @@ describe('Console output — function list display', () => {
     const hostState = createHostState();
     const filter = createLogFilter(false, hostState);
     filter.extractFunctionInfo("Mapped function route 'api/test' [GET] to 'test'");
+    filter.extractListeningUrl('Now listening on: http://0.0.0.0:7071');
 
     const logs = [];
     const origLog = console.log;
     console.log = (...args) => logs.push(args.join(' '));
 
     try {
-      filter.extractListeningUrl('Now listening on: http://0.0.0.0:7071');
+      filter.extractListeningUrl('Application started. Press Ctrl+C to shut down.');
       const allOutput = logs.join('\n');
       assert.ok(allOutput.includes('--verbose'), 'Should suggest --verbose flag');
     } finally {
@@ -132,13 +137,14 @@ describe('Console output — function list display', () => {
     const hostState = createHostState();
     const filter = createLogFilter(true, hostState);
     filter.extractFunctionInfo("Mapped function route 'api/test' [GET] to 'test'");
+    filter.extractListeningUrl('Now listening on: http://0.0.0.0:7071');
 
     const logs = [];
     const origLog = console.log;
     console.log = (...args) => logs.push(args.join(' '));
 
     try {
-      filter.extractListeningUrl('Now listening on: http://0.0.0.0:7071');
+      filter.extractListeningUrl('Application started. Press Ctrl+C to shut down.');
       const allOutput = logs.join('\n');
       assert.ok(!allOutput.includes('For detailed output'), 'Should NOT show verbose tip in verbose mode');
     } finally {

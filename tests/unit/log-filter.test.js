@@ -31,37 +31,45 @@ describe('Log filter — level resolution and filtering', () => {
 
   // ─── Default (clean) mode tests ──────────────────────────────────────
 
-  test('clean mode suppresses structured log headers (info, dbug, trce, warn)', () => {
+  test('clean mode suppresses structured log headers (info, dbug, trce) but shows warn with color', () => {
     const filter = createLogFilter(false, null);
-    const headers = [
+    const suppressedHeaders = [
       'trce: Some.Internal.Trace[0]',
       'dbug: Host.Startup[1]',
       'info: Microsoft.Hosting.Lifetime[14]',
-      'warn: Some.Warning.Category[0]',
     ];
-    for (const line of headers) {
+    for (const line of suppressedHeaders) {
       const result = filter.processLine(line);
       assert.strictEqual(result, null, `Expected clean mode to suppress: "${line}"`);
     }
+    // warn should be shown with color, not suppressed
+    const warnResult = filter.processLine('warn: Some.Warning.Category[0]');
+    assert.ok(warnResult !== null, 'warn lines should be shown');
+    assert.ok(warnResult.includes('[WARN]'), 'warn lines should have [WARN] prefix');
   });
 
-  test('clean mode suppresses fail and crit log headers', () => {
+  test('clean mode shows fail and crit log headers with color', () => {
     const filter = createLogFilter(false, null);
-    assert.strictEqual(filter.processLine('fail: Some.Error[0]'), null);
-    assert.strictEqual(filter.processLine('crit: Some.Critical[0]'), null);
+    const failResult = filter.processLine('fail: Some.Error[0]');
+    assert.ok(failResult !== null, 'fail lines should be shown');
+    assert.ok(failResult.includes('[ERROR]'), 'fail lines should have [ERROR] prefix');
+
+    const critResult = filter.processLine('crit: Some.Critical[0]');
+    assert.ok(critResult !== null, 'crit lines should be shown');
+    assert.ok(critResult.includes('[CRIT]'), 'crit lines should have [CRIT] prefix');
   });
 
   test('clean mode passes through non-structured plain text lines', () => {
     const filter = createLogFilter(false, null);
-    const plainLines = [
-      'Now listening on: http://0.0.0.0:7071',
-      'Application started. Press Ctrl+C to shut down.',
-      'Content root path: /some/path',
-    ];
-    for (const line of plainLines) {
-      const result = filter.processLine(line);
-      assert.strictEqual(result, line, `Expected clean mode to show plain text: "${line}"`);
-    }
+    // Note: 0.0.0.0 is replaced with localhost in output
+    const result1 = filter.processLine('Now listening on: http://0.0.0.0:7071');
+    assert.strictEqual(result1, 'Now listening on: http://localhost:7071');
+
+    const result2 = filter.processLine('Application started. Press Ctrl+C to shut down.');
+    assert.strictEqual(result2, 'Application started. Press Ctrl+C to shut down.');
+
+    const result3 = filter.processLine('Content root path: /some/path');
+    assert.strictEqual(result3, 'Content root path: /some/path');
   });
 
   test('clean mode suppresses empty lines', () => {

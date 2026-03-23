@@ -410,9 +410,8 @@ describe('fnx init — E2E', () => {
         // Only verify if successful and project exists
         if (result.exitCode === 0 && existsSync(projectDir)) {
           const appConfig = readFileSync(join(projectDir, 'app-config.yaml'), 'utf-8');
-          assert.ok(appConfig.includes('configurations:'), 'Should have configurations section');
-          assert.ok(appConfig.includes('AzureWebJobsFeatureFlags'), 'Should have AzureWebJobsFeatureFlags');
-          assert.ok(appConfig.includes('EnableWorkerIndexing'), 'Should have EnableWorkerIndexing');
+          assert.ok(appConfig.includes('local:'), 'Should have local section');
+          assert.ok(appConfig.includes('runtime:'), 'Should have runtime section');
         }
       } finally {
         rmSync(tmpDir, { recursive: true, force: true });

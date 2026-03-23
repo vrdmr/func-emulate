@@ -13,29 +13,18 @@ export const SUPPORTED_RUNTIMES = {
     supported: ['3.10', '3.11', '3.12', '3.13'],
     preview: ['3.14'],
     deprecated: ['3.8', '3.9'],
-    default: '3.11',
+    default: '3.13',
   },
   node: {
     // JavaScript and TypeScript run on Node.js runtime
     supported: ['20', '22'],
     preview: ['24'],
     deprecated: ['18'],
-    default: '20',
+    default: '22',
   },
-  typescript: {
-    // TypeScript runs on Node.js runtime
-    supported: ['20', '22'],
-    preview: ['24'],
-    deprecated: ['18'],
-    default: '20',
-  },
-  javascript: {
-    // JavaScript runs on Node.js runtime
-    supported: ['20', '22'],
-    preview: ['24'],
-    deprecated: ['18'],
-    default: '20',
-  },
+  // TypeScript and JavaScript alias to node - they share the same runtime versions
+  get typescript() { return this.node; },
+  get javascript() { return this.node; },
   java: {
     supported: ['8', '11', '17', '21'],
     preview: ['25'],
@@ -155,10 +144,10 @@ export const LANGUAGE_INFO = {
     initCommand: 'fnx init --runtime python',
     runCommand: 'fnx start',
   },
-  node: {
-    name: 'Node.js (JavaScript)',
-    runtime: formatRuntimeVersions('node'),
-    programmingModel: 'Node.js v4 programming model',
+  javascript: {
+    name: 'JavaScript',
+    runtime: formatRuntimeVersions('javascript'),
+    programmingModel: 'Node.js v4 programming model with JavaScript',
     prerequisites: [
       `Node.js ${SUPPORTED_RUNTIMES.node.default}.x or later installed`,
       `Azure Functions Core Tools v${SUPPORTED_RUNTIMES.functionsRuntime}`,
@@ -166,7 +155,7 @@ export const LANGUAGE_INFO = {
       'Azure CLI (optional, for deployment)',
     ],
     developmentTools: ['Azure Functions Core Tools CLI'],
-    initCommand: 'fnx init --runtime node',
+    initCommand: 'fnx init --runtime node --language javascript',
     runCommand: 'npm start',
   },
   typescript: {
@@ -174,7 +163,7 @@ export const LANGUAGE_INFO = {
     runtime: formatRuntimeVersions('typescript'),
     programmingModel: 'Node.js v4 programming model with TypeScript',
     prerequisites: [
-      `Node.js ${SUPPORTED_RUNTIMES.typescript.default}.x or later installed`,
+      `Node.js ${SUPPORTED_RUNTIMES.node.default}.x or later installed`,
       `Azure Functions Core Tools v${SUPPORTED_RUNTIMES.functionsRuntime}`,
       'npm package manager',
       'Azure CLI (optional, for deployment)',
