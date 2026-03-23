@@ -108,7 +108,7 @@ $ fnx init
 Templates are fetched from a remote manifest hosted on Azure CDN:
 
 ```text
-https://cdn-test.functions.azure.com/public/templates/manifest.json
+https://cdn.functions.azure.com/public/templates-manifest/manifest.json
 ```
 
 **Manifest structure:**
