@@ -10,10 +10,12 @@
   "files": [
     "bin/",
     "lib/",
+    "manifests/",
     "profiles/",
     "README.md"
   ],
   "scripts": {
+    "test": "node --test test/",
     "postinstall": "node ./bin/fnx warmup || echo 'fnx: warmup skipped (offline or error). Run fnx warmup manually.'"
   },
   "keywords": [

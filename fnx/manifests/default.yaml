@@ -1,0 +1,124 @@
+# fnx Agent Workspace Manifest
+# This manifest defines skills, instructions, MCP servers, and agent definitions
+# that fnx setup applies to a developer's workspace.
+
+version: "1.0.0"
+
+manifest:
+  id: azure-functions-agent
+  name: "Azure Functions Agent Workspace"
+  description: "Skills, MCP, instructions for Azure Functions development with fnx"
+  author: "azure-functions-team"
+  tags: [azure-functions, serverless, fnx]
+  updated: "2026-03-09"
+
+# ─── Agent path mapping (based on skills.sh + agent-workspace-specs research) ───
+agentPaths:
+  # Agents that share .agents/skills/ as project skills directory
+  shared:
+    projectSkills: ".agents/skills"
+    agents:
+      - github-copilot
+      - cursor
+      - codex
+      - cline
+      - gemini-cli
+      - opencode
+      - amp
+
+  # Agents with platform-specific paths
+  custom:
+    claude-code:
+      projectSkills: ".claude/skills"
+      instructions: ".claude/CLAUDE.md"
+      mcp: ".claude/settings.json"
+    github-copilot:
+      instructions: ".github/copilot-instructions.md"
+      agentDefs: ".github/agents"
+      prompts: ".github/prompts"
+      mcp: ".vscode/mcp.json"
+    cursor:
+      rules: ".cursor/rules"
+      mcp: ".cursor/mcp.json"
+    codex:
+      instructions: "AGENTS.md"
+
+# ─── Content definitions ───
+contents:
+  skills:
+    - id: fnx-diagnostics
+      name: "fnx Diagnostics"
+      description: "Diagnose fnx start issues, errors, and logs"
+      file: skills/fnx-diagnostics/SKILL.md
+
+    - id: fnx-best-practices
+      name: "Azure Functions Best Practices"
+      description: "SKU-specific best practices, performance, and security guidance"
+      file: skills/fnx-best-practices/SKILL.md
+
+    - id: fnx-create-function
+      name: "Create Azure Function"
+      description: "Create new functions using fnx templates and MCP tools"
+      file: skills/fnx-create-function/SKILL.md
+
+    - id: fnx-intro
+      name: "fnx Introduction"
+      description: "What fnx can do, installed skills overview, getting started"
+      file: skills/fnx-intro/SKILL.md
+
+    - id: fnx-feedback
+      name: "fnx Feedback"
+      description: "Report issues from conversation history as GitHub Issues"
+      file: skills/fnx-feedback/SKILL.md
+
+  mcp:
+    - id: fnx-templates
+      name: "fnx Templates MCP"
+      description: "Azure Functions template discovery and scaffolding"
+      type: "stdio"
+      command: "npx"
+      args: ["-y", "manvir-templates-mcp-server"]
+
+  agentDefinitions:
+    - id: fnx-agent
+      name: "fnx"
+      description: "Azure Functions development expert"
+      file: agents/fnx.agent.md
+
+# ─── Project detection rules ───
+detection:
+  rules:
+    - name: "Azure Functions (Node.js)"
+      match:
+        files: ["host.json", "package.json"]
+        packageDep: "@azure/functions"
+      result:
+        runtime: node
+        programmingModel: v4
+
+    - name: "Azure Functions (Python)"
+      match:
+        files: ["host.json", "requirements.txt"]
+        pipDep: "azure-functions"
+      result:
+        runtime: python
+        programmingModel: v2
+
+    - name: "Azure Functions (.NET Isolated)"
+      match:
+        files: ["host.json"]
+        glob: "*.csproj"
+      result:
+        runtime: dotnet-isolated
+
+    - name: "Azure Functions (Java)"
+      match:
+        files: ["host.json", "pom.xml"]
+      result:
+        runtime: java
+
+  sku:
+    sources:
+      - file: "app-config.yaml"
+        path: "local.targetSku"
+    default: flex

@@ -166,6 +166,28 @@ export async function main(args) {
     return;
   }
 
+  if (cmd === 'setup') {
+    if (hasHelp(args.slice(1))) {
+      const { printSetupHelp } = await import('./setup/index.js');
+      printSetupHelp();
+      return;
+    }
+    const { runSetup } = await import('./setup/index.js');
+    await runSetup(args.slice(1));
+    return;
+  }
+
+  if (cmd === 'chat') {
+    if (hasHelp(args.slice(1))) {
+      const { printChatHelp } = await import('./chat/index.js');
+      printChatHelp();
+      return;
+    }
+    const { runChat } = await import('./chat/index.js');
+    await runChat(args.slice(1));
+    return;
+  }
+
   if (cmd !== 'start') {
     console.error(errorColor(`Unknown command: ${cmd}\n`));
     printHelp();
@@ -484,6 +506,8 @@ function printHelp() {
 ${title('Commands:')}
   ${funcName('init')}             Initialize a new Azure Functions project.
   ${funcName('start')}            Launch the Azure Functions host runtime for a specific SKU.
+  ${funcName('setup')}            Add AI agent skills, MCP config, and instructions.
+  ${funcName('chat')}             Launch a coding agent with Azure Functions context.
   ${funcName('doctor')}           Validate project setup and diagnose common issues.
   ${funcName('sync')}             Sync cached host/extensions with current catalog profile.
   ${funcName('pack')}             Package a Functions app into a deployment zip.
