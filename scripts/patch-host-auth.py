@@ -18,7 +18,7 @@ def patch_auth_handler(host_dir: Path) -> bool:
     auth_file = host_dir / "src/WebJobs.Script.WebHost/Security/Authorization/FunctionAuthorizationHandler.cs"
     
     if not auth_file.exists():
-        print(f"✗ FATAL: {auth_file} not found")
+        print(f"[FAIL] {auth_file} not found")
         return False
     
     content = auth_file.read_text()
@@ -39,7 +39,7 @@ def patch_auth_handler(host_dir: Path) -> bool:
         }'''
     
     if not re.search(pattern, content, re.DOTALL):
-        print("✗ FATAL: HandleRequirementAsync pattern not found")
+        print("[FAIL] HandleRequirementAsync pattern not found")
         print("  The host source code may have changed.")
         return False
     
@@ -48,11 +48,11 @@ def patch_auth_handler(host_dir: Path) -> bool:
     
     # Verify patch was applied
     if "fnx patch" in auth_file.read_text():
-        print("✓ Patched FunctionAuthorizationHandler.cs to BYPASS auth")
+        print("[OK] Patched FunctionAuthorizationHandler.cs to BYPASS auth")
         print("  (All HTTP functions now accessible without keys locally)")
         return True
     else:
-        print("✗ FATAL: Patch verification failed")
+        print("[FAIL] Patch verification failed")
         return False
 
 
@@ -63,7 +63,7 @@ def main():
     
     host_dir = Path(sys.argv[1])
     if not host_dir.is_dir():
-        print(f"✗ FATAL: {host_dir} is not a directory")
+        print(f"[FAIL] {host_dir} is not a directory")
         sys.exit(1)
     
     if not patch_auth_handler(host_dir):
