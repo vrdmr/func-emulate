@@ -18,7 +18,7 @@ const PROFILES_PATH = join(__dirname, '..', '..', 'fnx', 'profiles', 'sku-profil
 describe('Cross-SKU — profile resolution for each SKU', { timeout: 30000 }, () => {
 
   const skus = [
-    { name: 'flex', display: 'Flex Consumption', hostPrefix: '4.1047' },
+    { name: 'flex', display: 'Flex Consumption', hostPrefix: '4.1048' },
     { name: 'linux-premium', display: 'Linux Premium (EP)', hostPrefix: '4.1046' },
     { name: 'windows-consumption', display: 'Windows Consumption', hostPrefix: '4.1045' },
     { name: 'windows-dedicated', display: 'Windows Dedicated (ASP)', hostPrefix: '4.1045' },
