@@ -3,15 +3,15 @@
   "profiles": {
     "flex": {
       "displayName": "Flex Consumption",
-      "hostVersion": "4.1047.100",
-      "hostGitTag": "v4.1047.100",
+      "hostVersion": "4.1048.100",
+      "hostGitTag": "v4.1048.100",
       "extensionBundleVersion": "[4.22.*, 5.0.0)",
       "maxExtensionBundleVersion": "4.99.0",
       "hostPackageUrl": {
-        "linux-x64": "https://github.com/vrdmr/func-emulate/releases/download/host-v4.1047.100/azure-functions-v4.1047.100-linux-x64.zip",
-        "osx-x64": "https://github.com/vrdmr/func-emulate/releases/download/host-v4.1047.100/azure-functions-v4.1047.100-osx-x64.zip",
-        "osx-arm64": "https://github.com/vrdmr/func-emulate/releases/download/host-v4.1047.100/azure-functions-v4.1047.100-osx-arm64.zip",
-        "win-x64": "https://github.com/vrdmr/func-emulate/releases/download/host-v4.1047.100/azure-functions-v4.1047.100-win-x64.zip"
+        "linux-x64": "https://github.com/vrdmr/func-emulate/releases/download/host-v4.1048.100/azure-functions-v4.1048.100-linux-x64.zip",
+        "osx-x64": "https://github.com/vrdmr/func-emulate/releases/download/host-v4.1048.100/azure-functions-v4.1048.100-osx-x64.zip",
+        "osx-arm64": "https://github.com/vrdmr/func-emulate/releases/download/host-v4.1048.100/azure-functions-v4.1048.100-osx-arm64.zip",
+        "win-x64": "https://github.com/vrdmr/func-emulate/releases/download/host-v4.1048.100/azure-functions-v4.1048.100-win-x64.zip"
       },
       "status": "GA",
       "dotnetModel": "isolated",
