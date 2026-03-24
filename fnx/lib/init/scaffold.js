@@ -23,6 +23,7 @@ import { randomUUID } from 'node:crypto';
 import { title, info, success, dim, bold, funcName } from '../colors.js';
 import { getDefaultVersion } from '../runtimes.js';
 import { createAppConfig } from '../config.js';
+import { ALLOWED_ORGS } from './manifest.js';
 
 /**
  * Validate that a file path is within the target directory (prevent path traversal)
@@ -99,9 +100,8 @@ export async function downloadTemplate(template, targetDir, manifest, options = 
 
   const [, owner, repo] = repoMatch;
   
-  // Security: Only allow Azure or Azure-Samples repos (defense against compromised manifest)
-  const allowedOrgs = ['azure', 'azure-samples'];
-  if (!allowedOrgs.includes(owner.toLowerCase())) {
+  // Security: Only allow trusted orgs (defense against compromised manifest)
+  if (!ALLOWED_ORGS.includes(owner.toLowerCase())) {
     const error = `Template references untrusted repository (${owner}/${repo}). Please report this issue.`;
     if (verbose) console.log(dim(`  Warning: ${error}`));
     return { success: false, filesDownloaded: 0, error };
