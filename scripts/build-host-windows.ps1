@@ -53,6 +53,39 @@ try {
         Write-Host "⚠ Workers.Python.props not found" -ForegroundColor Yellow
     }
 
+    # CRITICAL: Patch FunctionAuthorizationHandler to bypass auth for local development
+    # Core Tools does this via DI injection (CliAuthenticationHandler + CoreToolsAuthorizationHandler)
+    # but we run the standalone host binary, so we patch the source to always succeed auth checks.
+    $authHandler = "src\WebJobs.Script.WebHost\Security\Authorization\FunctionAuthorizationHandler.cs"
+    if (Test-Path $authHandler) {
+        $content = Get-Content $authHandler -Raw
+        # Pattern uses (?s) for single-line mode so .* matches across newlines
+        # Matches from method signature through "return Task.CompletedTask;" and closing brace
+        $originalPattern = '(?s)protected override Task HandleRequirementAsync\(AuthorizationHandlerContext context, FunctionAuthorizationRequirement requirement, FunctionDescriptor resource\)\s*\{.*?return Task\.CompletedTask;\s*\}'
+        $patchedMethod = @'
+protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, FunctionAuthorizationRequirement requirement, FunctionDescriptor resource)
+        {
+            // fnx patch: bypass auth for local development (matches Core Tools behavior)
+            context.Succeed(requirement);
+            return Task.CompletedTask;
+        }
+'@
+        if ($content -match $originalPattern) {
+            $content = $content -replace $originalPattern, $patchedMethod
+            Set-Content $authHandler $content -NoNewline
+            Write-Host "✓ Patched FunctionAuthorizationHandler.cs to BYPASS auth" -ForegroundColor Green
+            Write-Host "  (All HTTP functions now accessible without keys)" -ForegroundColor DarkGray
+        } else {
+            Write-Host "✗ FATAL: Could not find HandleRequirementAsync pattern to patch" -ForegroundColor Red
+            Write-Host "  The host source code may have changed. Auth bypass WILL NOT WORK." -ForegroundColor Red
+            Write-Host "  Check: $authHandler" -ForegroundColor Red
+            throw "Auth bypass patch failed - pattern not found"
+        }
+    } else {
+        Write-Host "✗ FATAL: FunctionAuthorizationHandler.cs not found at $authHandler" -ForegroundColor Red
+        throw "Auth bypass patch failed - file not found"
+    }
+
     # Build self-contained
     Write-Host ""
     Write-Host "Building... (this may take a few minutes)" -ForegroundColor Yellow

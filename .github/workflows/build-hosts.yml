@@ -41,6 +41,12 @@ jobs:
       HOST_TAG: ${{ inputs.host_tag }}
 
     steps:
+      - name: Checkout fnx repo (for patch scripts)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+          path: fnx
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -74,6 +80,10 @@ jobs:
           else
             echo "⚠ Workers.Python.props not found (may be older host version)"
           fi
+
+      - name: Patch auth handler to bypass auth locally
+        shell: bash
+        run: python3 fnx/scripts/patch-host-auth.py host
 
       - name: Build self-contained host
         shell: bash
