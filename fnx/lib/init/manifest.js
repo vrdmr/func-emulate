@@ -21,7 +21,7 @@ const BUNDLED_MANIFEST_FILE = join(__dirname, '..', '..', 'templates', 'manifest
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Allowed GitHub organizations for template repositories
-const ALLOWED_ORGS = ['azure', 'azure-samples'];
+export const ALLOWED_ORGS = ['azure', 'azure-samples', 'microsoft'];
 
 /**
  * Filter templates to only include those from trusted Azure orgs
