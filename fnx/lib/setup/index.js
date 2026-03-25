@@ -30,6 +30,7 @@ export async function runSetup(args) {
   const dryRun = args.includes('--dry-run');
   const agentFilter = getFlag(args, '--agent');
   const nonInteractive = args.includes('--non-interactive') || args.includes('--all');
+  const quiet = args.includes('--quiet');
 
   // Validate --module flag
   const VALID_MODULES = ['agent', 'mcp', 'plugin'];
@@ -130,6 +131,21 @@ export async function runSetup(args) {
   if (skipped.length) console.log(dim(`  ○ ${skipped.length} files skipped (already exist, use --force to overwrite)`));
   console.log();
   console.log(dim('  Run ') + funcName('fnx chat') + dim(' to start an AI-assisted development session.'));
+
+  // Show startup prompt preview (only when run directly, not from fnx chat)
+  if (!quiet) {
+    try {
+      const { buildStartupPrompt } = await import('../chat/index.js');
+      const greeting = await buildStartupPrompt(appPath, project);
+      console.log();
+      console.log(bold('  Agent startup greeting preview:'));
+      console.log(dim('  ┌─────────────────────────────────────────────────'));
+      for (const line of greeting.split('\n')) {
+        console.log(dim('  │ ') + line);
+      }
+      console.log(dim('  └─────────────────────────────────────────────────'));
+    } catch { /* non-critical — skip if chat module fails */ }
+  }
 }
 
 // ─── Agent Module ───

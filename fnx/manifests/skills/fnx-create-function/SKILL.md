@@ -83,11 +83,31 @@ app.http('myFunction', {
 
 1. Run `fnx doctor` to validate the setup
 2. Configure connection strings in `local.settings.json` (for non-HTTP triggers)
-3. **Build the project** (if TypeScript: `npx tsc`, if Python: `pip install -r requirements.txt`)
-4. Run `fnx start` to test locally — **verify the function appears in the output and responds**
-5. For Queue/Blob/Table triggers, ensure Azurite is available (fnx auto-starts it)
+3. **Python v2 (critical)**: Ensure `local.settings.json` contains `"AzureWebJobsFeatureFlags": "EnableWorkerIndexing"` — required for decorator-based function discovery. Setting this only in `app-config.yaml` is NOT sufficient.
+4. **Build the project** (if TypeScript: `npx tsc`, if Python: `pip install -r requirements.txt`)
+5. Run `fnx start` to test locally — **verify the function appears in the output and responds**
+6. For Queue/Blob/Table triggers, ensure Azurite is available (fnx auto-starts it)
+
+If `fnx start` shows no functions or exits immediately, run `fnx start --verbose`. Look for:
+- `WorkerConfig for runtime: python not found` — host cache is corrupt. Fix: `rm -rf ~/.fnx/hosts/` then `fnx start`
+- `0 functions loaded` with no errors — missing `EnableWorkerIndexing` (see step 3)
+- `Port ... in use` — kill stale fnx processes or use `fnx start --port 7080`
 
 The task is complete only when `fnx start` launches successfully and the function is callable (e.g., `curl http://localhost:7071/api/<name>` returns a response for HTTP triggers).
+
+## Next Step: Deploy to Azure
+
+Once the function works locally, prompt the user to deploy:
+
+> Your function is working locally! Ready to deploy to Azure?
+> I can help you set up the infrastructure and deploy. Just say "deploy to Azure" to get started.
+
+Deployment options to suggest:
+- **Azure Developer CLI (azd)**: `azd init` then `azd up` — provisions infrastructure + deploys code in one step
+- **Azure CLI**: `az functionapp create` + `func azure functionapp publish <name>`
+- **VS Code**: Azure Functions extension → Deploy to Function App
+
+Always recommend azd as the first option for new projects.
 
 ## Troubleshooting
 
