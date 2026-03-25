@@ -614,7 +614,12 @@ async function replaceTemplatePlaceholders(targetDir, runtime, userVersion, verb
  */
 export function printSuccessBanner(targetDir, projectName, sku, runtime, envSetupDone = false) {
   const cwd = process.cwd();
-  const relativePath = targetDir === cwd ? '.' : targetDir.replace(cwd, '.').replace(/\\/g, '/');
+  // Normalize paths for comparison (handle Windows backslashes)
+  const normalizedTarget = resolve(targetDir);
+  const normalizedCwd = resolve(cwd);
+  const isCurrentDir = normalizedTarget === normalizedCwd;
+  
+  const relativePath = isCurrentDir ? '.' : targetDir.replace(cwd, '.').replace(/\\/g, '/');
 
   // Runtime-specific install steps (skip if --env already did setup)
   let installStep;
@@ -661,7 +666,7 @@ export function printSuccessBanner(targetDir, projectName, sku, runtime, envSetu
 
   // Adjust fnx start step number based on extra steps
   // Also adjust if we skip the cd step (when initializing in current directory)
-  const isCurrentDir = relativePath === '.';
+  // isCurrentDir is already computed above
   const cdStepOffset = isCurrentDir ? -1 : 0;
   const startStepNum = `${3 + extraSteps + cdStepOffset}.`;
 

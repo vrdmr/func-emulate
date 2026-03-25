@@ -253,9 +253,9 @@ function createLogFilter(verbose, hostState) {
       }
     }
 
-    // Worker indexing JSON (Python): extract non-HTTP trigger types from the indexed metadata
+    // Worker indexing JSON (Python): extract all functions from the indexed metadata
     // Format: {"message": "Successfully indexed function app.", "functions": "Function Name: X, Function Binding: [('triggerType', ...)] ..."}
-    if (line.includes('Successfully indexed function app')) {
+    if (line.includes('Successfully indexed function app') || line.includes('indexed function') || line.includes('Function Name:')) {
       const jsonStart = line.indexOf('{');
       if (jsonStart !== -1) {
         try {
@@ -268,12 +268,18 @@ function createLogFilter(verbose, hostState) {
             if (nameMatch && bindingMatch) {
               const name = nameMatch[1];
               const bindings = bindingMatch[1];
-              // Find all trigger bindings and pick the non-HTTP one if present
+              // Find all trigger bindings
               const allTriggers = [...bindings.matchAll(/\('(\w*[Tt]rigger)', '[^']*', '[^']*'\)/g)];
-              const nonHttpTrigger = allTriggers.find(m => m[1] !== 'httpTrigger');
-              if (nonHttpTrigger && !nonHttpFunctions.some(f => f.name === name)) {
-                nonHttpFunctions.push({ name, triggerType: nonHttpTrigger[1] });
-                if (hostState) hostState.nonHttpFunctions = [...nonHttpFunctions];
+              const trigger = allTriggers[0]; // First trigger binding
+              if (trigger) {
+                const triggerType = trigger[1];
+                // HTTP functions are tracked separately via URL detection
+                if (triggerType === 'httpTrigger') continue;
+                
+                if (!nonHttpFunctions.some(f => f.name === name)) {
+                  nonHttpFunctions.push({ name, triggerType });
+                  if (hostState) hostState.nonHttpFunctions = [...nonHttpFunctions];
+                }
               }
             }
           }
@@ -281,13 +287,44 @@ function createLogFilter(verbose, hostState) {
       }
     }
 
+    // Also detect functions from simpler log formats (e.g., .NET, Node.js)
+    // "Found the following functions: [func1, func2, ...]" or "Loading functions: ..."
+    const foundFunctionsMatch = line.match(/(?:Found the following functions|Loading functions):\s*\[([^\]]+)\]/i);
+    if (foundFunctionsMatch) {
+      const funcNames = foundFunctionsMatch[1].split(',').map(s => s.trim().replace(/['"]/g, ''));
+      for (const name of funcNames) {
+        if (name && !httpFunctions.some(f => f.name === name) && !nonHttpFunctions.some(f => f.name === name)) {
+          nonHttpFunctions.push({ name, triggerType: 'trigger' });
+          if (hostState) hostState.nonHttpFunctions = [...nonHttpFunctions];
+        }
+      }
+    }
+
     // Track invocations: "Executing 'Functions.hello' (Reason='...')"
     const execMatch = line.match(/Executing 'Functions\.(\w+)' \(Reason='([^']*)'/);
     if (execMatch) {
-      pendingInvocations.set(execMatch[1], {
-        reason: execMatch[2],
+      const funcName = execMatch[1];
+      const reason = execMatch[2];
+      
+      pendingInvocations.set(funcName, {
+        reason: reason,
         startTime: Date.now(),
       });
+      
+      // If this function isn't registered yet (e.g., timer triggers), add it now
+      if (!httpFunctions.some(f => f.name === funcName) && !nonHttpFunctions.some(f => f.name === funcName)) {
+        // Detect trigger type from reason (Timer fired, BlobCreated, etc.)
+        let triggerType = 'trigger';
+        if (reason.includes('Timer fired')) triggerType = 'timerTrigger';
+        else if (reason.includes('Blob')) triggerType = 'blobTrigger';
+        else if (reason.includes('Queue')) triggerType = 'queueTrigger';
+        else if (reason.includes('EventHub')) triggerType = 'eventHubTrigger';
+        else if (reason.includes('ServiceBus')) triggerType = 'serviceBusTrigger';
+        else if (reason.includes('Cosmos')) triggerType = 'cosmosDBTrigger';
+        
+        nonHttpFunctions.push({ name: funcName, triggerType });
+        if (hostState) hostState.nonHttpFunctions = [...nonHttpFunctions];
+      }
     }
 
     // Track invocation completions: "Executed 'Functions.hello' (Succeeded, Id=..., Duration=...ms)"
@@ -333,15 +370,26 @@ function createLogFilter(verbose, hostState) {
           console.log(`\t${funcName(fn.name)}: [${fn.methods}] ${urlColor(`${baseUrl}/${fn.route}`)}`);
         }
         for (const fn of nonHttpFunctions) {
+          fn._printed = true;
           console.log(`\t${funcName(fn.name)}: ${fn.triggerType}`);
         }
       } else {
-        console.log(dim(`\tNo functions found. Base URL: ${urlColor(baseUrl)}`));
+        // No functions detected from logs yet - they may appear on first invocation
+        console.log(dim(`\tBase URL: ${urlColor(baseUrl)}`));
       }
       if (!verbose) {
         console.log(dim('\nFor detailed output, run fnx with --verbose flag.'));
       }
       console.log();
+    }
+    
+    // When a new function is discovered after startup, print it
+    if (functionsShown && nonHttpFunctions.length > 0) {
+      const lastFn = nonHttpFunctions[nonHttpFunctions.length - 1];
+      if (!lastFn._printed) {
+        lastFn._printed = true;
+        console.log(`  ${funcName(lastFn.name)}: ${lastFn.triggerType} ${dim('(discovered)')}`);
+      }
     }
   }
 

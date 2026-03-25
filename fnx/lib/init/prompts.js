@@ -504,14 +504,14 @@ export async function promptNodeLanguage() {
  * Shows top 9 templates with "More..." option for additional templates.
  * Supports type-to-filter search (3+ characters).
  * @param {Array} templates - Filtered templates for the selected runtime
- * @param {string[]} priorityOrder - Resource types in priority order
+ * @param {Object} resourceOrderByPriority - Resource order for each priority bucket
  * @returns {Promise<Object>} Selected template
  */
-export async function promptTrigger(templates, priorityOrder) {
+export async function promptTrigger(templates, resourceOrderByPriority) {
   const MAX_INITIAL_DISPLAY = 9;
   
-  // Sort all templates by resource priority
-  const sorted = sortTemplatesByResourcePriority(templates, priorityOrder);
+  // Sort all templates by priority bucket, then resource order within bucket
+  const sorted = sortTemplatesByPriorityAndResource(templates, resourceOrderByPriority);
   
   // Take top 9 for initial display
   const displayTemplates = sorted.slice(0, MAX_INITIAL_DISPLAY);
@@ -521,7 +521,7 @@ export async function promptTrigger(templates, priorityOrder) {
   const options = displayTemplates.map(template => ({
     value: template,
     label: formatTemplateLabel(template),
-    searchText: `${template.displayName || ''} ${template.id || ''} ${template.resource || ''} ${template.bindingType || ''}`,
+    searchText: `${template.displayName || ''} ${template.id || ''} ${template.category || ''} ${template.resource || ''} ${template.bindingType || ''}`,
   }));
 
   // Add separator and "More..." option if there are additional templates
@@ -548,64 +548,57 @@ export async function promptTrigger(templates, priorityOrder) {
   
   // If "More..." selected, show full list
   if (selected === '__MORE__') {
-    return promptTriggerAll(sorted, priorityOrder);
+    return promptTriggerAll(sorted, resourceOrderByPriority);
   }
   
   return selected;
 }
 
 /**
- * Sort templates by resource type priority, then by template priority (P0 starters first),
- * then by binding type within each resource.
+ * Sort templates by priority bucket first, then by resource order within each bucket.
  * 
  * Sort order:
- * 1. Resource type (http > blob > timer > queue > servicebus > eventhub > durable > eventgrid > other)
- * 2. Template priority (P0 starters > P1 > P2 samples)
- * 3. Binding type (trigger > input > output > other)
- * 4. Alphabetical by display name
+ * 1. Priority bucket (P0 starters > P1 standard > P2 advanced > P3, etc.)
+ * 2. Resource order within bucket (defined in resourceOrderByPriority)
+ * 3. Templates not in the resource order go at the end of their bucket
+ * 4. Alphabetical by display name within same resource
+ * 
+ * @param {Array} templates - Templates to sort
+ * @param {Object} resourceOrderByPriority - Map of priority number to resource order array
  */
-function sortTemplatesByResourcePriority(templates, priorityOrder) {
-  const bindingTypeOrder = { 'trigger': 0, 'input': 1, 'output': 2 };
-  
+function sortTemplatesByPriorityAndResource(templates, resourceOrderByPriority) {
   return [...templates].sort((a, b) => {
-    // 1. Sort by resource type priority
-    const aResource = (a.resource || 'other').toLowerCase();
-    const bResource = (b.resource || 'other').toLowerCase();
+    // 1. Sort by priority bucket (P0 first, then P1, P2, etc.)
+    const aPriority = a.priority ?? 999;
+    const bPriority = b.priority ?? 999;
     
-    const aIdx = priorityOrder.indexOf(aResource);
-    const bIdx = priorityOrder.indexOf(bResource);
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority;
+    }
     
-    // Prioritized resources come first, others go to end alphabetically
-    const aResourcePriority = aIdx === -1 ? 999 : aIdx;
-    const bResourcePriority = bIdx === -1 ? 999 : bIdx;
+    // 2. Within same priority bucket: sort by resource order
+    const resourceOrder = resourceOrderByPriority[aPriority] || [];
+    const aResource = (a.resource || '').toLowerCase();
+    const bResource = (b.resource || '').toLowerCase();
+    
+    const aResourceIdx = resourceOrder.indexOf(aResource);
+    const bResourceIdx = resourceOrder.indexOf(bResource);
+    
+    // Resources in the defined order come first, others go to end
+    const aResourcePriority = aResourceIdx === -1 ? 999 : aResourceIdx;
+    const bResourcePriority = bResourceIdx === -1 ? 999 : bResourceIdx;
     
     if (aResourcePriority !== bResourcePriority) {
       return aResourcePriority - bResourcePriority;
     }
     
-    // If both unprioritized, sort alphabetically by resource
+    // 3. If both not in resource order, sort alphabetically by resource
     if (aResourcePriority === 999 && bResourcePriority === 999) {
       const resourceCmp = aResource.localeCompare(bResource);
       if (resourceCmp !== 0) return resourceCmp;
     }
     
-    // 2. Within same resource: sort by template priority (P0 starters first, then P1, P2 samples)
-    const aTemplatePriority = a.priority ?? 999;
-    const bTemplatePriority = b.priority ?? 999;
-    
-    if (aTemplatePriority !== bTemplatePriority) {
-      return aTemplatePriority - bTemplatePriority;
-    }
-    
-    // 3. Within same priority: sort by binding type (trigger > input > output)
-    const aBinding = bindingTypeOrder[a.bindingType] ?? 3;
-    const bBinding = bindingTypeOrder[b.bindingType] ?? 3;
-    
-    if (aBinding !== bBinding) {
-      return aBinding - bBinding;
-    }
-    
-    // 4. Alphabetical within same resource + priority + binding type
+    // 4. Alphabetical by display name within same resource
     return (a.displayName || a.id).localeCompare(b.displayName || b.id);
   });
 }
@@ -615,32 +608,30 @@ function sortTemplatesByResourcePriority(templates, priorityOrder) {
  */
 function formatTemplateLabel(template) {
   const name = template.displayName || template.id;
-  const resource = template.resource || 'other';
+  const category = template.category || template.resource || 'other';
   const bindingType = template.bindingType || '';
   
   // Show binding type for non-triggers
   if (bindingType && bindingType !== 'trigger') {
-    return `${funcName(name)} ${dim(`(${resource} ${bindingType})`)}`;
+    return `${funcName(name)} ${dim(`(${category} ${bindingType})`)}`;
   }
-  return `${funcName(name)} ${dim(`(${resource})`)}`;
+  return `${funcName(name)} ${dim(`(${category})`)}`;
 }
 
 /**
  * Show all templates when "More..." is selected
  * Uses search-enabled prompt for easy filtering
- * @param {Array} templates - All templates
- * @param {string[]} priorityOrder - Resource priority order
+ * @param {Array} templates - All templates (pre-sorted)
+ * @param {Object} resourceOrderByPriority - Resource order for each priority bucket (unused, templates pre-sorted)
  * @returns {Promise<object>} Selected template
  */
-async function promptTriggerAll(templates, priorityOrder) {
-  // Sort by resource priority, then binding type, then alphabetically
-  const sorted = sortTemplatesByResourcePriority(templates, priorityOrder);
-
-  const options = sorted.map(template => ({
+async function promptTriggerAll(templates, resourceOrderByPriority) {
+  // Templates are already pre-sorted, just use them directly
+  const options = templates.map(template => ({
     value: template,
     label: formatTemplateLabel(template),
     // Add searchText for improved search matching
-    searchText: `${template.displayName || ''} ${template.id || ''} ${template.resource || ''} ${template.bindingType || ''}`,
+    searchText: `${template.displayName || ''} ${template.id || ''} ${template.resource || ''} ${template.bindingType || ''} ${(template.categories || []).join(' ')}`,
   }));
 
   console.log(dim(`\n  Showing all ${options.length} templates (type to filter):\n`));

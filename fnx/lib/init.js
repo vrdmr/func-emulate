@@ -36,19 +36,24 @@ const RUNTIME_DISPLAY = {
 };
 
 /**
- * Priority order for templates by resource type.
- * Templates are sorted: 1) by resource priority, 2) by binding type (trigger > input > output), 3) alphabetically
+ * Priority order for displaying templates.
+ * 
+ * Templates are sorted by:
+ * 1. Priority bucket (P0 starters first, then P1 standard, then P2 advanced, etc.)
+ * 2. Resource order within each bucket (defined below)
+ * 3. Templates not in the resource order go at the end of their bucket
+ * 4. Alphabetical within same resource
+ * 
+ * Resource order per priority bucket:
+ * - P0 (Starter): HTTP, Timer, Blob, EventHub, MCP, HTTP (AI Agent uses http resource)
+ * - P1 (Standard): MCP, HTTP (ChatGPT), Durable, Cosmos, SQL, AgentFramework
+ * - P2 (Advanced): MCP, HTTP (AI samples), Durable, Bicep/Terraform/ARM
  */
-const TRIGGER_PRIORITY = [
-  'http',
-  'blob',
-  'timer',
-  'queue',
-  'servicebus',
-  'eventhub',
-  'durable',
-  'eventgrid',
-];
+const RESOURCE_ORDER_BY_PRIORITY = {
+  0: ['http', 'timer', 'blob', 'eventhub', 'mcp'],
+  1: ['mcp', 'http', 'durable', 'cosmos', 'sql', 'agentframework'],
+  2: ['mcp', 'http', 'durable', 'bicep', 'terraform', 'arm'],
+};
 
 /**
  * Main entry point for fnx init
@@ -72,7 +77,11 @@ export async function runInit(args) {
   
   let manifest;
   try {
-    manifest = await fetchManifest(MANIFEST_URL, { verbose: flags.verbose, backupUrl: MANIFEST_BACKUP_URL });
+    manifest = await fetchManifest(MANIFEST_URL, { 
+      verbose: flags.verbose, 
+      backupUrl: MANIFEST_BACKUP_URL,
+      refresh: flags.refresh,
+    });
   } catch (err) {
     console.error(errorColor(`\n✗ Cannot load template manifest`));
     console.error(dim(`
@@ -120,7 +129,7 @@ ${bold('✗ Invalid manifest format')}
   const filteredTemplates = filterTemplatesByRuntime(manifest, language);
   const template = flags.template
     ? findTemplateByName(filteredTemplates, flags.template)
-    : await promptTrigger(filteredTemplates, TRIGGER_PRIORITY);
+    : await promptTrigger(filteredTemplates, RESOURCE_ORDER_BY_PRIORITY);
 
   if (!template) {
     if (flags.template) {
@@ -408,6 +417,9 @@ function parseFlags(args) {
       case '-v':
         flags.verbose = true;
         break;
+      case '--refresh':
+        flags.refresh = true;
+        break;
       case '--env':
       case '-e':
         flags.env = true;
@@ -517,6 +529,7 @@ ${title('Options:')}
   ${success('--sku')} <sku>            Target SKU: flex (default), premium, dedicated.
   ${success('--env')}, ${success('-e')}             Setup dev environment (venv for Python, npm install for Node).
   ${success('--force')}, ${success('-f')}           Initialize in non-empty directory (overwrites template files only).
+  ${success('--refresh')}              Force refresh template manifest from CDN (bypass cache).
   ${success('--yes')}, ${success('-y')}             Accept all defaults (non-interactive).
   ${success('--verbose')}, ${success('-v')}         Show detailed output (manifest URL, cache, files).
   ${success('-h')}, ${success('--help')}            Show this help message.
