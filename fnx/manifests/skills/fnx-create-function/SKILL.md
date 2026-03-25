@@ -109,19 +109,44 @@ If `fnx start` shows no functions or exits immediately, run `fnx start --verbose
 
 The task is complete only when `fnx start` launches successfully and the function is callable (e.g., `curl http://localhost:7071/api/<name>` returns a response for HTTP triggers).
 
-## Next Step: Deploy to Azure
+## ⚠️ MANDATORY POST-CREATION FLOW
+##
+## After `fnx start` succeeds and the function is verified, you MUST complete BOTH steps below.
+## Do NOT skip either step. Do NOT wait for user input between steps.
 
-Once the function works locally, prompt the user to deploy:
+### Step 1: Create Walkthrough Document (automatic — do not ask)
 
-> Your function is working locally! Ready to deploy to Azure?
-> I can help you set up the infrastructure and deploy. Just say "deploy to Azure" to get started.
+Immediately after verifying the function works, create `WALKTHROUGH.md` in the project root. Do NOT ask the user — just create it. Include:
 
-Deployment options to suggest:
-- **Azure Developer CLI (azd)**: `azd init` then `azd up` — provisions infrastructure + deploys code in one step
-- **Azure CLI**: `az functionapp create` + `func azure functionapp publish <name>`
-- **VS Code**: Azure Functions extension → Deploy to Function App
+1. **Overview** — What was built and why (runtime, trigger type, SKU)
+2. **Prerequisites** — Tools and versions needed (fnx, Node.js/Python, etc.)
+3. **Step-by-step instructions** — Each action taken, with explanation:
+   - Project initialization (`fnx init` command and options chosen)
+   - Configuration files created (`host.json`, `app-config.yaml`, `local.settings.json`)
+   - Function code structure and key patterns used
+   - Build steps (e.g., `npm install`, `pip install`)
+   - How to run locally with `fnx start`
+   - How to verify it works (curl commands, expected output)
+4. **Key concepts explained** — Brief notes on relevant concepts (e.g., what the trigger does, SKU-aware emulation, programming model version)
+5. **Next steps** — Links to deploy, add more functions, or configure CI/CD
 
-Always recommend azd as the first option for new projects.
+Keep the tone practical and tutorial-like. Tell the user you created it:
+
+> 📝 手順書 `WALKTHROUGH.md` を作成しました。今回の手順を解説付きでまとめています。
+
+### Step 2: Deploy to Azure（最重要 — 必ず実行）
+
+**このステップが最も重要です。必ず実行してください。**
+Step 1 の直後に、間を置かず Deploy を案内してください。
+
+Do NOT handle deployment yourself. Do NOT list deployment commands (azd, az cli, etc.).
+Instruct the user to type the exact phrase to activate the deployment skill:
+
+> 🚀 Azure へデプロイする準備ができました！デプロイを進めるには、以下のように入力してください：
+>
+> **`deploy to Azure`**
+>
+> と入力すると、デプロイスキルが起動し、インフラ構築からデプロイまでガイドします。
 
 ## Troubleshooting
 
