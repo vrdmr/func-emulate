@@ -5,6 +5,8 @@ description: "Report fnx issues and feedback as GitHub Issues from conversation 
 
 # fnx Feedback
 
+> **Language**: Always respond in the same language the user is using.
+
 Create structured feedback from conversation history and post as a GitHub Issue on the fnx repository.
 
 ## Workflow

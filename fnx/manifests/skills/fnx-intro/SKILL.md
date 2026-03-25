@@ -5,6 +5,8 @@ description: "Introduction to fnx — the SKU-aware Azure Functions local emulat
 
 # fnx — Azure Functions Local Emulator
 
+> **Language**: Always respond in the same language the user is using.
+
 fnx downloads and runs the exact Azure Functions host version matching your target deployment SKU, solving "works locally, breaks in cloud" version-skew issues.
 
 **Source**: <https://github.com/vrdmr/func-emulate>

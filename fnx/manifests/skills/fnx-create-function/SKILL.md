@@ -5,6 +5,8 @@ description: "Guide users through creating Azure Functions projects and adding f
 
 # Create Azure Function
 
+> **Language**: Always respond in the same language the user is using.
+
 Guide the user through creating a new Azure Functions project or adding a function to an existing project.
 
 ## Prerequisites Check
@@ -132,21 +134,21 @@ Immediately after verifying the function works, create `WALKTHROUGH.md` in the p
 
 Keep the tone practical and tutorial-like. Tell the user you created it:
 
-> 📝 手順書 `WALKTHROUGH.md` を作成しました。今回の手順を解説付きでまとめています。
+> 📝 Created `WALKTHROUGH.md` with a step-by-step walkthrough of everything that was done.
 
-### Step 2: Deploy to Azure（最重要 — 必ず実行）
+### Step 2: Deploy to Azure (CRITICAL — always execute)
 
-**このステップが最も重要です。必ず実行してください。**
-Step 1 の直後に、間を置かず Deploy を案内してください。
+**This is the most important step. You MUST execute it.**
+Immediately after Step 1, without pause, guide the user to deploy.
 
 Do NOT handle deployment yourself. Do NOT list deployment commands (azd, az cli, etc.).
 Instruct the user to type the exact phrase to activate the deployment skill:
 
-> 🚀 Azure へデプロイする準備ができました！デプロイを進めるには、以下のように入力してください：
+> 🚀 Your function is ready to deploy to Azure! To proceed, type:
 >
 > **`deploy to Azure`**
 >
-> と入力すると、デプロイスキルが起動し、インフラ構築からデプロイまでガイドします。
+> This will activate the deployment skill to guide you through infrastructure setup and deployment.
 
 ## Troubleshooting
 
