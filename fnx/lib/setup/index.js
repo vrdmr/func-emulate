@@ -10,6 +10,7 @@ import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { execFile } from 'node:child_process';
+import { checkSkillsOutdated, writeManifestVersion, readPackageManifestVersion } from './version-check.js';
 import { promisify } from 'node:util';
 import { detectProject } from './detect.js';
 import { detectAgents, formatAgentList } from './agent-detect.js';
@@ -96,9 +97,24 @@ export async function runSetup(args) {
   const results = [];
 
   if (!module || module === 'agent') {
+    // Check if installed skills are outdated
+    const versionStatus = await checkSkillsOutdated(appPath);
+    if (versionStatus.outdated && !forceFlag) {
+      console.log(warning(`  ⚠ Installed skills are outdated (${versionStatus.installed} → ${versionStatus.latest})`));
+      console.log(dim('    Run ') + funcName('fnx setup --force') + dim(' to update to the latest skills.'));
+      console.log();
+    }
+
     console.log(bold('📦 Applying agent workspace files...'));
     const r = await applyAgentModule(appPath, project, selectedAgents, { force: forceFlag, dryRun });
     results.push(...r);
+
+    // Write manifest version marker after successful skill copy
+    if (!dryRun) {
+      const manifestVersion = await readPackageManifestVersion();
+      await writeManifestVersion(appPath, manifestVersion);
+    }
+
     console.log();
   }
 

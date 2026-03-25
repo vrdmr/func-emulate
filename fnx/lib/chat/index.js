@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { detectProject } from '../setup/detect.js';
 import { detectAgents } from '../setup/agent-detect.js';
+import { checkSkillsOutdated } from '../setup/version-check.js';
 import { title, info, funcName, success, error as errorColor, warning, dim, bold } from '../colors.js';
 
 const MANIFESTS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'manifests');
@@ -82,12 +83,16 @@ export async function runChat(args) {
 
   // Show skill status (informational only — setup runs after agent selection)
   const skillsDir = join(appPath, '.agents', 'skills');
+  const versionStatus = await checkSkillsOutdated(appPath);
   const needsSetup = !existsSync(skillsDir);
   if (!needsSetup) {
     try {
       const { readdir } = await import('node:fs/promises');
       const skills = (await readdir(skillsDir)).filter(d => !d.startsWith('.'));
       console.log(dim(`    Skills: ${skills.length} installed in .agents/skills/`));
+      if (versionStatus.outdated) {
+        console.log(warning(`    ⚠ Skills outdated (${versionStatus.installed} → ${versionStatus.latest}). Run fnx setup --force to update.`));
+      }
     } catch { /* ignore */ }
   }
   console.log();
