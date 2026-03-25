@@ -2,7 +2,7 @@
 # This manifest defines skills, instructions, MCP servers, and agent definitions
 # that fnx setup applies to a developer's workspace.
 
-version: "1.0.0"
+version: "1.0.1"
 
 manifest:
   id: azure-functions-agent
@@ -10,7 +10,7 @@ manifest:
   description: "Skills, MCP, instructions for Azure Functions development with fnx"
   author: "azure-functions-team"
   tags: [azure-functions, serverless, fnx]
-  updated: "2026-03-09"
+  updated: "2026-03-25"
 
 # ─── Agent path mapping (based on skills.sh + agent-workspace-specs research) ───
 agentPaths:

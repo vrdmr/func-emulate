@@ -48,7 +48,21 @@ Two approaches:
 
 ## Available Templates
 
-For the full template catalog (107 templates across 9 languages), see [references/templates.md](references/templates.md).
+For the full template catalog, see [references/templates.md](references/templates.md).
+
+### Version Check (run once per session)
+
+The templates reference file tracks a `source_version` in its YAML front-matter.
+To check if it is outdated, fetch the live manifest and compare:
+
+```bash
+curl -s https://cdn.functions.azure.com/public/templates-manifest/manifest.json | node -e "
+  let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+    const m=JSON.parse(d);console.log('Live manifest version:',m.version,'templates:',m.totalTemplates);
+  })"
+```
+
+If the live `version` is newer than `source_version` in `references/templates.md` front-matter, inform the user that the templates reference is outdated and offer to regenerate it from the live manifest.
 
 Common triggers by runtime:
 
