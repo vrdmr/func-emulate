@@ -53,14 +53,15 @@ function filterTrustedTemplates(templates, defaultRepoUrl, verbose) {
  * @param {Object} options - Options
  * @param {boolean} options.verbose - Show detailed logging
  * @param {string} options.backupUrl - Backup URL to try if CDN fails
+ * @param {boolean} options.refresh - Force refresh from network (bypass cache)
  * @returns {Promise<{templates: Array}>} Parsed manifest
  */
 export async function fetchManifest(url, options = {}) {
-  const { verbose, backupUrl } = options;
+  const { verbose, backupUrl, refresh } = options;
 
-  // Check if cached manifest is still valid
+  // Check if cached manifest is still valid (unless refresh requested)
   const cached = await loadCachedManifest();
-  if (cached && !isExpired(cached.meta)) {
+  if (!refresh && cached && !isExpired(cached.meta)) {
     if (verbose) {
       const age = Math.round((Date.now() - cached.meta.fetchedAt) / 1000 / 60);
       console.log(`  Cache hit: manifest cached ${age} minutes ago`);
@@ -70,12 +71,16 @@ export async function fetchManifest(url, options = {}) {
     return cached.manifest;
   }
 
-  // Fetch from network with conditional request if we have ETag
+  if (refresh && verbose) {
+    console.log(`  Refresh requested, fetching from CDN...`);
+  }
+
+  // Fetch from network with conditional request if we have ETag (skip ETag if refresh)
   const headers = {};
-  if (cached?.meta?.etag) {
+  if (!refresh && cached?.meta?.etag) {
     headers['If-None-Match'] = cached.meta.etag;
     if (verbose) console.log(`  Cache stale, checking with ETag...`);
-  } else {
+  } else if (!refresh) {
     if (verbose) console.log(`  No cache, fetching from CDN...`);
   }
 
