@@ -191,4 +191,45 @@ describe('fnx setup — skill copy integration', () => {
     const content = await readFile(introSkill, 'utf8');
     assert.equal(content, '# CUSTOM', 'Existing SKILL.md should be preserved without --force');
   });
+
+  it('writes .fnx/manifest-version.json after setup', async () => {
+    await execFileAsync('node', [FNX_BIN, 'setup', '--app-path', tmpDir, '--non-interactive'], {
+      timeout: 30000,
+    });
+
+    const markerPath = join(tmpDir, '.fnx', 'manifest-version.json');
+    assert.ok(existsSync(markerPath), '.fnx/manifest-version.json should exist after setup');
+
+    const data = JSON.parse(await readFile(markerPath, 'utf8'));
+    assert.ok(data.version, 'marker should have version');
+    assert.ok(data.installedAt, 'marker should have installedAt');
+    assert.match(data.version, /^\d+\.\d+\.\d+$/, 'version should be semver-like');
+  });
+
+  it('does not write marker on --dry-run', async () => {
+    await execFileAsync('node', [FNX_BIN, 'setup', '--app-path', tmpDir, '--non-interactive', '--dry-run'], {
+      timeout: 30000,
+    });
+
+    const markerPath = join(tmpDir, '.fnx', 'manifest-version.json');
+    assert.ok(!existsSync(markerPath), '.fnx/manifest-version.json should NOT exist after dry-run');
+  });
+
+  it('shows outdated warning when installed version is old', async () => {
+    // Fake an old marker file
+    await mkdir(join(tmpDir, '.fnx'), { recursive: true });
+    await writeFile(
+      join(tmpDir, '.fnx', 'manifest-version.json'),
+      JSON.stringify({ version: '0.0.1', installedAt: new Date().toISOString() })
+    );
+    // Create existing skills dir so setup has something to skip
+    await mkdir(join(tmpDir, '.agents', 'skills', 'fnx-intro'), { recursive: true });
+    await writeFile(join(tmpDir, '.agents', 'skills', 'fnx-intro', 'SKILL.md'), '# old');
+
+    const { stdout } = await execFileAsync('node', [FNX_BIN, 'setup', '--app-path', tmpDir, '--non-interactive'], {
+      timeout: 30000,
+    });
+
+    assert.ok(stdout.includes('outdated'), 'output should warn about outdated skills');
+  });
 });

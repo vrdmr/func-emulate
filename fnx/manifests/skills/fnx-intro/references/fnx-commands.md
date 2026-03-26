@@ -1,3 +1,8 @@
+---
+fnx_version: "0.5.0"
+updated: "2026-03-25"
+---
+
 # fnx Command Reference
 
 ## fnx init

@@ -5,6 +5,8 @@ description: "Introduction to fnx — the SKU-aware Azure Functions local emulat
 
 # fnx — Azure Functions Local Emulator
 
+> **Language**: Always respond in the same language the user is using.
+
 fnx downloads and runs the exact Azure Functions host version matching your target deployment SKU, solving "works locally, breaks in cloud" version-skew issues.
 
 **Source**: <https://github.com/vrdmr/func-emulate>
@@ -19,6 +21,10 @@ node --version   # Require >=18
 ```
 
 If fnx is outdated, suggest: `npm update -g @vrdmr/fnx-test`
+
+### Command Reference Version Check
+
+The command reference file [references/fnx-commands.md](references/fnx-commands.md) tracks a `fnx_version` in its YAML front-matter. After running `fnx --version`, compare the installed version with the `fnx_version` value. If the installed version is newer, the command reference may be outdated — inform the user that some commands or options may have changed and suggest checking `fnx <command> --help` for the latest usage.
 
 ## Commands
 

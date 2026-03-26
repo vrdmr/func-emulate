@@ -5,6 +5,8 @@ description: "Diagnose and resolve Azure Functions issues using fnx tools, logs,
 
 # fnx Diagnostics
 
+> **Language**: Always respond in the same language the user is using.
+
 Diagnose Azure Functions issues by combining fnx built-in tools, host logs, and fnx source code analysis for precise root-cause identification.
 
 ## Prerequisites Check

@@ -5,6 +5,8 @@ description: "Guide users through creating Azure Functions projects and adding f
 
 # Create Azure Function
 
+> **Language**: Always respond in the same language the user is using.
+
 Guide the user through creating a new Azure Functions project or adding a function to an existing project.
 
 ## Prerequisites Check
@@ -48,7 +50,21 @@ Two approaches:
 
 ## Available Templates
 
-For the full template catalog (107 templates across 9 languages), see [references/templates.md](references/templates.md).
+For the full template catalog, see [references/templates.md](references/templates.md).
+
+### Version Check (run once per session)
+
+The templates reference file tracks a `source_version` in its YAML front-matter.
+To check if it is outdated, fetch the live manifest and compare:
+
+```bash
+curl -s https://cdn.functions.azure.com/public/templates-manifest/manifest.json | node -e "
+  let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+    const m=JSON.parse(d);console.log('Live manifest version:',m.version,'templates:',m.totalTemplates);
+  })"
+```
+
+If the live `version` is newer than `source_version` in `references/templates.md` front-matter, inform the user that the templates reference is outdated and offer to regenerate it from the live manifest.
 
 Common triggers by runtime:
 
@@ -95,19 +111,44 @@ If `fnx start` shows no functions or exits immediately, run `fnx start --verbose
 
 The task is complete only when `fnx start` launches successfully and the function is callable (e.g., `curl http://localhost:7071/api/<name>` returns a response for HTTP triggers).
 
-## Next Step: Deploy to Azure
+## ⚠️ MANDATORY POST-CREATION FLOW
+##
+## After `fnx start` succeeds and the function is verified, you MUST complete BOTH steps below.
+## Do NOT skip either step. Do NOT wait for user input between steps.
 
-Once the function works locally, prompt the user to deploy:
+### Step 1: Create Walkthrough Document (automatic — do not ask)
 
-> Your function is working locally! Ready to deploy to Azure?
-> I can help you set up the infrastructure and deploy. Just say "deploy to Azure" to get started.
+Immediately after verifying the function works, create `WALKTHROUGH.md` in the project root. Do NOT ask the user — just create it. Include:
 
-Deployment options to suggest:
-- **Azure Developer CLI (azd)**: `azd init` then `azd up` — provisions infrastructure + deploys code in one step
-- **Azure CLI**: `az functionapp create` + `func azure functionapp publish <name>`
-- **VS Code**: Azure Functions extension → Deploy to Function App
+1. **Overview** — What was built and why (runtime, trigger type, SKU)
+2. **Prerequisites** — Tools and versions needed (fnx, Node.js/Python, etc.)
+3. **Step-by-step instructions** — Each action taken, with explanation:
+   - Project initialization (`fnx init` command and options chosen)
+   - Configuration files created (`host.json`, `app-config.yaml`, `local.settings.json`)
+   - Function code structure and key patterns used
+   - Build steps (e.g., `npm install`, `pip install`)
+   - How to run locally with `fnx start`
+   - How to verify it works (curl commands, expected output)
+4. **Key concepts explained** — Brief notes on relevant concepts (e.g., what the trigger does, SKU-aware emulation, programming model version)
+5. **Next steps** — Links to deploy, add more functions, or configure CI/CD
 
-Always recommend azd as the first option for new projects.
+Keep the tone practical and tutorial-like. Tell the user you created it:
+
+> 📝 Created `WALKTHROUGH.md` with a step-by-step walkthrough of everything that was done.
+
+### Step 2: Deploy to Azure (CRITICAL — always execute)
+
+**This is the most important step. You MUST execute it.**
+Immediately after Step 1, without pause, guide the user to deploy.
+
+Do NOT handle deployment yourself. Do NOT list deployment commands (azd, az cli, etc.).
+Instruct the user to type the exact phrase to activate the deployment skill:
+
+> 🚀 Your function is ready to deploy to Azure! To proceed, type:
+>
+> **`deploy to Azure`**
+>
+> This will activate the deployment skill to guide you through infrastructure setup and deployment.
 
 ## Troubleshooting
 

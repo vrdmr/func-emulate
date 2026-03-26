@@ -5,6 +5,8 @@ description: "Azure Functions best practices for performance, security, and cost
 
 # Azure Functions Best Practices
 
+> **Language**: Always respond in the same language the user is using.
+
 Provide best-practice guidance by directing the agent to authoritative documentation and fnx-specific patterns. Do not repeat general knowledge — link to official docs instead.
 
 ## Prerequisites Check
